@@ -1,0 +1,14 @@
+Pagination -> BE
+infinite scroll -> FE
+Error Handling/ NO DATA -> FE
+Filters -> FE
+Layout change -> FE
+
+Discuss
+- Get all languages and there transcript in object like 
+    {
+        lang : "English",
+        transcript : "jsajks anslaksna nasklas lamsals..."
+    }
+
+ 
