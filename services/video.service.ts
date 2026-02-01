@@ -22,6 +22,16 @@ export const getVideoById = async (
   return response.data;
 };
 
+export const createVideo = async (video: Omit<LectureVideo, 'id'>): Promise<LectureVideo> => {
+  const response = await apiClient.post<LectureVideo>(VIDEO_API_URL, video);
+  return response.data;
+};
+
+export const updateVideo = async (id: number, video: Omit<LectureVideo, 'id'>): Promise<LectureVideo> => {
+  const response = await apiClient.put<LectureVideo>(`${VIDEO_API_URL}/${id}`, video);
+  return response.data;
+};
+
 
 export const getLanguageData = async (): Promise<LanguageData[]> => {
   const response = await apiClient.get<LanguageData[]>(LANGUAGE_API_URL);

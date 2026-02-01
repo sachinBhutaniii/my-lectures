@@ -28,5 +28,5 @@ export const useFetch = <T>(apiFn: () => Promise<T>) => {
     fetchData();
   }, [apiFn]);
 
-  return { data, loading, error };
+  return { data, loading, error, setData };
 };
