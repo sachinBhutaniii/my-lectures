@@ -5,7 +5,7 @@ const MainBanner = () => {
     <div className="flex justify-evenly px-4 py-16 sm:px-6 sm:py-20 md:items-center">
     <div className="max-w-prose text-left">
       <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl">
-        Divine Teachings of His Holiness
+        <span className="text-green-600">Divine Teachings of His Holiness</span>
         <strong className="text-amber-600"> Bhakti Dhira Damodara Swami </strong>
         
       </h1>
