@@ -15,6 +15,7 @@ interface Props {
   search: string;
   currentTime: number; // seconds from audio player
   startTime?: number;  // recording start offset in seconds
+  autoScroll: boolean;
 }
 
 /**
@@ -79,6 +80,7 @@ export default function TranscriptView({
   search,
   currentTime,
   startTime,
+  autoScroll,
 }: Props) {
   const activeRef = useRef<HTMLParagraphElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -124,12 +126,12 @@ export default function TranscriptView({
       .filter((e) => e.text.toLowerCase().includes(search.toLowerCase()));
   }, [entries, search]);
 
-  // Auto-scroll to active entry
+  // Auto-scroll to active entry only when autoScroll is on
   useEffect(() => {
-    if (hasTiming && !search) {
+    if (autoScroll && hasTiming && !search) {
       activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [activeIndex, hasTiming, search]);
+  }, [activeIndex, hasTiming, search, autoScroll]);
 
   if (entries.length === 0) {
     return (
@@ -160,7 +162,9 @@ export default function TranscriptView({
             key={entry.index}
             ref={isActive ? activeRef : undefined}
             className={`text-lg leading-relaxed mb-5 transition-colors duration-300 ${
-              isActive
+              !autoScroll
+                ? "text-gray-300"
+                : isActive
                 ? "text-white font-medium"
                 : hasTiming && !search
                 ? entry.originalIndex < activeIndex
