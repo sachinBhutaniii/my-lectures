@@ -1,38 +1,137 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
+
+interface SrtEntry {
+  index: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+}
 
 interface Props {
+  transcriptSrt?: string;
   transcript?: string;
   search: string;
-  highlightIndex: number;
-  autoScroll: boolean;
+  currentTime: number; // seconds from audio player
+  startTime?: number;  // recording start offset in seconds
 }
 
-function splitPhrases(text: string): string[] {
-  if (!text) return [];
-  return text
-    .split(/\n+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+/**
+ * Parse an SRT timestamp like "01:02:03,456" or "02:03,456" into milliseconds.
+ */
+function parseSrtTime(ts: string): number {
+  ts = ts.trim();
+  const parts = ts.split(",");
+  const ms = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+  const timeParts = parts[0].split(":").map(Number);
+
+  let hours = 0, minutes = 0, seconds = 0;
+  if (timeParts.length === 3) {
+    [hours, minutes, seconds] = timeParts;
+  } else if (timeParts.length === 2) {
+    [minutes, seconds] = timeParts;
+  }
+
+  return (hours * 3600 + minutes * 60 + seconds) * 1000 + ms;
 }
 
-export default function TranscriptView({ transcript, search, highlightIndex, autoScroll }: Props) {
-  const phrases = splitPhrases(transcript || "");
+/**
+ * Parse full SRT content into structured entries.
+ */
+function parseSrt(srt: string): SrtEntry[] {
+  if (!srt) return [];
+  const blocks = srt.trim().split(/\n\s*\n/);
+  const entries: SrtEntry[] = [];
+
+  for (const block of blocks) {
+    const lines = block.trim().split("\n");
+    if (lines.length < 3) continue;
+
+    const index = parseInt(lines[0], 10);
+    const timeLine = lines[1];
+    const arrowIdx = timeLine.indexOf("-->");
+    if (arrowIdx === -1) continue;
+
+    const startMs = parseSrtTime(timeLine.slice(0, arrowIdx));
+    const endMs = parseSrtTime(timeLine.slice(arrowIdx + 3));
+    const text = lines.slice(2).join(" ").trim();
+
+    if (text) {
+      entries.push({ index, startMs, endMs, text });
+    }
+  }
+
+  return entries;
+}
+
+function formatStartTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export default function TranscriptView({
+  transcriptSrt,
+  transcript,
+  search,
+  currentTime,
+  startTime,
+}: Props) {
   const activeRef = useRef<HTMLParagraphElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const filtered = search
-    ? phrases.filter((p) => p.toLowerCase().includes(search.toLowerCase()))
-    : phrases;
+  // Parse SRT entries, fall back to plain transcript split by newlines
+  const entries = useMemo(() => {
+    if (transcriptSrt) {
+      return parseSrt(transcriptSrt);
+    }
+    // Fallback: plain transcript, no timing
+    if (transcript) {
+      return transcript
+        .split(/\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((text, i) => ({
+          index: i + 1,
+          startMs: -1,
+          endMs: -1,
+          text,
+        }));
+    }
+    return [];
+  }, [transcriptSrt, transcript]);
 
-  // Scroll active phrase into view only when autoScroll is on
+  const hasTiming = entries.length > 0 && entries[0].startMs >= 0;
+  const currentMs = currentTime * 1000;
+
+  // Find the active entry index based on current audio time
+  const activeIndex = useMemo(() => {
+    if (!hasTiming) return -1;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (currentMs >= entries[i].startMs) return i;
+    }
+    return -1;
+  }, [entries, currentMs, hasTiming]);
+
+  // Filter by search
+  const filtered = useMemo(() => {
+    if (!search) return entries.map((e, i) => ({ ...e, originalIndex: i }));
+    return entries
+      .map((e, i) => ({ ...e, originalIndex: i }))
+      .filter((e) => e.text.toLowerCase().includes(search.toLowerCase()));
+  }, [entries, search]);
+
+  // Auto-scroll to active entry
   useEffect(() => {
-    if (autoScroll) {
+    if (hasTiming && !search) {
       activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [highlightIndex, autoScroll]);
+  }, [activeIndex, hasTiming, search]);
 
-  if (!transcript) {
+  if (entries.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
         No transcript available
@@ -41,32 +140,39 @@ export default function TranscriptView({ transcript, search, highlightIndex, aut
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-2 relative">
-      {filtered.map((phrase, i) => {
-        const isActive = autoScroll && !search && i === highlightIndex % filtered.length;
+    <div ref={containerRef} className="flex-1 overflow-y-auto px-5 py-2 relative">
+      {/* Start time indicator */}
+      {startTime != null && startTime > 0 && (
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-orange-400 flex-shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-orange-400 text-sm font-medium">
+            Transcription starts at {formatStartTime(startTime)}
+          </span>
+        </div>
+      )}
+
+      {filtered.map((entry) => {
+        const isActive = hasTiming && !search && entry.originalIndex === activeIndex;
         return (
           <p
-            key={i}
+            key={entry.index}
             ref={isActive ? activeRef : undefined}
-            className={`text-lg leading-relaxed mb-6 transition-colors duration-300 ${
+            className={`text-lg leading-relaxed mb-5 transition-colors duration-300 ${
               isActive
                 ? "text-white font-medium"
-                : autoScroll
-                ? "text-gray-500"
+                : hasTiming && !search
+                ? entry.originalIndex < activeIndex
+                  ? "text-gray-600"
+                  : "text-gray-500"
                 : "text-gray-300"
             }`}
           >
-            {phrase}
+            {entry.text}
           </p>
         );
       })}
-
-      {/* Floating note icon */}
-      <button className="sticky bottom-4 float-right text-orange-400 bg-black/60 rounded-full p-2">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-        </svg>
-      </button>
     </div>
   );
 }

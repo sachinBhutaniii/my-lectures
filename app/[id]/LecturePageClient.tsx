@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { LectureVideo, VideoApiResponse } from "@/types/videos";
 import { getVideoById, getVideos, getLanguageData } from "@/services/video.service";
@@ -21,8 +21,7 @@ export default function LecturePage() {
   const [activeTab, setActiveTab] = useState<Tab>("transcript");
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [transcriptSearch, setTranscriptSearch] = useState("");
-  const [highlightIndex, setHighlightIndex] = useState(0);
-  const [autoScroll, setAutoScroll] = useState(true);
+  const [audioTime, setAudioTime] = useState(0);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
   const { addListeningTime } = useStreak();
@@ -56,14 +55,9 @@ export default function LecturePage() {
       router.push(`/${queueLectures[currentIdx + 1].id}`);
   };
 
-  // Auto-advance highlight — pauses when autoScroll is off
-  useEffect(() => {
-    if (!autoScroll) return;
-    const t = setInterval(() => {
-      setHighlightIndex((i) => i + 1);
-    }, 4000);
-    return () => clearInterval(t);
-  }, [autoScroll]);
+  const handleTimeUpdate = useCallback((seconds: number) => {
+    setAudioTime(seconds);
+  }, []);
 
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
@@ -114,32 +108,6 @@ export default function LecturePage() {
               className="flex-1 bg-transparent text-sm text-gray-300 placeholder-gray-600 outline-none"
             />
           </div>
-
-          {/* Auto-scroll toggle */}
-          <button
-            onClick={() => setAutoScroll((v) => !v)}
-            title={autoScroll ? "Switch to manual scroll" : "Switch to auto-scroll"}
-            className={`flex-shrink-0 flex flex-col items-center gap-0.5 border rounded-lg px-2.5 py-2 transition-colors ${
-              autoScroll
-                ? "border-orange-500 text-orange-400 bg-orange-500/10"
-                : "border-gray-700 text-gray-500 bg-gray-900/50"
-            }`}
-          >
-            {/* Lines icon */}
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
-            </svg>
-            {/* Lock or scroll indicator */}
-            {autoScroll ? (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
-                <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5">
-                <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 013 3v6.75a3 3 0 01-3 3H3.75a3 3 0 01-3-3v-6.75a3 3 0 013-3h9v-3c0-2.9 2.35-5.25 5.25-5.25z" />
-              </svg>
-            )}
-          </button>
 
           {/* Language selector button */}
           <div className="relative">
@@ -207,10 +175,11 @@ export default function LecturePage() {
 
         {!loading && activeTab === "transcript" && (
           <TranscriptView
+            transcriptSrt={lecture?.transcriptSrt}
             transcript={lecture?.transcript}
             search={transcriptSearch}
-            highlightIndex={highlightIndex}
-            autoScroll={autoScroll}
+            currentTime={audioTime}
+            startTime={lecture?.startTime}
           />
         )}
 
@@ -235,6 +204,7 @@ export default function LecturePage() {
           onPrev={goPrev}
           onNext={goNext}
           onListeningTime={addListeningTime}
+          onTimeUpdate={handleTimeUpdate}
         />
       )}
     </div>

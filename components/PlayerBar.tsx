@@ -8,6 +8,7 @@ interface Props {
   onPrev?: () => void;
   onNext?: () => void;
   onListeningTime?: (seconds: number) => void;
+  onTimeUpdate?: (seconds: number) => void;
 }
 
 const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -19,7 +20,7 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: Props) {
+export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime, onTimeUpdate }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -39,17 +40,19 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
     audioRef.current = audio;
 
     const onLoaded = () => setDuration(audio.duration);
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
     const onEnded = () => setIsPlaying(false);
 
     audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", onEnded);
 
     return () => {
       audio.pause();
       audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", onEnded);
       audio.src = "";
       audioRef.current = null;
@@ -74,6 +77,11 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
       audioRef.current.playbackRate = speed;
     }
   }, [speed]);
+
+  // Report time updates to parent
+  useEffect(() => {
+    onTimeUpdate?.(currentTime);
+  }, [currentTime, onTimeUpdate]);
 
   // Track listening time while playing
   useEffect(() => {
