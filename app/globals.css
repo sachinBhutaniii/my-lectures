@@ -1,5 +1,51 @@
 @import "tailwindcss";
 
+/* ── Flame icon animation ── */
+@keyframes flame-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px #f97316) drop-shadow(0 0 8px #fb923c);
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 8px #f97316) drop-shadow(0 0 16px #fbbf24);
+    transform: scale(1.1);
+  }
+}
+
+.flame-animated {
+  animation: flame-pulse 1.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* Hide scrollbar on horizontal scroll rows */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Progress bar scrubber thumb */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: none;
+}
+
 /* :root {
   --background: #ffffff;
   --foreground: #171717;
