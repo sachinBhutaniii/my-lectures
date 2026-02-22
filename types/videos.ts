@@ -3,6 +3,7 @@ export interface LectureVideo {
   title: string;
   thumbnailUrl: string;
   videoUrl: string;
+  audioUrl?: string;
   transcript : string;
   transcriptSrt?: string;
   key?: string;

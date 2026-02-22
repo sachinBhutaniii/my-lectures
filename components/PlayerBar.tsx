@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { LectureVideo } from "@/types/videos";
 
 interface Props {
@@ -12,14 +12,70 @@ interface Props {
 
 const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
+function formatTime(sec: number): string {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: Props) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [speed, setSpeed] = useState(1.0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [speedIdx, setSpeedIdx] = useState(2);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Track listening time while playing — fires every second
+  const speed = speeds[speedIdx];
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Create / update audio element when audioUrl changes
+  useEffect(() => {
+    if (!lecture.audioUrl) return;
+
+    const audio = new Audio(lecture.audioUrl);
+    audio.preload = "metadata";
+    audioRef.current = audio;
+
+    const onLoaded = () => setDuration(audio.duration);
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onEnded = () => setIsPlaying(false);
+
+    audio.addEventListener("loadedmetadata", onLoaded);
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("ended", onEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("ended", onEnded);
+      audio.src = "";
+      audioRef.current = null;
+    };
+  }, [lecture.audioUrl]);
+
+  // Sync play/pause state with audio element
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.play().catch(() => setIsPlaying(false));
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying]);
+
+  // Sync playback speed
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
+    }
+  }, [speed]);
+
+  // Track listening time while playing
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
@@ -39,10 +95,27 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
     };
   }, [isPlaying, onListeningTime]);
 
+  const togglePlay = useCallback(() => {
+    if (!lecture.audioUrl) return;
+    setIsPlaying((v) => !v);
+  }, [lecture.audioUrl]);
+
+  const seek = useCallback((pct: number) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    audio.currentTime = (pct / 100) * duration;
+    setCurrentTime(audio.currentTime);
+  }, [duration]);
+
+  const skip = useCallback((seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, duration));
+    setCurrentTime(audio.currentTime);
+  }, [duration]);
+
   const cycleSpeed = () => {
-    const next = (speedIdx + 1) % speeds.length;
-    setSpeedIdx(next);
-    setSpeed(speeds[next]);
+    setSpeedIdx((prev) => (prev + 1) % speeds.length);
   };
 
   return (
@@ -84,7 +157,7 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
         )}
 
         {/* 3-dot menu */}
-        <button className="text-gray-400 text-xl leading-none pl-1">⋮</button>
+        <button className="text-gray-400 text-xl leading-none pl-1">&#x22EE;</button>
       </div>
 
       {/* Progress bar */}
@@ -95,7 +168,7 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
             min={0}
             max={100}
             value={progress}
-            onChange={(e) => setProgress(Number(e.target.value))}
+            onChange={(e) => seek(Number(e.target.value))}
             className="w-full h-1 appearance-none rounded-full cursor-pointer"
             style={{
               background: `linear-gradient(to right, #f97316 ${progress}%, #374151 ${progress}%)`,
@@ -104,13 +177,13 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
         </div>
         {/* Time row */}
         <div className="flex justify-between items-center mt-1">
-          <span className="text-white text-xs font-medium">0:00</span>
+          <span className="text-white text-xs font-medium">{formatTime(currentTime)}</span>
           <div className="flex gap-0.5">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="w-0.5 h-0.5 bg-gray-500 rounded-full" />
             ))}
           </div>
-          <span className="text-white text-xs font-medium">--:--</span>
+          <span className="text-white text-xs font-medium">{duration > 0 ? formatTime(duration) : "--:--"}</span>
         </div>
       </div>
 
@@ -131,17 +204,21 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
         </button>
 
         {/* Rewind 10s */}
-        <button className="text-gray-300 relative">
+        <button onClick={() => skip(-10)} className="text-gray-300 relative">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
           </svg>
           <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-0.5">10</span>
         </button>
 
-        {/* Play / Pause — large orange button */}
+        {/* Play / Pause */}
         <button
-          onClick={() => setIsPlaying((v) => !v)}
-          className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/30"
+          onClick={togglePlay}
+          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${
+            lecture.audioUrl
+              ? "bg-orange-500 shadow-orange-500/30"
+              : "bg-gray-700 shadow-none cursor-not-allowed"
+          }`}
         >
           {isPlaying ? (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-7 h-7">
@@ -155,7 +232,7 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime }: 
         </button>
 
         {/* Forward 10s */}
-        <button className="text-gray-300 relative">
+        <button onClick={() => skip(10)} className="text-gray-300 relative">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
           </svg>
