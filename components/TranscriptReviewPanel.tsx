@@ -1,5 +1,6 @@
 "use client";
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import { useFetch } from "@/hooks/useFetch";
 import {
   getAllTranscripts,
@@ -277,6 +278,21 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
           )}
           L2
         </button>
+
+        {/* Review Edits link — shown when L1 or L2 submitted their work */}
+        {(item.l1ReviewSubmitted || item.l2ReviewSubmitted) && !item.deployed && (
+          <Link
+            href={`/admin/review?id=${item.id}`}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors flex-shrink-0"
+            title="Open transcript editor to review submitted edits"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+              <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+              <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41Z" clipRule="evenodd" />
+            </svg>
+            Review{item.l2ReviewSubmitted ? " L2" : " L1"}
+          </Link>
+        )}
 
         {/* Approve / Reset / Deploy actions */}
         <div className="flex items-center gap-1.5 flex-shrink-0">

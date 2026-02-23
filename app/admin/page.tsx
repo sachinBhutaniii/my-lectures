@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import AdminVideoList from "@/components/AdminVideoList";
 import AdminUserManager from "@/components/AdminUserManager";
 import TranscriptReviewPanel from "@/components/TranscriptReviewPanel";
+import { getSubmittedReviews, TranscriptReviewItem } from "@/services/video.service";
 
 type Tab = "videos" | "transcripts" | "users";
 
@@ -44,11 +45,19 @@ export default function AdminPage() {
   const { user, authLoading, isAdmin, isParentAdmin } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("videos");
+  const [submittedReviews, setSubmittedReviews] = useState<TranscriptReviewItem[]>([]);
+  const [notifDismissed, setNotifDismissed] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user || !isAdmin) router.replace("/");
   }, [user, authLoading, isAdmin, router]);
+
+  // Poll for submitted reviews (notification badge)
+  useEffect(() => {
+    if (!isAdmin) return;
+    getSubmittedReviews().then(setSubmittedReviews).catch(() => {});
+  }, [isAdmin]);
 
   if (authLoading || !isAdmin) {
     return (
@@ -84,6 +93,39 @@ export default function AdminPage() {
         </div>
         <span className="ml-auto text-orange-500/70 text-xs font-mono">{user?.email}</span>
       </div>
+
+      {/* Review submitted notification banner */}
+      {submittedReviews.length > 0 && !notifDismissed && (
+        <div className="mx-5 mt-3 flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
+          <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-400">
+              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-blue-200">
+              {submittedReviews.length} transcript review{submittedReviews.length > 1 ? "s" : ""} ready
+            </p>
+            <p className="text-xs text-gray-400 truncate">
+              {submittedReviews.map((r) => r.videoTitle).join(", ")}
+            </p>
+          </div>
+          <button
+            onClick={() => { setActiveTab("transcripts"); setNotifDismissed(true); }}
+            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+          >
+            Review
+          </button>
+          <button
+            onClick={() => setNotifDismissed(true)}
+            className="flex-shrink-0 text-gray-600 hover:text-gray-400 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-gray-800">

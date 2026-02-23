@@ -81,6 +81,9 @@ export interface TranscriptReviewItem {
   level2ProofreaderId: number | null;
   level2ProofreaderName: string | null;
   deployed: boolean;
+  l1ReviewSubmitted: boolean;
+  l2ReviewSubmitted: boolean;
+  audioUrl?: string;
 }
 
 export const getAllTranscripts = async (): Promise<TranscriptReviewItem[]> => {
@@ -119,6 +122,48 @@ export const deployTranscript = async (id: number): Promise<TranscriptReviewItem
 
 export const getMyAssignments = async (): Promise<TranscriptReviewItem[]> => {
   const res = await apiClient.get<TranscriptReviewItem[]>("/api/transcripts/my-assignments");
+  return res.data;
+};
+
+// ── Transcript editor ─────────────────────────────────────────────────────────
+
+export interface TranscriptEditorData {
+  id: number;
+  videoId: number;
+  videoTitle: string;
+  audioUrl?: string;
+  localeCode: string;
+  localeName: string;
+  approvalStatus: string;
+  originalSrt: string | null;
+  level1Srt: string | null;
+  level2Srt: string | null;
+  l1ReviewSubmitted: boolean;
+  l2ReviewSubmitted: boolean;
+  level1ProofreaderId: number | null;
+  level2ProofreaderId: number | null;
+  deployed: boolean;
+}
+
+export const getTranscriptForEditor = async (id: number): Promise<TranscriptEditorData> => {
+  const res = await apiClient.get<TranscriptEditorData>(`/api/transcripts/${id}/editor`);
+  return res.data;
+};
+
+export const saveTranscriptDraft = async (id: number, level: 1 | 2, srtContent: string): Promise<void> => {
+  await apiClient.put(`/api/transcripts/${id}/save-draft`, { level, srtContent });
+};
+
+export const submitTranscriptReview = async (id: number, level: 1 | 2, srtContent: string): Promise<void> => {
+  await apiClient.put(`/api/transcripts/${id}/submit-review`, { level, srtContent });
+};
+
+export const publishTranscript = async (id: number, srtContent: string): Promise<void> => {
+  await apiClient.put(`/api/transcripts/${id}/publish`, { level: 0, srtContent });
+};
+
+export const getSubmittedReviews = async (): Promise<TranscriptReviewItem[]> => {
+  const res = await apiClient.get<TranscriptReviewItem[]>("/api/transcripts/submitted-reviews");
   return res.data;
 };
 
