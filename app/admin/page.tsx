@@ -6,9 +6,10 @@ import { useAuth } from "@/context/AuthContext";
 import AdminVideoList from "@/components/AdminVideoList";
 import AdminUserManager from "@/components/AdminUserManager";
 import TranscriptReviewPanel from "@/components/TranscriptReviewPanel";
+import JnanaYagyaAdmin from "@/components/JnanaYagyaAdmin";
 import { getSubmittedReviews, TranscriptReviewItem } from "@/services/video.service";
 
-type Tab = "videos" | "transcripts" | "users";
+type Tab = "videos" | "transcripts" | "users" | "jnana";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
   {
@@ -36,6 +37,15 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; adminOnly?: boolean
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+      </svg>
+    ),
+  },
+  {
+    id: "jnana",
+    label: "Jñāna Yajña",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+        <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z" />
       </svg>
     ),
   },
@@ -150,6 +160,7 @@ export default function AdminPage() {
         {activeTab === "videos"      && <AdminVideoList />}
         {activeTab === "transcripts" && <TranscriptReviewPanel />}
         {activeTab === "users"       && isParentAdmin && <AdminUserManager />}
+        {activeTab === "jnana"       && <JnanaYagyaAdmin />}
       </div>
     </div>
   );
