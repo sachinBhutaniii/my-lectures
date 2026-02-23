@@ -36,18 +36,18 @@ export default function AdminUserManager() {
       // Pass roleFilter hint via the query — backend searchUsers returns ROLE_ADMIN by default
       // For proofreaders with no query, use a marker approach: we call with a special empty search
       // that the backend doesn't support yet for proofreaders. Instead we call the proofreaders endpoint.
-      if (currentView === "proofreaders" && !q) {
-        // Fetch all proofreaders via /api/users/proofreaders
+      if (q && q.length >= 2) {
+        // Search mode: show ALL matching users so any user can be found and assigned a role
+        const results = await searchUsers(q);
+        setUsers(results);
+      } else if (currentView === "proofreaders") {
         const { default: apiClient } = await import("@/lib/axios");
         const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
         setUsers(res.data);
       } else {
-        const results = await searchUsers(q);
-        // If viewing proofreaders, filter client-side (search returns all roles)
-        const filtered = currentView === "proofreaders"
-          ? results.filter((u) => u.role === "ROLE_PROOFREADER")
-          : results.filter((u) => u.role === "ROLE_ADMIN" || u.role === "ROLE_PARENT_ADMIN");
-        setUsers(filtered);
+        // Default admins view: show current child admins
+        const results = await searchUsers(undefined);
+        setUsers(results);
       }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status: number; data?: { error?: string } } };
@@ -86,12 +86,7 @@ export default function AdminUserManager() {
     setUpdating({ id: user.id, role: newRole });
     try {
       const updated = await updateUserRole(user.id, newRole);
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)).filter((u) => {
-        // Remove from list if they no longer match the current view
-        if (view === "admins") return u.role === "ROLE_ADMIN" || u.role === "ROLE_PARENT_ADMIN";
-        if (view === "proofreaders") return u.role === "ROLE_PROOFREADER";
-        return true;
-      }));
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
     } catch {
       setError("Failed to update role. Please try again.");
     } finally {
