@@ -32,6 +32,10 @@ export const updateVideo = async (id: number, video: Omit<LectureVideo, 'id'>): 
   return response.data;
 };
 
+export const deleteVideo = async (id: number): Promise<void> => {
+  await apiClient.delete(`${VIDEO_API_URL}/${id}`);
+};
+
 
 export const getLanguageData = async (): Promise<LanguageData[]> => {
   const response = await apiClient.get<LanguageData[]>(LANGUAGE_API_URL);
