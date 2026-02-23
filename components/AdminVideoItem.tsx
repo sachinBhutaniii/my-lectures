@@ -91,7 +91,7 @@ export default function AdminVideoItem({ video, onEdit, onDelete }: AdminVideoIt
           {/* Delete button */}
           <button
             onClick={() => onDelete(video)}
-            className="p-1.5 rounded-lg text-gray-700 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Delete lecture"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">

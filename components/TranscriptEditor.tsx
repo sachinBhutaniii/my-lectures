@@ -51,6 +51,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [publishDone, setPublishDone] = useState(false);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const origCuesRef = useRef<SrtCue[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
 
   // ── Initialise cues ──────────────────────────────────────────────────────────
@@ -58,6 +59,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     const orig = parseSrt(data.originalSrt ?? "");
     const l1 = parseSrt(data.level1Srt ?? "");
     const l2 = parseSrt(data.level2Srt ?? "");
+
+    origCuesRef.current = orig;
 
     if (mode === "l1") {
       setCues(l1.length > 0 ? l1 : orig);
@@ -122,6 +125,12 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }, 3000);
     return () => { if (saveTimer.current !== null) clearTimeout(saveTimer.current); };
   }, [cues, data.id, level, mode]);
+
+  // ── L1 mode: live track-changes diff ─────────────────────────────────────────
+  useEffect(() => {
+    if (mode !== "l1" || origCuesRef.current.length === 0 || cues.length === 0) return;
+    setL1Diff(diffCues(origCuesRef.current, cues));
+  }, [cues, mode]);
 
   // ── Audio controls ───────────────────────────────────────────────────────────
   const togglePlay = () => {
