@@ -1,10 +1,11 @@
 "use client";
-import { LectureVideo } from "@/types/videos";
-import { useState, useEffect, useRef } from "react";
-import { uploadImage } from "@/services/video.service";
+import { LectureVideo, LanguageData } from "@/types/videos";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { uploadImage, getVideoById, getLanguageData } from "@/services/video.service";
 
 type VideoFormProps = {
   initialData?: Partial<LectureVideo>;
+  videoId?: number;          // needed to load transcripts for existing lectures
   onSubmit: (data: Omit<LectureVideo, "id">) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
@@ -29,7 +30,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 const inputCls =
   "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-orange-500 transition-colors";
 
-export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }: VideoFormProps) {
+export default function VideoForm({ initialData, videoId, onSubmit, onCancel, isLoading }: VideoFormProps) {
   const [formData, setFormData] = useState<Omit<LectureVideo, "id">>({
     title: "",
     videoUrl: "",
@@ -44,6 +45,7 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
     category: [],
     description: "",
     keywords: [],
+    locale: "en",
   });
 
   const [keywordInput, setKeywordInput] = useState("");
@@ -51,6 +53,20 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Transcript locale state
+  const [languages, setLanguages] = useState<LanguageData[]>([]);
+  const [transcriptLocale, setTranscriptLocale] = useState("en");
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [transcriptLoaded, setTranscriptLoaded] = useState(false);
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
+  const [langSearch, setLangSearch] = useState("");
+
+  // Load available languages once
+  useEffect(() => {
+    getLanguageData().then(setLanguages).catch(() => {});
+  }, []);
+
+  // Populate form when initialData changes
   useEffect(() => {
     if (initialData) {
       setFormData({
@@ -67,9 +83,39 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
         category: initialData.category || [],
         description: initialData.description || "",
         keywords: initialData.keywords || [],
+        locale: "en",
       });
+      setTranscriptLocale("en");
+      setTranscriptLoaded(false);
     }
   }, [initialData]);
+
+  const loadTranscript = useCallback(async (locale: string) => {
+    if (!videoId) return;
+    setTranscriptLoading(true);
+    setTranscriptLoaded(false);
+    try {
+      const video = await getVideoById(videoId, locale);
+      setFormData((prev) => ({
+        ...prev,
+        transcript: video.transcript || "",
+        transcriptSrt: video.transcriptSrt || "",
+        locale,
+      }));
+      setTranscriptLoaded(true);
+    } catch {
+      setFormData((prev) => ({ ...prev, transcript: "", transcriptSrt: "", locale }));
+    } finally {
+      setTranscriptLoading(false);
+    }
+  }, [videoId]);
+
+  const handleLocaleSelect = (code: string) => {
+    setTranscriptLocale(code);
+    setShowLangDropdown(false);
+    setLangSearch("");
+    loadTranscript(code);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -97,18 +143,12 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
   const addKeyword = () => {
     const kw = keywordInput.trim();
     if (!kw) return;
-    setFormData((prev) => ({
-      ...prev,
-      keywords: [...(prev.keywords ?? []), kw],
-    }));
+    setFormData((prev) => ({ ...prev, keywords: [...(prev.keywords ?? []), kw] }));
     setKeywordInput("");
   };
 
   const removeKeyword = (kw: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      keywords: (prev.keywords ?? []).filter((k) => k !== kw),
-    }));
+    setFormData((prev) => ({ ...prev, keywords: (prev.keywords ?? []).filter((k) => k !== kw) }));
   };
 
   const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -130,6 +170,11 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
     e.preventDefault();
     onSubmit(formData);
   };
+
+  const selectedLangName = languages.find((l) => l.code === transcriptLocale)?.name ?? "English";
+  const filteredLangs = languages.filter((l) =>
+    l.name.toLowerCase().includes(langSearch.toLowerCase())
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -198,13 +243,7 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
             </div>
           )}
           <div className="flex-1 space-y-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleThumbnailUpload}
-              className="hidden"
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -234,9 +273,7 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
               type="text"
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); addKeyword(); }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeyword(); } }}
               placeholder="Type keyword and press Enter…"
               className={inputCls + " flex-1"}
             />
@@ -268,106 +305,154 @@ export default function VideoForm({ initialData, onSubmit, onCancel, isLoading }
       {/* Speaker + Date */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Speaker">
-          <input
-            type="text"
-            name="speaker"
-            value={formData.speaker}
-            onChange={handleChange}
-            className={inputCls}
-          />
+          <input type="text" name="speaker" value={formData.speaker} onChange={handleChange} className={inputCls} />
         </Field>
         <Field label="Date">
-          <input
-            type="date"
-            name="date"
-            value={formData.date}
-            onChange={handleChange}
-            className={inputCls}
-          />
+          <input type="date" name="date" value={formData.date} onChange={handleChange} className={inputCls} />
         </Field>
       </div>
 
       {/* City + Country */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="City">
-          <input
-            type="text"
-            name="city"
-            value={formData.place?.city || ""}
-            onChange={handlePlaceChange}
-            placeholder="e.g. Mayapur"
-            className={inputCls}
-          />
+          <input type="text" name="city" value={formData.place?.city || ""} onChange={handlePlaceChange} placeholder="e.g. Mayapur" className={inputCls} />
         </Field>
         <Field label="Country">
-          <input
-            type="text"
-            name="country"
-            value={formData.place?.country || ""}
-            onChange={handlePlaceChange}
-            placeholder="e.g. India"
-            className={inputCls}
-          />
+          <input type="text" name="country" value={formData.place?.country || ""} onChange={handlePlaceChange} placeholder="e.g. India" className={inputCls} />
         </Field>
       </div>
 
       {/* URLs */}
       <Field label="Video URL">
-        <input
-          type="text"
-          name="videoUrl"
-          required
-          value={formData.videoUrl}
-          onChange={handleChange}
-          placeholder="https://…"
-          className={inputCls}
-        />
+        <input type="text" name="videoUrl" required value={formData.videoUrl} onChange={handleChange} placeholder="https://…" className={inputCls} />
       </Field>
-
       <Field label="Audio URL">
-        <input
-          type="text"
-          name="audioUrl"
-          value={formData.audioUrl}
-          onChange={handleChange}
-          placeholder="https://…"
-          className={inputCls}
-        />
+        <input type="text" name="audioUrl" value={formData.audioUrl} onChange={handleChange} placeholder="https://…" className={inputCls} />
       </Field>
-
       <Field label="Key (SKU)">
-        <input
-          type="text"
-          name="key"
-          value={formData.key}
-          onChange={handleChange}
-          placeholder="e.g. sb-1-1-001"
-          className={inputCls}
-        />
+        <input type="text" name="key" value={formData.key} onChange={handleChange} placeholder="e.g. sb-1-1-001" className={inputCls} />
       </Field>
 
-      {/* Transcript */}
-      <Field label="Transcript">
-        <textarea
-          name="transcript"
-          rows={3}
-          value={formData.transcript}
-          onChange={handleChange}
-          placeholder="Plain text transcript…"
-          className={inputCls + " resize-none"}
-        />
-      </Field>
+      {/* ── Transcript section ── */}
+      <div className="border border-gray-800 rounded-xl p-4 space-y-4 bg-gray-900/30">
+        {/* Section header + language picker */}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Transcript</span>
 
-      <Field label="Transcript SRT">
-        <textarea
-          name="transcriptSrt"
-          rows={2}
-          value={formData.transcriptSrt}
-          onChange={handleChange}
-          placeholder="SRT subtitle content…"
-          className={inputCls + " resize-none"}
-        />
-      </Field>
+          <div className="flex items-center gap-2">
+            {/* Language picker */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowLangDropdown((v) => !v)}
+                className="flex items-center gap-1.5 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 bg-gray-900 hover:border-gray-600 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 text-gray-500">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />
+                </svg>
+                <span>{selectedLangName}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-2.5 h-2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+
+              {showLangDropdown && (
+                <div className="absolute right-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+                  <div className="p-2 border-b border-gray-800">
+                    <input
+                      type="text"
+                      value={langSearch}
+                      onChange={(e) => setLangSearch(e.target.value)}
+                      placeholder="Search language…"
+                      className="w-full bg-gray-800 text-xs text-gray-300 placeholder-gray-600 rounded-lg px-2.5 py-1.5 outline-none"
+                    />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto">
+                    {filteredLangs.length > 0 ? (
+                      filteredLangs.map((lang) => (
+                        <button
+                          key={lang.id}
+                          type="button"
+                          onClick={() => handleLocaleSelect(lang.code)}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                            lang.code === transcriptLocale
+                              ? "text-orange-400 bg-gray-800"
+                              : "text-gray-300 hover:bg-gray-800"
+                          }`}
+                        >
+                          {lang.name}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-gray-600 text-xs px-3 py-2">No results</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Load button — only for existing lectures */}
+            {videoId && (
+              <button
+                type="button"
+                onClick={() => loadTranscript(transcriptLocale)}
+                disabled={transcriptLoading}
+                className="flex items-center gap-1 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-400 hover:border-orange-500 hover:text-orange-400 transition-colors disabled:opacity-50"
+              >
+                {transcriptLoading ? (
+                  <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                )}
+                Load
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Status badge */}
+        {videoId && transcriptLoaded && (
+          <p className="text-[11px] text-green-500/80 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+            </svg>
+            Loaded {selectedLangName} transcript
+          </p>
+        )}
+        {!videoId && (
+          <p className="text-[11px] text-gray-600">Save the lecture first, then load/edit transcripts per language.</p>
+        )}
+
+        {/* Transcript textarea */}
+        <div>
+          <label className="block text-xs text-gray-600 mb-1.5">Plain text transcript</label>
+          <textarea
+            name="transcript"
+            rows={6}
+            value={formData.transcript}
+            onChange={handleChange}
+            placeholder={videoId ? "Click Load to fetch existing transcript, or type here…" : "Transcript text…"}
+            disabled={transcriptLoading}
+            className={inputCls + " resize-y disabled:opacity-40"}
+          />
+        </div>
+
+        {/* SRT textarea */}
+        <div>
+          <label className="block text-xs text-gray-600 mb-1.5">SRT subtitles</label>
+          <textarea
+            name="transcriptSrt"
+            rows={4}
+            value={formData.transcriptSrt}
+            onChange={handleChange}
+            placeholder={videoId ? "Click Load to fetch existing SRT, or paste here…" : "SRT content…"}
+            disabled={transcriptLoading}
+            className={inputCls + " resize-y font-mono text-xs disabled:opacity-40"}
+          />
+        </div>
+      </div>
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">

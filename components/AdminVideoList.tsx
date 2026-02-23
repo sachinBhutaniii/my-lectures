@@ -141,6 +141,7 @@ const AdminVideoList = () => {
             <div className="flex-1 overflow-y-auto px-5 py-5">
               <VideoForm
                 initialData={editingVideo || undefined}
+                videoId={editingVideo?.id}
                 onSubmit={handleFormSubmit}
                 onCancel={closePanel}
                 isLoading={isSaving}
