@@ -155,16 +155,11 @@ export default function ProfilePage() {
         try {
           const { latitude, longitude } = pos.coords;
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
           );
           const data = await res.json();
-          const city =
-            data.address?.city ||
-            data.address?.town ||
-            data.address?.village ||
-            data.address?.county ||
-            "";
-          const country = data.address?.country || "";
+          const city = data.city || data.locality || data.principalSubdivision || "";
+          const country = data.countryName || "";
           const updates: Parameters<typeof save>[0] = {};
           if (city) updates.city = city;
           if (country) updates.country = country;
