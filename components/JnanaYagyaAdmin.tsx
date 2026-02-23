@@ -192,11 +192,11 @@ export default function JnanaYagyaAdmin() {
       setPreview([]);
       setRawText("");
       await loadExistingQuestions(selectedSection.id);
-      // Refresh section count in list
       if (selectedCourse) await loadSections(selectedCourse.id);
       setExistingTab("existing");
-    } catch {
-      alert("Failed to save questions");
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || "Unknown error";
+      alert(`Save failed: ${msg}`);
     } finally {
       setSaveLoading(false);
     }
