@@ -146,7 +146,7 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  // Auto-detect city via Geolocation + Nominatim reverse geocoding
+  // Auto-detect city + country via Geolocation + Nominatim reverse geocoding
   const detectCity = async () => {
     if (!navigator.geolocation) return;
     setLocating(true);
@@ -164,7 +164,11 @@ export default function ProfilePage() {
             data.address?.village ||
             data.address?.county ||
             "";
-          if (city) save({ city });
+          const country = data.address?.country || "";
+          const updates: Parameters<typeof save>[0] = {};
+          if (city) updates.city = city;
+          if (country) updates.country = country;
+          if (Object.keys(updates).length > 0) save(updates);
         } catch { /* ignore */ }
         setLocating(false);
       },
@@ -341,6 +345,17 @@ export default function ProfilePage() {
               )}
               {locating ? "Detecting…" : "Auto"}
             </button>
+          </FieldRow>
+          <FieldRow>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#f97316" className="w-4 h-4 flex-shrink-0">
+              <path d="M15.75 8.25a.75.75 0 01.75.75c0 1.12-.492 2.126-1.27 2.812a.75.75 0 11-.992-1.124A2.243 2.243 0 0015 9a.75.75 0 01.75-.75z" />
+              <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM4.575 15.6a8.25 8.25 0 009.348 4.425 1.966 1.966 0 00-1.84-1.275.983.983 0 01-.97-.822l-.073-.437c-.094-.565.25-1.11.8-1.267l.99-.282c.427-.123.783-.418.982-.816l.036-.073a1.453 1.453 0 012.328-.377L16.5 15h.628a2.25 2.25 0 011.983 1.186 8.25 8.25 0 00-6.345-12.4c.03.489-.013.987-.14 1.479-.19.731-.692 1.338-1.37 1.671l-.534.268a1.5 1.5 0 00-.83 1.342v.943a1.5 1.5 0 01-.44 1.06l-.739.74a1.5 1.5 0 01-1.06.44h-.689a1.5 1.5 0 01-1.484-1.309l-.065-.523a1.5 1.5 0 00-.758-1.152A8.225 8.225 0 004.575 15.6z" clipRule="evenodd" />
+            </svg>
+            <TextInput
+              value={profile.country}
+              onChange={(v) => save({ country: v })}
+              placeholder="Your country"
+            />
           </FieldRow>
         </SectionCard>
 

@@ -20,6 +20,7 @@ export interface UserProfile {
   email: string;
   emailVerified: boolean;
   city: string;
+  country: string;
   relationship: Relationship;
   profilePicture: string; // base64 data URL or ""
 }
@@ -33,6 +34,7 @@ const DEFAULT_PROFILE: UserProfile = {
   email: "",
   emailVerified: false,
   city: "",
+  country: "",
   relationship: "",
   profilePicture: "",
 };
@@ -47,6 +49,13 @@ export function useProfile() {
       if (raw) setProfile({ ...DEFAULT_PROFILE, ...JSON.parse(raw) });
     } catch { /* ignore */ }
     setLoaded(true);
+  }, []);
+
+  // Reset profile state when logout clears localStorage
+  useEffect(() => {
+    const reset = () => { setProfile(DEFAULT_PROFILE); setLoaded(true); };
+    window.addEventListener("bdd-logout", reset);
+    return () => window.removeEventListener("bdd-logout", reset);
   }, []);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {

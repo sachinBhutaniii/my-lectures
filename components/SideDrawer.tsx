@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/context/AuthContext";
 
 interface Props {
@@ -180,7 +179,6 @@ function formatNow() {
 }
 
 export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile }: Props) {
-  const { profile, displayName } = useProfile();
   const { user, logout, isAdmin, isProofreader } = useAuth();
   const router = useRouter();
   const [now, setNow] = useState("");
@@ -247,10 +245,8 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-semibold text-base">{displayName}</p>
-                <p className="text-gray-500 text-xs mt-0.5">
-                  {profile.email || "Not signed in"}
-                </p>
+                <p className="text-white font-semibold text-base">Guest</p>
+                <p className="text-gray-500 text-xs mt-0.5">Not signed in</p>
               </div>
             </div>
             <button

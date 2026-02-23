@@ -126,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem("bdd_user_profile");
+    window.dispatchEvent(new Event("bdd-logout"));
     setToken(null);
     setUser(null);
   }, []);
