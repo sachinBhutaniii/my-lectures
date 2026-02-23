@@ -3,9 +3,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { searchUsers, updateUserRole, UserSearchResult } from "@/services/video.service";
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
-  ROLE_ADMIN:  { label: "Child Admin", color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
-  ROLE_USER:   { label: "User",        color: "text-gray-400 bg-gray-800 border-gray-700" },
-  ROLE_PARENT_ADMIN: { label: "Parent Admin", color: "text-amber-300 bg-amber-500/10 border-amber-400/30" },
+  ROLE_ADMIN:        { label: "Child Admin",  color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
+  ROLE_PROOFREADER:  { label: "Proofreader",  color: "text-blue-400 bg-blue-500/10 border-blue-500/30" },
+  ROLE_USER:         { label: "User",          color: "text-gray-400 bg-gray-800 border-gray-700" },
+  ROLE_PARENT_ADMIN: { label: "Parent Admin",  color: "text-amber-300 bg-amber-500/10 border-amber-400/30" },
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -17,22 +18,38 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+type ViewMode = "admins" | "proofreaders";
+
 export default function AdminUserManager() {
+  const [view, setView] = useState<ViewMode>("admins");
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [updating, setUpdating] = useState<number | null>(null);
+  const [updating, setUpdating] = useState<{ id: number; role: string } | null>(null);
   const [error, setError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const load = useCallback(async (q?: string) => {
+  const load = useCallback(async (q?: string, currentView: ViewMode = "admins") => {
     setLoading(true);
     setError("");
     try {
-      const results = await searchUsers(q);
-      setUsers(results);
+      // Pass roleFilter hint via the query — backend searchUsers returns ROLE_ADMIN by default
+      // For proofreaders with no query, use a marker approach: we call with a special empty search
+      // that the backend doesn't support yet for proofreaders. Instead we call the proofreaders endpoint.
+      if (currentView === "proofreaders" && !q) {
+        // Fetch all proofreaders via /api/users/proofreaders
+        const { default: apiClient } = await import("@/lib/axios");
+        const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
+        setUsers(res.data);
+      } else {
+        const results = await searchUsers(q);
+        // If viewing proofreaders, filter client-side (search returns all roles)
+        const filtered = currentView === "proofreaders"
+          ? results.filter((u) => u.role === "ROLE_PROOFREADER")
+          : results.filter((u) => u.role === "ROLE_ADMIN" || u.role === "ROLE_PARENT_ADMIN");
+        setUsers(filtered);
+      }
     } catch (err: unknown) {
-      // Surface the actual HTTP status so it's easier to diagnose
       const axiosErr = err as { response?: { status: number; data?: { error?: string } } };
       const status = axiosErr?.response?.status;
       const msg = axiosErr?.response?.data?.error;
@@ -50,27 +67,31 @@ export default function AdminUserManager() {
     }
   }, []);
 
-  // Initial load: show current child admins
-  useEffect(() => { load(); }, [load]);
+  // Reload when view changes
+  useEffect(() => { load(undefined, view); }, [load, view]);
 
   // Debounced search
   useEffect(() => {
     clearTimeout(debounceRef.current);
     if (query.length === 0) {
-      load();
+      load(undefined, view);
       return;
     }
     if (query.length < 2) return;
-    debounceRef.current = setTimeout(() => load(query), 300);
+    debounceRef.current = setTimeout(() => load(query, view), 300);
     return () => clearTimeout(debounceRef.current);
-  }, [query, load]);
+  }, [query, load, view]);
 
-  const handleRoleToggle = async (user: UserSearchResult) => {
-    const newRole = user.role === "ROLE_ADMIN" ? "ROLE_USER" : "ROLE_ADMIN";
-    setUpdating(user.id);
+  const handleRoleChange = async (user: UserSearchResult, newRole: string) => {
+    setUpdating({ id: user.id, role: newRole });
     try {
       const updated = await updateUserRole(user.id, newRole);
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)).filter((u) => {
+        // Remove from list if they no longer match the current view
+        if (view === "admins") return u.role === "ROLE_ADMIN" || u.role === "ROLE_PARENT_ADMIN";
+        if (view === "proofreaders") return u.role === "ROLE_PROOFREADER";
+        return true;
+      }));
     } catch {
       setError("Failed to update role. Please try again.");
     } finally {
@@ -84,8 +105,32 @@ export default function AdminUserManager() {
       <div>
         <h2 className="text-base font-semibold text-white">User Management</h2>
         <p className="text-xs text-gray-500 mt-1">
-          Assign or revoke the Child Admin role. Child admins can edit lectures and approve transcripts (Level 1).
+          Assign Child Admin, Proofreader, or User roles.
         </p>
+      </div>
+
+      {/* View toggle */}
+      <div className="flex gap-1 p-1 bg-gray-900 border border-gray-800 rounded-xl w-fit">
+        <button
+          onClick={() => { setView("admins"); setQuery(""); }}
+          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            view === "admins"
+              ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+              : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          Admins
+        </button>
+        <button
+          onClick={() => { setView("proofreaders"); setQuery(""); }}
+          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            view === "proofreaders"
+              ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+              : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          Proofreaders
+        </button>
       </div>
 
       {/* Search */}
@@ -111,7 +156,11 @@ export default function AdminUserManager() {
 
       {/* Section label */}
       <p className="text-xs text-gray-600 uppercase tracking-wide">
-        {query.length >= 2 ? `Results for "${query}"` : "Current child admins"}
+        {query.length >= 2
+          ? `Results for "${query}"`
+          : view === "admins"
+          ? "Current child admins"
+          : "Current proofreaders"}
       </p>
 
       {/* Error */}
@@ -124,7 +173,7 @@ export default function AdminUserManager() {
             <p className="text-red-400 text-sm">{error}</p>
           </div>
           <button
-            onClick={() => load(query.length >= 2 ? query : undefined)}
+            onClick={() => load(query.length >= 2 ? query : undefined, view)}
             className="flex-shrink-0 text-xs text-red-400 hover:text-red-200 border border-red-500/30 rounded-lg px-2.5 py-1 transition-colors"
           >
             Retry
@@ -143,7 +192,11 @@ export default function AdminUserManager() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
           </svg>
           <p className="text-sm">
-            {query.length >= 2 ? "No users found. Try a different search." : "No child admins assigned yet."}
+            {query.length >= 2
+              ? "No users found. Try a different search."
+              : view === "admins"
+              ? "No child admins assigned yet."
+              : "No proofreaders assigned yet."}
           </p>
           {query.length >= 2 && (
             <p className="text-xs mt-1 text-gray-700">The user must have registered in the app first.</p>
@@ -176,25 +229,48 @@ export default function AdminUserManager() {
               {/* Role badge */}
               <RoleBadge role={user.role} />
 
-              {/* Action button — don't show for parent admin */}
+              {/* Action buttons — skip for parent admin */}
               {user.role !== "ROLE_PARENT_ADMIN" && (
-                <button
-                  onClick={() => handleRoleToggle(user)}
-                  disabled={updating === user.id}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
-                    user.role === "ROLE_ADMIN"
-                      ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
-                      : "border-orange-500/40 text-orange-400 hover:bg-orange-500/10"
-                  }`}
-                >
-                  {updating === user.id ? (
-                    <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
-                  ) : user.role === "ROLE_ADMIN" ? (
-                    "Revoke"
-                  ) : (
-                    "Make Admin"
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Make Admin button — show if not already admin */}
+                  {user.role !== "ROLE_ADMIN" && (
+                    <button
+                      onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
+                      disabled={updating !== null}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                    >
+                      {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
+                        <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
+                      ) : "Admin"}
+                    </button>
                   )}
-                </button>
+
+                  {/* Make Proofreader button — show if not already proofreader */}
+                  {user.role !== "ROLE_PROOFREADER" && (
+                    <button
+                      onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
+                      disabled={updating !== null}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                    >
+                      {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
+                        <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      ) : "Proofreader"}
+                    </button>
+                  )}
+
+                  {/* Revoke — reset to ROLE_USER */}
+                  {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
+                    <button
+                      onClick={() => handleRoleChange(user, "ROLE_USER")}
+                      disabled={updating !== null}
+                      className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    >
+                      {updating?.id === user.id && updating.role === "ROLE_USER" ? (
+                        <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                      ) : "Revoke"}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}

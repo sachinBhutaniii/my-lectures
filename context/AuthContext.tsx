@@ -28,6 +28,7 @@ interface AuthContextType {
   authLoading: boolean;
   isAdmin: boolean;
   isParentAdmin: boolean;
+  isProofreader: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   loginWithGoogle: () => void;
@@ -128,10 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isParentAdmin = user?.email === PARENT_ADMIN_EMAIL;
   const isAdmin = isParentAdmin || user?.role === "ROLE_ADMIN";
+  const isProofreader = user?.role === "ROLE_PROOFREADER";
 
   return (
     <AuthContext.Provider
-      value={{ token, user, authLoading, isAdmin, isParentAdmin, login, register, loginWithGoogle, logout }}
+      value={{ token, user, authLoading, isAdmin, isParentAdmin, isProofreader, login, register, loginWithGoogle, logout }}
     >
       {children}
     </AuthContext.Provider>

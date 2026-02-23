@@ -72,7 +72,17 @@ export interface TranscriptReviewItem {
   approvalStatus: string;
   level1ApprovedByName: string | null;
   finalApprovedByName: string | null;
+  level1ProofreaderId: number | null;
+  level1ProofreaderName: string | null;
+  level2ProofreaderId: number | null;
+  level2ProofreaderName: string | null;
+  deployed: boolean;
 }
+
+export const getAllTranscripts = async (): Promise<TranscriptReviewItem[]> => {
+  const res = await apiClient.get<TranscriptReviewItem[]>("/api/transcripts/all");
+  return res.data;
+};
 
 export const getTranscriptsForReview = async (): Promise<TranscriptReviewItem[]> => {
   const res = await apiClient.get<TranscriptReviewItem[]>("/api/transcripts/review");
@@ -86,6 +96,30 @@ export const approveTranscript = async (id: number): Promise<TranscriptReviewIte
 
 export const rejectTranscript = async (id: number): Promise<TranscriptReviewItem> => {
   const res = await apiClient.put<TranscriptReviewItem>(`/api/transcripts/${id}/reject`);
+  return res.data;
+};
+
+export const assignProofreader = async (
+  transcriptId: number,
+  userId: number | null,
+  level: 1 | 2
+): Promise<TranscriptReviewItem> => {
+  const res = await apiClient.put<TranscriptReviewItem>(`/api/transcripts/${transcriptId}/assign`, { userId, level });
+  return res.data;
+};
+
+export const deployTranscript = async (id: number): Promise<TranscriptReviewItem> => {
+  const res = await apiClient.put<TranscriptReviewItem>(`/api/transcripts/${id}/deploy`);
+  return res.data;
+};
+
+export const getMyAssignments = async (): Promise<TranscriptReviewItem[]> => {
+  const res = await apiClient.get<TranscriptReviewItem[]>("/api/transcripts/my-assignments");
+  return res.data;
+};
+
+export const getProofreaders = async (): Promise<UserSearchResult[]> => {
+  const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
   return res.data;
 };
 
