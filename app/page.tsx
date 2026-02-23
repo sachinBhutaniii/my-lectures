@@ -38,6 +38,7 @@ export default function Home() {
   const [showStreak, setShowStreak] = useState(false);
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistLecture | null>(null);
   const [showWisdom, setShowWisdom] = useState(false);
+  const [showBhajansModal, setShowBhajansModal] = useState(false);
   const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
 
   // Client-only: pick wisdom + auto-show once per session
@@ -155,6 +156,42 @@ export default function Home() {
         onCreatePlaylist={createPlaylist}
       />
 
+      {/* ── Bhajans Coming Soon Modal ── */}
+      {showBhajansModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowBhajansModal(false)} />
+          <div className="relative w-full max-w-md bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-10 shadow-2xl">
+            {/* Handle bar */}
+            <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
+            {/* Musical note emblem */}
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="#f97316" className="w-8 h-8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                </svg>
+              </div>
+            </div>
+            <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">Bhajans</h2>
+            <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-4">✦ Sacred Kīrtana ✦</p>
+            <p className="text-center text-gray-300 text-sm leading-relaxed mb-2">
+              The sacred melodies of the Lord are being lovingly gathered.
+            </p>
+            <p className="text-center text-gray-400 text-sm leading-relaxed mb-6">
+              Soon, the transcendental vibrations of kīrtana will fill your heart and purify your consciousness. <span className="text-orange-400 italic">Please be patient, dear devotee.</span>
+            </p>
+            <p className="text-center text-gray-600 text-xs italic mb-6">
+              "nāma-saṅkīrtanaṁ yasya sarva-pāpa praṇāśanam" — all sins are destroyed by the congregational chanting of the Lord's names.
+            </p>
+            <button
+              onClick={() => setShowBhajansModal(false)}
+              className="w-full py-3 rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-semibold text-sm hover:bg-orange-500/25 transition-colors active:scale-95"
+            >
+              Hare Kṛṣṇa 🙏
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Streak Panel ── */}
       <StreakPanel
         open={showStreak}
@@ -265,6 +302,37 @@ export default function Home() {
       {/* ── Browse by Book ── */}
       <CategoryPicker selected={selectedCategory} onSelect={setSelectedCategory} />
 
+      {/* ── Jñāna Yajña — Knowledge Test section ── */}
+      <div className="px-4 mt-6 mb-2">
+        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-[#1c1300] to-[#120e00] overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-amber-500/10">
+            <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#fbbf24" className="w-5 h-5">
+                <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-amber-300 font-bold text-sm tracking-wide">Jñāna Yajña</p>
+              <p className="text-amber-700 text-[10px] tracking-widest uppercase">Sacrifice of Knowledge</p>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 tracking-wide">
+              COMING SOON
+            </span>
+          </div>
+          {/* Body */}
+          <div className="px-4 py-4">
+            <p className="text-gray-300 text-sm leading-relaxed mb-3">
+              Test your realizations from the sacred scriptures — Bhagavad-gītā, Śrīmad-Bhāgavatam, and more.
+            </p>
+            <p className="text-gray-600 text-xs italic leading-relaxed">
+              "jñāna-yajñena cāpy anye yajanto mām upāsate" — others worship Me by the yajña of knowledge.
+              <span className="text-amber-800"> — Bhagavad-gītā 9.15</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Lectures section ── */}
       <div ref={lecturesSectionRef} className="px-4 mt-5">
         <div className="flex items-center justify-between mb-3">
@@ -342,7 +410,13 @@ export default function Home() {
       </div>
 
       {/* ── Bottom Navigation ── */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          if (tab === "bhajans") { setShowBhajansModal(true); return; }
+          setActiveTab(tab);
+        }}
+      />
     </div>
   );
 }
