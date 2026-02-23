@@ -1,0 +1,187 @@
+"use client";
+
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from "react";
+import { LectureVideo } from "@/types/videos";
+import { usePlaybackHistory } from "@/hooks/usePlaybackHistory";
+import { useStreak } from "@/hooks/useStreak";
+
+const posKey = (id: number) => `bdd_pos_${id}`;
+
+export interface PlayerContextType {
+  lecture: LectureVideo | null;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  speed: number;
+  play: (lecture: LectureVideo) => void;
+  pause: () => void;
+  resume: () => void;
+  stop: () => void;
+  seek: (pct: number) => void;
+  skip: (seconds: number) => void;
+  setSpeed: (speed: number) => void;
+}
+
+const PlayerContext = createContext<PlayerContextType | null>(null);
+
+export function PlayerProvider({ children }: { children: ReactNode }) {
+  const { addToHistory } = usePlaybackHistory();
+  const { addListeningTime } = useStreak();
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lectureRef = useRef<LectureVideo | null>(null);
+
+  const [lecture, setLecture] = useState<LectureVideo | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [speed, setSpeedState] = useState(1.0);
+
+  // Track listening time for streak (1 tick/sec while playing)
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => addListeningTime(1), 1000);
+    return () => clearInterval(id);
+  }, [isPlaying, addListeningTime]);
+
+  // Save playback position every 5s while playing
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      const lec = lectureRef.current;
+      const audio = audioRef.current;
+      if (lec && audio) {
+        localStorage.setItem(posKey(lec.id), String(Math.floor(audio.currentTime)));
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [isPlaying]);
+
+  const play = useCallback(
+    (newLecture: LectureVideo) => {
+      // Same lecture already loaded — just resume
+      if (audioRef.current && lectureRef.current?.id === newLecture.id) {
+        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+        return;
+      }
+
+      // Tear down existing audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+
+      lectureRef.current = newLecture;
+      setLecture(newLecture);
+      setCurrentTime(0);
+      setDuration(0);
+      addToHistory(newLecture);
+
+      if (!newLecture.audioUrl) {
+        setIsPlaying(false);
+        return;
+      }
+
+      const audio = new Audio(newLecture.audioUrl);
+      audio.preload = "metadata";
+      audioRef.current = audio;
+
+      audio.addEventListener("loadedmetadata", () => {
+        setDuration(audio.duration);
+        // Restore saved position
+        const saved = localStorage.getItem(posKey(newLecture.id));
+        if (saved) {
+          const pos = parseFloat(saved);
+          if (pos > 0 && pos < audio.duration - 5) {
+            audio.currentTime = pos;
+            setCurrentTime(pos);
+          }
+        }
+        audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      });
+
+      audio.addEventListener("timeupdate", () => {
+        setCurrentTime(audio.currentTime);
+      });
+
+      audio.addEventListener("ended", () => {
+        setIsPlaying(false);
+        localStorage.removeItem(posKey(newLecture.id));
+      });
+    },
+    [addToHistory]
+  );
+
+  const pause = useCallback(() => {
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    const lec = lectureRef.current;
+    const audio = audioRef.current;
+    if (lec && audio) {
+      localStorage.setItem(posKey(lec.id), String(Math.floor(audio.currentTime)));
+    }
+  }, []);
+
+  const resume = useCallback(() => {
+    audioRef.current?.play().then(() => setIsPlaying(true)).catch(() => {});
+  }, []);
+
+  const stop = useCallback(() => {
+    const lec = lectureRef.current;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    if (lec) localStorage.removeItem(posKey(lec.id));
+    lectureRef.current = null;
+    setLecture(null);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }, []);
+
+  const seek = useCallback((pct: number) => {
+    const audio = audioRef.current;
+    if (!audio || !audio.duration) return;
+    const t = (pct / 100) * audio.duration;
+    audio.currentTime = t;
+    setCurrentTime(t);
+  }, []);
+
+  const skip = useCallback((seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const t = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration));
+    audio.currentTime = t;
+    setCurrentTime(t);
+  }, []);
+
+  const setSpeed = useCallback((s: number) => {
+    setSpeedState(s);
+    if (audioRef.current) audioRef.current.playbackRate = s;
+  }, []);
+
+  return (
+    <PlayerContext.Provider
+      value={{ lecture, isPlaying, currentTime, duration, speed, play, pause, resume, stop, seek, skip, setSpeed }}
+    >
+      {children}
+    </PlayerContext.Provider>
+  );
+}
+
+export function usePlayer() {
+  const ctx = useContext(PlayerContext);
+  if (!ctx) throw new Error("usePlayer must be used within PlayerProvider");
+  return ctx;
+}

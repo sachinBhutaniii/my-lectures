@@ -9,7 +9,7 @@ import { LanguageData } from "@/types/videos";
 import TranscriptView from "@/components/TranscriptView";
 import QueueList from "@/components/QueueList";
 import PlayerBar from "@/components/PlayerBar";
-import { useStreak } from "@/hooks/useStreak";
+import { usePlayer } from "@/context/PlayerContext";
 
 type Tab = "queue" | "transcript" | "summary";
 
@@ -21,11 +21,10 @@ export default function LecturePage() {
   const [activeTab, setActiveTab] = useState<Tab>("transcript");
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [transcriptSearch, setTranscriptSearch] = useState("");
-  const [audioTime, setAudioTime] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
-  const { addListeningTime } = useStreak();
+  const { currentTime } = usePlayer();
 
   // Fetch current lecture
   const fetchVideo = useCallback(
@@ -55,10 +54,6 @@ export default function LecturePage() {
     if (currentIdx < queueLectures.length - 1)
       router.push(`/${queueLectures[currentIdx + 1].id}`);
   };
-
-  const handleTimeUpdate = useCallback((seconds: number) => {
-    setAudioTime(seconds);
-  }, []);
 
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
@@ -203,7 +198,7 @@ export default function LecturePage() {
             transcriptSrt={lecture?.transcriptSrt}
             transcript={lecture?.transcript}
             search={transcriptSearch}
-            currentTime={audioTime}
+            currentTime={currentTime}
             startTime={lecture?.startTime}
             autoScroll={autoScroll}
           />
@@ -229,8 +224,6 @@ export default function LecturePage() {
           lecture={lecture}
           onPrev={goPrev}
           onNext={goNext}
-          onListeningTime={addListeningTime}
-          onTimeUpdate={handleTimeUpdate}
         />
       )}
     </div>

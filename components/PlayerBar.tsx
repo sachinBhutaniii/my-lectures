@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { LectureVideo } from "@/types/videos";
+import { usePlayer } from "@/context/PlayerContext";
 
 interface Props {
   lecture: LectureVideo;
   onPrev?: () => void;
   onNext?: () => void;
-  onListeningTime?: (seconds: number) => void;
-  onTimeUpdate?: (seconds: number) => void;
 }
 
 const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -20,110 +19,40 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime, onTimeUpdate }: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+export default function PlayerBar({ lecture, onPrev, onNext }: Props) {
+  const player = usePlayer();
   const [speedIdx, setSpeedIdx] = useState(2);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const speed = speeds[speedIdx];
+  const isThisLecture = player.lecture?.id === lecture.id;
+  const isPlaying = isThisLecture && player.isPlaying;
+  const currentTime = isThisLecture ? player.currentTime : 0;
+  const duration = isThisLecture ? player.duration : 0;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  // Create / update audio element when audioUrl changes
-  useEffect(() => {
-    if (!lecture.audioUrl) return;
-
-    const audio = new Audio(lecture.audioUrl);
-    audio.preload = "metadata";
-    audioRef.current = audio;
-
-    const onLoaded = () => setDuration(audio.duration);
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
-    const onEnded = () => setIsPlaying(false);
-
-    audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("timeupdate", handleTimeUpdate);
-    audio.addEventListener("ended", onEnded);
-
-    return () => {
-      audio.pause();
-      audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("ended", onEnded);
-      audio.src = "";
-      audioRef.current = null;
-    };
-  }, [lecture.audioUrl]);
-
-  // Sync play/pause state with audio element
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (isPlaying) {
-      audio.play().catch(() => setIsPlaying(false));
-    } else {
-      audio.pause();
-    }
-  }, [isPlaying]);
-
-  // Sync playback speed
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.playbackRate = speed;
-    }
-  }, [speed]);
-
-  // Report time updates to parent
-  useEffect(() => {
-    onTimeUpdate?.(currentTime);
-  }, [currentTime, onTimeUpdate]);
-
-  // Track listening time while playing
-  useEffect(() => {
-    if (isPlaying) {
-      intervalRef.current = setInterval(() => {
-        onListeningTime?.(1);
-      }, 1000);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [isPlaying, onListeningTime]);
+  const speed = speeds[speedIdx];
 
   const togglePlay = useCallback(() => {
     if (!lecture.audioUrl) return;
-    setIsPlaying((v) => !v);
-  }, [lecture.audioUrl]);
+    if (!isThisLecture) {
+      player.play(lecture);
+    } else {
+      isPlaying ? player.pause() : player.resume();
+    }
+  }, [lecture, isThisLecture, isPlaying, player]);
 
-  const seek = useCallback((pct: number) => {
-    const audio = audioRef.current;
-    if (!audio || !duration) return;
-    audio.currentTime = (pct / 100) * duration;
-    setCurrentTime(audio.currentTime);
-  }, [duration]);
+  const seek = useCallback(
+    (pct: number) => { if (isThisLecture) player.seek(pct); },
+    [isThisLecture, player]
+  );
 
-  const skip = useCallback((seconds: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, duration));
-    setCurrentTime(audio.currentTime);
-  }, [duration]);
+  const skip = useCallback(
+    (seconds: number) => { if (isThisLecture) player.skip(seconds); },
+    [isThisLecture, player]
+  );
 
   const cycleSpeed = () => {
-    setSpeedIdx((prev) => (prev + 1) % speeds.length);
+    const newIdx = (speedIdx + 1) % speeds.length;
+    setSpeedIdx(newIdx);
+    player.setSpeed(speeds[newIdx]);
   };
 
   return (
@@ -183,7 +112,6 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime, on
             }}
           />
         </div>
-        {/* Time row */}
         <div className="flex justify-between items-center mt-1">
           <span className="text-white text-xs font-medium">{formatTime(currentTime)}</span>
           <div className="flex gap-0.5">
@@ -191,7 +119,9 @@ export default function PlayerBar({ lecture, onPrev, onNext, onListeningTime, on
               <div key={i} className="w-0.5 h-0.5 bg-gray-500 rounded-full" />
             ))}
           </div>
-          <span className="text-white text-xs font-medium">{duration > 0 ? formatTime(duration) : "--:--"}</span>
+          <span className="text-white text-xs font-medium">
+            {duration > 0 ? formatTime(duration) : "--:--"}
+          </span>
         </div>
       </div>
 
