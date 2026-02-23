@@ -31,8 +31,20 @@ export default function AdminUserManager() {
     try {
       const results = await searchUsers(q);
       setUsers(results);
-    } catch {
-      setError("Failed to load users.");
+    } catch (err: unknown) {
+      // Surface the actual HTTP status so it's easier to diagnose
+      const axiosErr = err as { response?: { status: number; data?: { error?: string } } };
+      const status = axiosErr?.response?.status;
+      const msg = axiosErr?.response?.data?.error;
+      if (status === 403) {
+        setError("Access denied (403). Make sure you are logged in as the parent admin.");
+      } else if (status === 404) {
+        setError("Endpoint not found (404). The backend may still be deploying — please wait a minute and retry.");
+      } else if (status) {
+        setError(`Server error (${status})${msg ? `: ${msg}` : ""}. Check Railway logs.`);
+      } else {
+        setError("Network error — backend may be starting up. Please retry in a moment.");
+      }
     } finally {
       setLoading(false);
     }
@@ -103,7 +115,22 @@ export default function AdminUserManager() {
       </p>
 
       {/* Error */}
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && (
+        <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+          <button
+            onClick={() => load(query.length >= 2 ? query : undefined)}
+            className="flex-shrink-0 text-xs text-red-400 hover:text-red-200 border border-red-500/30 rounded-lg px-2.5 py-1 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* User list */}
       {loading ? (
