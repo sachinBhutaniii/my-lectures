@@ -59,6 +59,12 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const previewCueRef = useRef<{ startMs: number; endMs: number } | null>(null);
   const previewLoopCountRef = useRef(0);
 
+  // Fullscreen (triple-tap to toggle)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fsHint, setFsHint] = useState<"entered" | "exited" | null>(null);
+  const tapTimesRef = useRef<number[]>([]);
+  const fsHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
     const orig = parseSrt(data.originalSrt ?? "");
@@ -152,6 +158,52 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     if (mode !== "l1" || origCuesRef.current.length === 0 || cues.length === 0) return;
     setL1Diff(diffCues(origCuesRef.current, cues));
   }, [cues, mode]);
+
+  // ── Fullscreen ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onChange = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element };
+      const inFS = !!(document.fullscreenElement || doc.webkitFullscreenElement);
+      setIsFullscreen(inFS);
+      if (fsHintTimerRef.current !== null) clearTimeout(fsHintTimerRef.current);
+      setFsHint(inFS ? "entered" : "exited");
+      fsHintTimerRef.current = setTimeout(() => setFsHint(null), 1800);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    type FSDoc = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
+    type FSEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+    const doc = document as FSDoc;
+    const el = document.documentElement as FSEl;
+    const inFS = !!(document.fullscreenElement || doc.webkitFullscreenElement);
+    if (inFS) {
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+    } else {
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    }
+  };
+
+  const handleTripleTap = (e: React.TouchEvent) => {
+    const tag = (e.target as HTMLElement).tagName;
+    if (["INPUT", "TEXTAREA", "BUTTON", "A", "SELECT"].includes(tag)) return;
+    const now = Date.now();
+    const recent = tapTimesRef.current.filter((t) => now - t < 600);
+    recent.push(now);
+    tapTimesRef.current = recent;
+    if (recent.length >= 3) {
+      tapTimesRef.current = [];
+      toggleFullscreen();
+    }
+  };
 
   // ── Audio controls ───────────────────────────────────────────────────────────
   const togglePlay = () => {
@@ -287,12 +339,35 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const noSrt = cues.length === 0;
 
   return (
-    <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden" onTouchEnd={handleTripleTap}>
       {/* Hidden audio */}
       {data.audioUrl && <audio ref={audioRef} src={data.audioUrl} preload="metadata" />}
 
+      {/* Fullscreen hint toast */}
+      {fsHint && (
+        <div className="fixed inset-x-0 top-16 z-[100] flex justify-center pointer-events-none">
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900/95 border border-gray-700 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+            {fsHint === "entered" ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-400">
+                  <path fillRule="evenodd" d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.75a.75.75 0 0 1 0 1.5H2.5v3.75a.75.75 0 0 1-1.5 0V3.5Zm13.75-.75a.75.75 0 0 1 .75.75V7.25a.75.75 0 0 1-1.5 0V3.5h-3.75a.75.75 0 0 1 0-1.5h3.75A1.5 1.5 0 0 1 17 3.5ZM.75 13.25a.75.75 0 0 1 .75.75v3.75h3.75a.75.75 0 0 1 0 1.5H2.5A1.5 1.5 0 0 1 1 17.75V14a.75.75 0 0 1 .75-.75Zm18.5 0A.75.75 0 0 1 20 14v3.75A1.5 1.5 0 0 1 18.5 19H14.75a.75.75 0 0 1 0-1.5H18.5V14a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+                </svg>
+                <span className="text-xs font-medium text-gray-200">Fullscreen — triple tap to exit</span>
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-gray-400">
+                  <path fillRule="evenodd" d="M4.5 4.5a.75.75 0 0 0-1.06 1.06L6.19 8.31H2.75a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 .75-.75v-5a.75.75 0 0 0-1.5 0v3.44L4.5 4.5Zm11 11a.75.75 0 0 0 1.06-1.06l-2.75-2.75h3.44a.75.75 0 0 0 0-1.5h-5a.75.75 0 0 0-.75.75v5a.75.75 0 0 0 1.5 0v-3.44l2.75 2.75-.25-.75Z" clipRule="evenodd" />
+                </svg>
+                <span className="text-xs font-medium text-gray-400">Exited fullscreen</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 pt-12 pb-3 border-b border-gray-800 flex-shrink-0">
+      <div className={`flex items-center gap-3 px-4 pb-3 border-b border-gray-800 flex-shrink-0 ${isFullscreen ? "pt-3" : "pt-12"}`}>
         <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -333,6 +408,22 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             Publish ↑
           </button>
         )}
+        {/* Fullscreen toggle button */}
+        <button
+          onClick={toggleFullscreen}
+          className="flex-shrink-0 text-gray-600 hover:text-gray-300 transition-colors"
+          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen (or triple tap)"}
+        >
+          {isFullscreen ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M4.5 4.5a.75.75 0 0 0-1.06 1.06L6.19 8.31H2.75a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 .75-.75v-5a.75.75 0 0 0-1.5 0v3.44L4.5 4.5Zm11 11a.75.75 0 0 0 1.06-1.06l-2.75-2.75h3.44a.75.75 0 0 0 0-1.5h-5a.75.75 0 0 0-.75.75v5a.75.75 0 0 0 1.5 0v-3.44l2.75 2.75Z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.75a.75.75 0 0 1 0 1.5H2.5v3.75a.75.75 0 0 1-1.5 0V3.5Zm13.75-.75a.75.75 0 0 1 .75.75V7.25a.75.75 0 0 1-1.5 0V3.5h-3.75a.75.75 0 0 1 0-1.5h3.75A1.5 1.5 0 0 1 17 3.5ZM.75 13.25a.75.75 0 0 1 .75.75v3.75h3.75a.75.75 0 0 1 0 1.5H2.5A1.5 1.5 0 0 1 1 17.75V14a.75.75 0 0 1 .75-.75Zm18.5 0A.75.75 0 0 1 20 14v3.75A1.5 1.5 0 0 1 18.5 19H14.75a.75.75 0 0 1 0-1.5H18.5V14a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* ── Audio Player Bar ──────────────────────────────────────────────────── */}
