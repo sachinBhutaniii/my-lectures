@@ -12,6 +12,7 @@ import apiClient from "@/lib/axios";
 
 const BACKEND_URL = "https://bddsm-production.up.railway.app";
 const TOKEN_KEY = "bdd_auth_token";
+const ADMIN_EMAIL = "dasgargamuni@gmail.com";
 
 export interface AuthUser {
   id: number;
@@ -25,6 +26,7 @@ interface AuthContextType {
   token: string | null;
   user: AuthUser | null;
   authLoading: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   loginWithGoogle: () => void;
@@ -123,9 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
   return (
     <AuthContext.Provider
-      value={{ token, user, authLoading, login, register, loginWithGoogle, logout }}
+      value={{ token, user, authLoading, isAdmin, login, register, loginWithGoogle, logout }}
     >
       {children}
     </AuthContext.Provider>

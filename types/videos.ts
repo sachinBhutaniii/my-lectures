@@ -15,6 +15,8 @@ export interface LectureVideo {
   };
   category?: string[];
   startTime?: number;
+  description?: string;
+  keywords?: string[];
 }
 
 

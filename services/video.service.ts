@@ -37,3 +37,12 @@ export const getLanguageData = async (): Promise<LanguageData[]> => {
   const response = await apiClient.get<LanguageData[]>(LANGUAGE_API_URL);
   return response.data;
 };
+
+export const uploadImage = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await apiClient.post<{ url: string }>("/api/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.url;
+};

@@ -1,30 +1,31 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useCallback } from "react";
 import { useFetch } from "@/hooks/useFetch";
 import { getVideos, createVideo, updateVideo } from "@/services/video.service";
 import { VideoApiResponse, LectureVideo } from "@/types/videos";
-import CustomLoader from "@/components/CustomLoader";
 import AdminVideoItem from "./AdminVideoItem";
 import VideoForm from "./VideoForm";
 
 const AdminVideoList = () => {
-  const { data, loading, error, setData } = useFetch<VideoApiResponse>(getVideos);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const fetchFn = useCallback(() => getVideos(), []);
+  const { data, loading, setData } = useFetch<VideoApiResponse>(fetchFn);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [editingVideo, setEditingVideo] = useState<LectureVideo | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const handleAddClick = () => {
+  const openAdd = () => {
     setEditingVideo(null);
-    setIsModalOpen(true);
+    setPanelOpen(true);
   };
 
-  const handleEditClick = (video: LectureVideo) => {
+  const openEdit = (video: LectureVideo) => {
     setEditingVideo(video);
-    setIsModalOpen(true);
+    setPanelOpen(true);
   };
 
-  const handleModalClose = () => {
-    setIsModalOpen(false);
+  const closePanel = () => {
+    setPanelOpen(false);
     setEditingVideo(null);
   };
 
@@ -32,86 +33,118 @@ const AdminVideoList = () => {
     setIsSaving(true);
     try {
       if (editingVideo) {
-         const updated = await updateVideo(editingVideo.id, formData);
-         // Update local state
-         if(data) {
-             const updatedVideos = data.videos.map(v => v.id === editingVideo.id ? updated : v);
-             setData({ ...data, videos: updatedVideos });
-         }
+        const updated = await updateVideo(editingVideo.id, formData);
+        if (data) {
+          setData({ ...data, videos: data.videos.map((v) => (v.id === editingVideo.id ? updated : v)) });
+        }
       } else {
-         const created = await createVideo(formData);
-         if(data) {
-             setData({ ...data, videos: [...data.videos, created], totalVideos: data.totalVideos + 1 });
-         }
+        const created = await createVideo(formData);
+        if (data) {
+          setData({ ...data, videos: [...data.videos, created], totalVideos: data.totalVideos + 1 });
+        }
       }
-      handleModalClose();
-    } catch (e) {
-      console.error("Failed to save video:", e);
-      alert("Failed to save video. Please try again.");
+      closePanel();
+    } catch {
+      alert("Failed to save. Please try again.");
     } finally {
       setIsSaving(false);
     }
   };
 
+  const filteredVideos = (data?.videos ?? []).filter((v) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      v.title.toLowerCase().includes(q) ||
+      (v.description ?? "").toLowerCase().includes(q) ||
+      (v.keywords ?? []).some((k) => k.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <>
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-semibold text-gray-800">Manage Videos</h2>
-        <button 
-            onClick={handleAddClick}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 cursor-pointer"
+      {/* Header row */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="flex-1 flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search lectures…"
+            className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none"
+          />
+        </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium transition-colors flex-shrink-0"
         >
-            Add New Video
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add
         </button>
       </div>
 
-      {loading && <div className="flex justify-center items-center"><CustomLoader /></div>}
-      
-      {/* Grid Layout matches page.tsx */}
-      <div className="flex flex-wrap gap-6 mb-16">
-          {data && data?.totalVideos > 0 && data?.videos?.map((item) => (
-             <div
-               key={item.id}
-               className="flex-shrink-0 w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)]">
-               <AdminVideoItem video={item} onEdit={handleEditClick} />
-             </div>
-          ))}
-          {!loading && data?.videos?.length === 0 && (
-             <p className="text-gray-500">No videos found. Click "Add New Video" to create one.</p>
-          )}
-      </div>
+      {/* Stats */}
+      <p className="text-xs text-gray-600 mb-4">
+        {loading ? "Loading…" : `${filteredVideos.length} lecture${filteredVideos.length !== 1 ? "s" : ""}`}
+        {search && data && ` of ${data.totalVideos} total`}
+      </p>
 
-      {/* Modal Overlay */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={handleModalClose}></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="relative z-50 inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full sm:p-6">
-                <div className="absolute top-0 right-0 pt-4 pr-4">
-                    <button onClick={handleModalClose} type="button" className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 cursor-pointer">
-                    <span className="sr-only">Close</span>
-                    <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    </button>
-                </div>
-              <div className="sm:flex sm:items-start w-full">
-                <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                    {editingVideo ? "Edit Video" : "Add New Video"}
-                  </h3>
-                  <div className="mt-4">
-                     <VideoForm 
-                        initialData={editingVideo || undefined} 
-                        onSubmit={handleFormSubmit} 
-                        onCancel={handleModalClose}
-                        isLoading={isSaving}
-                     />
-                  </div>
-                </div>
-              </div>
+      {/* Grid */}
+      {loading ? (
+        <div className="flex items-center justify-center h-48">
+          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : filteredVideos.length === 0 ? (
+        <div className="text-center py-16 text-gray-600">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-12 h-12 mx-auto mb-3">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+          <p className="text-sm">{search ? "No lectures match your search" : "No lectures yet. Click Add to create one."}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-16">
+          {filteredVideos.map((video) => (
+            <AdminVideoItem key={video.id} video={video} onEdit={openEdit} />
+          ))}
+        </div>
+      )}
+
+      {/* Slide-in edit panel */}
+      {panelOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div className="flex-1 bg-black/60 backdrop-blur-sm" onClick={closePanel} />
+
+          {/* Panel */}
+          <div className="w-full max-w-md bg-[#0d0d0d] border-l border-gray-800 flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-200">
+            {/* Panel header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-800 flex-shrink-0">
+              <button onClick={closePanel} className="text-gray-500 hover:text-gray-200 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <h2 className="text-base font-semibold text-white">
+                {editingVideo ? "Edit Lecture" : "Add Lecture"}
+              </h2>
+              {editingVideo && (
+                <span className="ml-auto text-xs text-gray-600 font-mono">ID #{editingVideo.id}</span>
+              )}
+            </div>
+
+            {/* Scrollable form */}
+            <div className="flex-1 overflow-y-auto px-5 py-5">
+              <VideoForm
+                initialData={editingVideo || undefined}
+                onSubmit={handleFormSubmit}
+                onCancel={closePanel}
+                isLoading={isSaving}
+              />
             </div>
           </div>
         </div>

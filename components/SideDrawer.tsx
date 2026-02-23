@@ -181,7 +181,7 @@ function formatNow() {
 
 export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile }: Props) {
   const { profile, displayName } = useProfile();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const router = useRouter();
   const [now, setNow] = useState("");
   useEffect(() => { setNow(formatNow()); }, []);
@@ -295,6 +295,30 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           <MenuItem icon={icons.star}      label="Rate Us"   sub="v1.0.0 (1)" />
           <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={now} />
           <MenuItem icon={icons.clock}     label="Last Lecture Published On:" sub={now} />
+
+          {/* Admin Panel — only for admin */}
+          {isAdmin && (
+            <>
+              <Divider />
+              <button
+                onClick={() => { onClose(); router.push("/admin"); }}
+                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-orange-500/10 transition-colors text-left"
+              >
+                <span className="w-9 h-9 flex items-center justify-center rounded-full border border-orange-500/60 flex-shrink-0 text-orange-400 bg-orange-500/10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                  </svg>
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-orange-400 text-[15px] font-semibold">Admin Panel</span>
+                  <p className="text-orange-600 text-xs mt-0.5">Switch to admin mode</p>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-orange-600 flex-shrink-0">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </>
+          )}
 
           {/* Sign Out / Sign In — bottom of menu */}
           {user ? (
