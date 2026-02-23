@@ -42,22 +42,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Pre-fill localStorage profile with Google/backend user data (only empty fields)
+  // Pre-fill localStorage profile with Google/backend user data (only empty fields).
+  // If stored email belongs to a different user, clear the profile first.
   const syncProfileFromAuth = useCallback((authUser: AuthUser) => {
     try {
       const raw = localStorage.getItem("bdd_user_profile");
       const existing = raw ? JSON.parse(raw) : {};
+      // Different user logged in — discard the previous profile
+      const base = existing.email && existing.email !== authUser.email ? {} : existing;
       const updates: Record<string, unknown> = {};
-      if (!existing.legalName?.trim() && authUser.name)
+      if (!base.legalName?.trim() && authUser.name)
         updates.legalName = authUser.name;
-      if (!existing.email?.trim() && authUser.email) {
+      if (!base.email?.trim() && authUser.email) {
         updates.email = authUser.email;
-        updates.emailVerified = true; // backend-verified email
+        updates.emailVerified = true;
       }
-      if (!existing.profilePicture?.trim() && authUser.avatarUrl)
+      if (!base.profilePicture?.trim() && authUser.avatarUrl)
         updates.profilePicture = authUser.avatarUrl;
-      if (Object.keys(updates).length > 0)
-        localStorage.setItem("bdd_user_profile", JSON.stringify({ ...existing, ...updates }));
+      localStorage.setItem("bdd_user_profile", JSON.stringify({ ...base, ...updates }));
     } catch { /* ignore */ }
   }, []);
 
@@ -123,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("bdd_user_profile");
     setToken(null);
     setUser(null);
   }, []);
