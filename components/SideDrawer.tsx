@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useProfile } from "@/hooks/useProfile";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props {
   open: boolean;
@@ -166,16 +169,22 @@ function MenuItem({
   );
 }
 
-const NOW = new Date().toLocaleString("en-US", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+function formatNow() {
+  return new Date().toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile }: Props) {
   const { profile, displayName } = useProfile();
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const [now, setNow] = useState("");
+  useEffect(() => { setNow(formatNow()); }, []);
 
   return (
     <>
@@ -194,36 +203,64 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
         {/* ── User profile ── */}
-        <button
-          onClick={() => { onClose(); onProfile(); }}
-          className="flex items-center gap-4 px-5 pt-12 pb-6 w-full text-left hover:bg-white/5 transition-colors cursor-pointer"
-        >
-          {/* Avatar */}
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-700 to-amber-500 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-orange-500/50">
-            {profile.profilePicture ? (
-              <img
-                src={profile.profilePicture}
-                alt="Profile"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-white text-xl font-bold select-none">
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-            )}
+        {user ? (
+          /* Logged-in: show backend user */
+          <div className="px-5 pt-12 pb-5">
+            <button
+              onClick={() => { onClose(); onProfile(); }}
+              className="flex items-center gap-4 w-full text-left hover:bg-white/5 rounded-xl p-2 -mx-2 transition-colors"
+            >
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-700 to-amber-500 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-orange-500/50">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white text-xl font-bold select-none">
+                    {user.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-base leading-tight truncate">{user.name}</p>
+                <p className="text-gray-400 text-xs mt-0.5 truncate">{user.email}</p>
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-500 flex-shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => { logout(); onClose(); }}
+              className="mt-3 w-full flex items-center justify-center gap-2 text-red-400 text-sm py-2 rounded-xl border border-red-500/20 hover:bg-red-500/10 transition-colors"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+              </svg>
+              Sign Out
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold text-base leading-tight truncate">{displayName}</p>
-            {profile.email ? (
-              <p className="text-gray-400 text-xs mt-0.5 truncate">{profile.email}</p>
-            ) : (
-              <p className="text-orange-400 text-xs mt-0.5">Tap to set up profile →</p>
-            )}
+        ) : (
+          /* Not logged in: show login prompt */
+          <div className="px-5 pt-12 pb-5">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 border-2 border-white/10">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-7 h-7 text-gray-500">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold text-base">{displayName}</p>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {profile.email || "Not signed in"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => { onClose(); router.push("/login"); }}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+            >
+              Sign In / Sign Up
+            </button>
           </div>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-gray-500 flex-shrink-0">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-          </svg>
-        </button>
+        )}
 
         <Divider />
 
@@ -256,8 +293,41 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           <MenuItem icon={icons.trash}     label="Clear Cache" />
           <MenuItem icon={icons.share}     label="Share" />
           <MenuItem icon={icons.star}      label="Rate Us"   sub="v1.0.0 (1)" />
-          <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={NOW} />
-          <MenuItem icon={icons.clock}     label="Last Lecture Published On:" sub={NOW} />
+          <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={now} />
+          <MenuItem icon={icons.clock}     label="Last Lecture Published On:" sub={now} />
+
+          {/* Sign Out / Sign In — bottom of menu */}
+          {user ? (
+            <>
+              <Divider />
+              <button
+                onClick={() => { logout(); onClose(); }}
+                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-red-500/10 transition-colors text-left"
+              >
+                <span className="w-9 h-9 flex items-center justify-center rounded-full border border-red-500/40 flex-shrink-0 text-red-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                  </svg>
+                </span>
+                <span className="text-red-400 text-[15px]">Sign Out</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <Divider />
+              <button
+                onClick={() => { onClose(); router.push("/login"); }}
+                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-orange-500/10 transition-colors text-left"
+              >
+                <span className="w-9 h-9 flex items-center justify-center rounded-full border border-orange-500/40 flex-shrink-0 text-orange-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l3 3m0 0l-3 3m3-3H3.75" />
+                  </svg>
+                </span>
+                <span className="text-orange-400 text-[15px]">Sign In / Sign Up</span>
+              </button>
+            </>
+          )}
 
           {/* Bottom padding */}
           <div className="h-8" />

@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile, Relationship } from "@/hooks/useProfile";
+import { useAuth } from "@/context/AuthContext";
 
 // ── Reusable sub-components ───────────────────────────────────────────────────
 
@@ -108,9 +109,27 @@ const RELATIONSHIPS: { value: Relationship; label: string; sub?: string }[] = [
 export default function ProfilePage() {
   const router = useRouter();
   const { profile, updateProfile, loaded } = useProfile();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [locating, setLocating] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  // When auth user loads, sync their data into profile for any empty fields
+  useEffect(() => {
+    if (!user || !loaded) return;
+    const updates: Parameters<typeof updateProfile>[0] = {};
+    if (!profile.legalName.trim() && user.name) updates.legalName = user.name;
+    if (!profile.email.trim() && user.email) { updates.email = user.email; updates.emailVerified = true; }
+    if (!profile.profilePicture.trim() && user.avatarUrl) updates.profilePicture = user.avatarUrl;
+    if (Object.keys(updates).length > 0) updateProfile(updates);
+  }, [user, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Use auth user data as fallback when profile fields are still empty
+  const displayPhoto = profile.profilePicture || user?.avatarUrl || "";
+  const displayName = (profile.isInitiated && profile.initiatedName.trim())
+    ? profile.initiatedName.trim()
+    : profile.legalName.trim() || user?.name || "G";
+  const displayEmail = profile.email || user?.email || "";
 
   const save = useCallback((updates: Parameters<typeof updateProfile>[0]) => {
     updateProfile(updates);
@@ -188,18 +207,15 @@ export default function ProfilePage() {
           className="relative group"
         >
           <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-orange-500/60 flex items-center justify-center bg-gradient-to-br from-orange-700 to-amber-500">
-            {profile.profilePicture ? (
+            {displayPhoto ? (
               <img
-                src={profile.profilePicture}
+                src={displayPhoto}
                 alt="Profile"
                 className="w-full h-full object-cover"
               />
             ) : (
               <span className="text-white text-3xl font-bold select-none">
-                {(profile.isInitiated && profile.initiatedName
-                  ? profile.initiatedName
-                  : profile.legalName || "G"
-                ).charAt(0).toUpperCase()}
+                {displayName.charAt(0).toUpperCase()}
               </span>
             )}
           </div>
@@ -231,7 +247,7 @@ export default function ProfilePage() {
             <TextInput
               value={profile.legalName}
               onChange={(v) => save({ legalName: v })}
-              placeholder="Your full legal name"
+              placeholder={user?.name || "Your full legal name"}
             />
           </FieldRow>
 
@@ -284,15 +300,15 @@ export default function ProfilePage() {
               <path d="M22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z" />
             </svg>
             <TextInput
-              value={profile.email}
+              value={displayEmail}
               onChange={(v) => save({ email: v, emailVerified: false })}
               placeholder="Email address"
               type="email"
             />
             <VerifyBadge
-              verified={profile.emailVerified}
+              verified={profile.emailVerified || !!user?.email}
               onVerify={() => {
-                if (profile.email.includes("@"))
+                if (displayEmail.includes("@"))
                   save({ emailVerified: true });
               }}
             />

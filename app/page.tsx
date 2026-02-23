@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePlaybackHistory } from "@/hooks/usePlaybackHistory";
 import { useFavourites } from "@/hooks/useFavourites";
@@ -22,6 +22,7 @@ import PlaylistsPanel from "@/components/PlaylistsPanel";
 import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import FlameIcon from "@/components/FlameIcon";
 import StreakPanel from "@/components/StreakPanel";
+import WisdomModal, { getWisdomForToday } from "@/components/WisdomModal";
 
 export default function Home() {
   const router = useRouter();
@@ -36,6 +37,18 @@ export default function Home() {
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [showStreak, setShowStreak] = useState(false);
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistLecture | null>(null);
+  const [showWisdom, setShowWisdom] = useState(false);
+  const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
+
+  // Client-only: pick wisdom + auto-show once per session
+  useEffect(() => {
+    const w = getWisdomForToday();
+    setTodayWisdom(w);
+    if (!sessionStorage.getItem("bdd_wisdom_shown")) {
+      sessionStorage.setItem("bdd_wisdom_shown", "1");
+      setShowWisdom(true);
+    }
+  }, []);
 
   const lecturesSectionRef = useRef<HTMLDivElement>(null);
   const { history, addToHistory, clearHistory } = usePlaybackHistory();
@@ -96,6 +109,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#1a1208] text-white max-w-md mx-auto relative">
+      {/* ── Wisdom of the Day ── */}
+      <WisdomModal open={showWisdom} onClose={() => setShowWisdom(false)} />
+
       {/* ── Side Drawer ── */}
       <SideDrawer
         open={menuOpen}
@@ -225,6 +241,26 @@ export default function Home() {
         lectures={lectures.slice(0, 8)}
         onSelect={(lecture) => router.push(`/${lecture.id}`)}
       />
+
+      {/* ── Wisdom of the Day card ── */}
+      {todayWisdom && (
+        <button
+          onClick={() => setShowWisdom(true)}
+          className="mx-4 mt-4 w-[calc(100%-2rem)] flex items-center gap-4 bg-[#1c1106] border border-orange-500/20 rounded-2xl px-4 py-3.5 text-left hover:border-orange-500/40 active:scale-[0.98] transition-all"
+        >
+          <span className="text-3xl leading-none flex-shrink-0 select-none">{todayWisdom.emoji}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-orange-500 text-[10px] font-bold tracking-widest uppercase mb-0.5">
+              ✦ Wisdom of the Day
+            </p>
+            <p className="text-white text-sm font-semibold leading-snug truncate">{todayWisdom.title}</p>
+            <p className="text-gray-500 text-xs mt-0.5 leading-snug line-clamp-1">{todayWisdom.body}</p>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-orange-500 flex-shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
+      )}
 
       {/* ── Browse by Book ── */}
       <CategoryPicker selected={selectedCategory} onSelect={setSelectedCategory} />
