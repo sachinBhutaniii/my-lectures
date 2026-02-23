@@ -50,7 +50,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [publishConfirm, setPublishConfirm] = useState(false);
   const [publishDone, setPublishDone] = useState(false);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // ── Initialise cues ──────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   // ── Auto-save (L1 / L2 only) ─────────────────────────────────────────────────
   useEffect(() => {
     if (mode === "admin" || cues.length === 0) return;
-    clearTimeout(saveTimer.current);
+    if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
@@ -120,7 +120,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         setSaveStatus("error");
       }
     }, 3000);
-    return () => clearTimeout(saveTimer.current);
+    return () => { if (saveTimer.current !== null) clearTimeout(saveTimer.current); };
   }, [cues, data.id, level, mode]);
 
   // ── Audio controls ───────────────────────────────────────────────────────────
