@@ -54,6 +54,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const origCuesRef = useRef<SrtCue[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Preview-loop refs (seek to cue + loop 2× on edit open)
+  const wasPlayingRef = useRef(false);
+  const previewCueRef = useRef<{ startMs: number; endMs: number } | null>(null);
+  const previewLoopCountRef = useRef(0);
+
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
     const orig = parseSrt(data.originalSrt ?? "");
@@ -82,9 +87,25 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const onTime = () => setCurrentTime(audio.currentTime);
+    const onTime = () => {
+      setCurrentTime(audio.currentTime);
+      // Preview loop: when current time passes cue end, loop or stop
+      const preview = previewCueRef.current;
+      if (preview && audio.currentTime >= preview.endMs / 1000) {
+        if (previewLoopCountRef.current < 1) {
+          // First loop done — play once more
+          previewLoopCountRef.current++;
+          audio.currentTime = preview.startMs / 1000;
+        } else {
+          // Both loops done — stop and clear preview
+          previewCueRef.current = null;
+          audio.pause();
+          setIsPlaying(false);
+        }
+      }
+    };
     const onDur = () => setDuration(audio.duration);
-    const onEnd = () => setIsPlaying(false);
+    const onEnd = () => { previewCueRef.current = null; setIsPlaying(false); };
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("durationchange", onDur);
     audio.addEventListener("ended", onEnd);
@@ -156,10 +177,36 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const startEdit = (cue: SrtCue) => {
     setEditingId(cue.id);
     setDraft({ text: cue.text, startTime: cue.startTime, endTime: cue.endTime });
+
+    const audio = audioRef.current;
+    if (audio && data.audioUrl) {
+      wasPlayingRef.current = !audio.paused;
+      audio.pause();
+      setIsPlaying(false);
+      // Seek to cue and loop 2×
+      previewCueRef.current = { startMs: cue.startMs, endMs: cue.endMs };
+      previewLoopCountRef.current = 0;
+      audio.currentTime = cue.startMs / 1000;
+      audio.play().catch(() => {});
+      setIsPlaying(true);
+    }
   };
-  const cancelEdit = () => setEditingId(null);
+  const cancelEdit = () => {
+    previewCueRef.current = null;
+    setEditingId(null);
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      setIsPlaying(false);
+      if (wasPlayingRef.current) {
+        audio.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
+  };
   const saveEdit = useCallback(() => {
     if (editingId === null) return;
+    previewCueRef.current = null;
     setCues((prev) =>
       prev.map((c) =>
         c.id === editingId
@@ -175,6 +222,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       )
     );
     setEditingId(null);
+    const audio = audioRef.current;
+    if (audio && wasPlayingRef.current) {
+      audio.play().catch(() => {});
+      setIsPlaying(true);
+    }
   }, [editingId, draft]);
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
@@ -235,7 +287,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const noSrt = cues.length === 0;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+    <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
       {/* Hidden audio */}
       {data.audioUrl && <audio ref={audioRef} src={data.audioUrl} preload="metadata" />}
 
