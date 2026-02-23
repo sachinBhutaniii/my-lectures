@@ -45,7 +45,7 @@ export default function AdminUserManager() {
         const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
         setUsers(res.data);
       } else {
-        // Default admins view: show current child admins
+        // Default admins view: show all users
         const results = await searchUsers(undefined);
         setUsers(results);
       }
@@ -154,7 +154,7 @@ export default function AdminUserManager() {
         {query.length >= 2
           ? `Results for "${query}"`
           : view === "admins"
-          ? "Current child admins"
+          ? "All users"
           : "Current proofreaders"}
       </p>
 
@@ -190,7 +190,7 @@ export default function AdminUserManager() {
             {query.length >= 2
               ? "No users found. Try a different search."
               : view === "admins"
-              ? "No child admins assigned yet."
+              ? "No users found."
               : "No proofreaders assigned yet."}
           </p>
           {query.length >= 2 && (
