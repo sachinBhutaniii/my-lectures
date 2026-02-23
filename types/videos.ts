@@ -18,6 +18,7 @@ export interface LectureVideo {
   description?: string;
   keywords?: string[];
   locale?: string;
+  visibility?: string;
 }
 
 
