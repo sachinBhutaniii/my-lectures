@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { PlayerProvider } from "@/context/PlayerContext";
 import MiniPlayerBar from "@/components/MiniPlayerBar";
+import TripleTapFullscreen from "@/components/TripleTapFullscreen";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,8 +33,10 @@ export default function RootLayout({
       >
         <AuthProvider>
           <PlayerProvider>
-            {children}
-            <MiniPlayerBar />
+            <TripleTapFullscreen>
+              {children}
+              <MiniPlayerBar />
+            </TripleTapFullscreen>
           </PlayerProvider>
         </AuthProvider>
       </body>
