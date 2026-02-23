@@ -24,7 +24,7 @@ export default function AdminUserManager() {
   const [view, setView] = useState<ViewMode>("admins");
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<{ id: number; role: string } | null>(null);
   const [error, setError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -33,9 +33,6 @@ export default function AdminUserManager() {
     setLoading(true);
     setError("");
     try {
-      // Pass roleFilter hint via the query — backend searchUsers returns ROLE_ADMIN by default
-      // For proofreaders with no query, use a marker approach: we call with a special empty search
-      // that the backend doesn't support yet for proofreaders. Instead we call the proofreaders endpoint.
       if (q && q.length >= 2) {
         // Search mode: show ALL matching users so any user can be found and assigned a role
         const results = await searchUsers(q);
@@ -45,7 +42,7 @@ export default function AdminUserManager() {
         const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
         setUsers(res.data);
       } else {
-        // Default admins view: show all users
+        // Default view: show all users
         const results = await searchUsers(undefined);
         setUsers(results);
       }
@@ -67,17 +64,15 @@ export default function AdminUserManager() {
     }
   }, []);
 
-  // Reload when view changes
-  useEffect(() => { load(undefined, view); }, [load, view]);
-
-  // Debounced search
+  // Load when view changes or query is cleared
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-    if (query.length === 0) {
-      load(undefined, view);
-      return;
-    }
+    if (query.length === 0) load(undefined, view);
+  }, [load, view, query]);
+
+  // Debounced search when query has 2+ chars
+  useEffect(() => {
     if (query.length < 2) return;
+    clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => load(query, view), 300);
     return () => clearTimeout(debounceRef.current);
   }, [query, load, view]);
