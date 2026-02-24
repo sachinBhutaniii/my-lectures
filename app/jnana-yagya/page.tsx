@@ -1041,9 +1041,7 @@ export default function JnanaYagyaPage() {
               const isSelected = selectedOpt === opt.key;
               let style = "border-amber-500/10 bg-[#1c1300]/40 text-gray-300";
               if (answered && isSelected) {
-                style = wasCorrect
-                  ? "border-green-500/50 bg-green-500/12 text-green-200"
-                  : "border-red-500/40 bg-red-500/10 text-red-300";
+                style = "border-amber-500/50 bg-amber-500/15 text-amber-200";
               } else if (answered && !isSelected) {
                 style = "border-gray-800/50 bg-[#111]/40 text-gray-600 opacity-50";
               }
@@ -1052,7 +1050,7 @@ export default function JnanaYagyaPage() {
                   className={`w-full text-left flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all ${style} ${!answered ? "hover:border-amber-500/30 active:scale-[0.98]" : ""}`}>
                   <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
                     answered && isSelected
-                      ? wasCorrect ? "bg-green-500/20 border-green-500/60 text-green-300" : "bg-red-500/15 border-red-500/40 text-red-300"
+                      ? "bg-amber-500/20 border-amber-500/60 text-amber-300"
                       : "bg-amber-500/5 border-amber-500/20 text-amber-600"}`}>{opt.key}</span>
                   <span className="text-sm leading-relaxed">{opt.text}</span>
                 </button>
