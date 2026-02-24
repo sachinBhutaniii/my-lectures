@@ -188,9 +188,8 @@ function LevelButton({
   onClick: () => void;
 }) {
   const firstName = (name: string | null) => name?.split(" ")[0] ?? null;
-  const displayName =
-    status === "approved" ? firstName(approvedByName) ?? firstName(proofreaderName)
-    : firstName(proofreaderName);
+  // Always show the proofreader who did the work, not the admin who approved
+  const displayName = firstName(proofreaderName);
 
   const title =
     status === "approved"   ? `${label} approved by ${approvedByName ?? proofreaderName ?? "—"}`
