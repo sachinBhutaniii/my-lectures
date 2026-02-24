@@ -28,10 +28,10 @@ export default function ProofreadPage() {
   }
 
   const level1Items = (items ?? []).filter(
-    (t) => t.level1ProofreaderId != null && t.approvalStatus === "DRAFT"
+    (t) => t.level1ProofreaderId != null && t.approvalStatus === "DRAFT" && !t.l1ReviewSubmitted
   );
   const level2Items = (items ?? []).filter(
-    (t) => t.level2ProofreaderId != null
+    (t) => t.level2ProofreaderId != null && !t.l2ReviewSubmitted && t.approvalStatus !== "APPROVED"
   );
 
   return (
