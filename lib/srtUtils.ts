@@ -19,22 +19,45 @@ export interface CueDiff {
   newEnd: string;
 }
 
+/**
+ * Parse an SRT timestamp into milliseconds.
+ * Handles: "HH:MM:SS,mmm", "MM:SS,mmm", "HH:MM:SS:mmm" (colon instead of comma),
+ * "MM:SS:mmm", and variable-length milliseconds.
+ */
 export function timeToMs(t: string): number {
   if (!t) return 0;
   t = t.trim();
-  const [hms, msStr = "0"] = t.split(",");
-  const ms = parseInt(msStr.padEnd(3, "0").slice(0, 3), 10);
-  const parts = hms.split(":");
-  let h = 0, m = 0, s = 0;
-  if (parts.length === 3) {
-    h = parseInt(parts[0], 10);
-    m = parseInt(parts[1], 10);
-    s = parseInt(parts[2], 10);
-  } else if (parts.length === 2) {
-    m = parseInt(parts[0], 10);
-    s = parseInt(parts[1], 10);
+
+  // If there's a comma, split on it: left is H:M:S, right is ms
+  const commaIdx = t.indexOf(",");
+  if (commaIdx !== -1) {
+    const hms = t.slice(0, commaIdx);
+    const msStr = t.slice(commaIdx + 1).padEnd(3, "0").slice(0, 3);
+    const ms = parseInt(msStr, 10);
+    const parts = hms.split(":").map(Number);
+    let h = 0, m = 0, s = 0;
+    if (parts.length === 3) [h, m, s] = parts;
+    else if (parts.length === 2) [m, s] = parts;
+    return h * 3600000 + m * 60000 + s * 1000 + ms;
   }
-  return h * 3600000 + m * 60000 + s * 1000 + ms;
+
+  // No comma — all colons. Last segment might be milliseconds.
+  // e.g. "00:10:827" = 0min 10sec 827ms, "01:07:27" = 1min 7sec 27*10ms
+  const parts = t.split(":").map(Number);
+  if (parts.length === 3) {
+    // Could be HH:MM:SS or MM:SS:mmm — disambiguate by checking if last part > 59
+    if (parts[2] > 59) {
+      // MM:SS:mmm format (last part is ms)
+      const msStr = t.split(":")[2].padEnd(3, "0").slice(0, 3);
+      return parts[0] * 60000 + parts[1] * 1000 + parseInt(msStr, 10);
+    }
+    // Standard HH:MM:SS (no ms)
+    return parts[0] * 3600000 + parts[1] * 60000 + parts[2] * 1000;
+  }
+  if (parts.length === 2) {
+    return parts[0] * 60000 + parts[1] * 1000;
+  }
+  return 0;
 }
 
 export function msToTime(ms: number): string {
@@ -59,18 +82,19 @@ export function parseSrt(srt: string): SrtCue[] {
     if (lines.length < 3) continue;
     const id = parseInt(lines[0], 10);
     if (isNaN(id)) continue;
-    // Match flexible SRT timestamps: HH:MM:SS,mmm or MM:SS,mmm (with 1-3 ms digits)
-    const m = lines[1].match(
-      /(\d{1,2}(?::\d{1,2}){1,2},\d{1,3})\s*-->\s*(\d{1,2}(?::\d{1,2}){1,2},\d{1,3})/
-    );
-    if (!m) continue;
+    // Split timestamp line by --> (handles any timestamp format)
+    const arrowIdx = lines[1].indexOf("-->");
+    if (arrowIdx === -1) continue;
+    const startTime = lines[1].slice(0, arrowIdx).trim();
+    const endTime = lines[1].slice(arrowIdx + 3).trim();
+    if (!startTime || !endTime) continue;
     const text = lines.slice(2).join("\n").trim();
     cues.push({
       id,
-      startTime: m[1],
-      endTime: m[2],
-      startMs: timeToMs(m[1]),
-      endMs: timeToMs(m[2]),
+      startTime,
+      endTime,
+      startMs: timeToMs(startTime),
+      endMs: timeToMs(endTime),
       text,
     });
   }
