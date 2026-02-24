@@ -16,22 +16,25 @@ import { useAuth } from "@/context/AuthContext";
 
 // ── L1/L2 button status helpers ──────────────────────────────────────────────
 
-type LevelStatus = "approved" | "assigned" | "neutral";
+type LevelStatus = "approved" | "submitted" | "assigned" | "neutral";
 
 function getL1Status(item: TranscriptReviewItem): LevelStatus {
   if (item.approvalStatus === "LEVEL1_APPROVED" || item.approvalStatus === "APPROVED") return "approved";
+  if (item.l1ReviewSubmitted) return "submitted";
   if (item.level1ProofreaderId != null) return "assigned";
   return "neutral";
 }
 
 function getL2Status(item: TranscriptReviewItem): LevelStatus {
   if (item.approvalStatus === "APPROVED") return "approved";
+  if (item.l2ReviewSubmitted) return "submitted";
   if (item.level2ProofreaderId != null) return "assigned";
   return "neutral";
 }
 
 const LEVEL_BUTTON_STYLE: Record<LevelStatus, string> = {
-  approved: "bg-green-500/15 border-green-500/40 text-green-400 hover:bg-green-500/25",
+  approved:  "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30",
+  submitted: "bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20",
   assigned:  "bg-orange-500/15 border-orange-500/40 text-orange-400 hover:bg-orange-500/25",
   neutral:   "bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400",
 };
@@ -173,6 +176,59 @@ export default function TranscriptReviewPanel() {
   );
 }
 
+// ── Level button ──────────────────────────────────────────────────────────────
+
+function LevelButton({
+  label, status, proofreaderName, approvedByName, onClick,
+}: {
+  label: string;
+  status: LevelStatus;
+  proofreaderName: string | null;
+  approvedByName: string | null;
+  onClick: () => void;
+}) {
+  const firstName = (name: string | null) => name?.split(" ")[0] ?? null;
+  const displayName =
+    status === "approved" ? firstName(approvedByName) ?? firstName(proofreaderName)
+    : firstName(proofreaderName);
+
+  const title =
+    status === "approved"   ? `${label} approved by ${approvedByName ?? proofreaderName ?? "—"}`
+    : status === "submitted" ? `${label} submitted by ${proofreaderName ?? "—"} — awaiting admin approval`
+    : status === "assigned"  ? `${label} assigned to ${proofreaderName ?? "—"}`
+    : `Assign ${label} proofreader`;
+
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors flex-shrink-0 min-w-[36px] ${LEVEL_BUTTON_STYLE[status]}`}
+    >
+      <span className="flex items-center gap-1">
+        {status === "approved" || status === "submitted" ? (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+            <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+          </svg>
+        ) : status === "assigned" ? (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+            <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+            <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+          </svg>
+        )}
+        {label}
+      </span>
+      {displayName && (
+        <span className="text-[9px] truncate max-w-[52px] font-normal leading-tight mt-0.5 opacity-80">
+          {displayName}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ── Transcript row ────────────────────────────────────────────────────────────
 
 type RowProps = {
@@ -224,60 +280,22 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
         </div>
 
         {/* L1 button */}
-        <button
+        <LevelButton
+          label="L1"
+          status={l1Status}
+          proofreaderName={item.level1ProofreaderName}
+          approvedByName={item.level1ApprovedByName}
           onClick={() => onOpenModal(1)}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors flex-shrink-0 ${LEVEL_BUTTON_STYLE[l1Status]}`}
-          title={
-            l1Status === "approved"
-              ? `L1 approved by ${item.level1ApprovedByName ?? "—"}`
-              : l1Status === "assigned"
-              ? `L1 assigned to ${item.level1ProofreaderName}`
-              : "Assign L1 proofreader"
-          }
-        >
-          {l1Status === "approved" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-            </svg>
-          ) : l1Status === "assigned" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-              <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-            </svg>
-          )}
-          L1
-        </button>
+        />
 
         {/* L2 button */}
-        <button
+        <LevelButton
+          label="L2"
+          status={l2Status}
+          proofreaderName={item.level2ProofreaderName}
+          approvedByName={item.finalApprovedByName}
           onClick={() => onOpenModal(2)}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors flex-shrink-0 ${LEVEL_BUTTON_STYLE[l2Status]}`}
-          title={
-            l2Status === "approved"
-              ? `L2 approved by ${item.finalApprovedByName ?? "—"}`
-              : l2Status === "assigned"
-              ? `L2 assigned to ${item.level2ProofreaderName}`
-              : "Assign L2 proofreader"
-          }
-        >
-          {l2Status === "approved" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-              <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-            </svg>
-          ) : l2Status === "assigned" ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-              <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-            </svg>
-          )}
-          L2
-        </button>
+        />
 
         {/* Review Edits link — shown when L1 or L2 submitted their work */}
         {(item.l1ReviewSubmitted || item.l2ReviewSubmitted) && !item.deployed && (
