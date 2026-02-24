@@ -13,6 +13,15 @@ import { usePlayer } from "@/context/PlayerContext";
 
 type Tab = "queue" | "transcript" | "summary";
 
+function fmtTime(sec: number): string {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}`;
+  return `${m}:${s.toString().padStart(2,"0")}`;
+}
+
 export default function LecturePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -24,7 +33,10 @@ export default function LecturePage() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
-  const { currentTime, seekToSeconds } = usePlayer();
+  const [readingMode, setReadingMode] = useState(false);
+  const { currentTime, seekToSeconds, isPlaying, pause, resume, seek, skip, duration, lecture: playingLecture } = usePlayer();
+  const isThisLecture = playingLecture?.id === videoId;
+  const progress = isThisLecture && duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // Fetch current lecture
   const fetchVideo = useCallback(
@@ -55,22 +67,32 @@ export default function LecturePage() {
       router.push(`/${queueLectures[currentIdx + 1].id}`);
   };
 
+  const handleEnterReadingMode = useCallback(() => {
+    setReadingMode(true);
+    setAutoScroll(false);
+  }, []);
+
+  const handleExitReadingMode = useCallback(() => {
+    setReadingMode(false);
+    setAutoScroll(true);
+  }, []);
+
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
 
   return (
     <div className="h-screen bg-black text-white max-w-md mx-auto flex flex-col overflow-hidden">
       {/* ── Top header ── */}
-      <div className="flex items-center px-4 pt-5 pb-3 gap-3 flex-shrink-0">
+      <div className={`flex items-center px-4 gap-3 flex-shrink-0 transition-all duration-300 ${readingMode ? "pt-3 pb-2" : "pt-5 pb-3"}`}>
         {/* Back / minimize */}
-        <button onClick={() => router.back()} className="text-gray-300">
+        <button onClick={() => router.back()} className="text-gray-300 flex-shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
         </button>
 
-        {/* Tab switcher pill */}
-        <div className="flex-1 flex justify-center">
+        {/* Tab switcher pill — hidden in reading mode */}
+        <div className={`flex-1 flex justify-center transition-all duration-300 ${readingMode ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
           <div className="bg-gray-800 rounded-full p-1 flex">
             {(["queue", "transcript", "summary"] as Tab[]).map((tab) => (
               <button
@@ -89,9 +111,9 @@ export default function LecturePage() {
         </div>
       </div>
 
-      {/* ── Transcript toolbar (search + language) ── */}
+      {/* ── Transcript toolbar (search + language) — hidden in reading mode ── */}
       {activeTab === "transcript" && (
-        <div className="flex items-center gap-2 px-4 pb-3 flex-shrink-0">
+        <div className={`flex items-center gap-2 px-4 flex-shrink-0 overflow-hidden transition-all duration-300 ${readingMode ? "max-h-0 opacity-0 pb-0" : "max-h-20 opacity-100 pb-3"}`}>
           <div className="flex-1 flex items-center gap-2 border border-gray-700 rounded-lg px-3 py-2 bg-gray-900/50">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -202,6 +224,8 @@ export default function LecturePage() {
             startTime={lecture?.startTime}
             autoScroll={autoScroll}
             onSeek={seekToSeconds}
+            onEnterReadingMode={handleEnterReadingMode}
+            onExitReadingMode={handleExitReadingMode}
           />
         )}
 
@@ -219,13 +243,73 @@ export default function LecturePage() {
         )}
       </div>
 
-      {/* ── Player bar ── */}
-      {lecture && (
-        <PlayerBar
-          lecture={lecture}
-          onPrev={goPrev}
-          onNext={goNext}
-        />
+      {/* ── Full player bar (hidden in reading mode) ── */}
+      <div className={`flex-shrink-0 overflow-hidden transition-all duration-300 ${readingMode ? "max-h-0 opacity-0" : "max-h-64 opacity-100"}`}>
+        {lecture && <PlayerBar lecture={lecture} onPrev={goPrev} onNext={goNext} />}
+      </div>
+
+      {/* ── Mini player bar (reading mode only) ── */}
+      {readingMode && lecture && (
+        <div className="flex-shrink-0 bg-black/95 border-t border-gray-800/60 px-4 pt-2 pb-safe-or-3">
+          {/* Seek bar */}
+          <input
+            type="range" min={0} max={100} step={0.1}
+            value={isThisLecture ? progress : 0}
+            onChange={(e) => isThisLecture && seek(Number(e.target.value))}
+            className="w-full h-1 mb-3 cursor-pointer rounded-full appearance-none"
+            style={{ background: `linear-gradient(to right, #f97316 ${progress}%, #374151 ${progress}%)` }}
+          />
+          {/* Controls row */}
+          <div className="flex items-center justify-between pb-2">
+            {/* Time */}
+            <span className="text-xs text-gray-500 tabular-nums w-14">
+              {isThisLecture ? fmtTime(currentTime) : "0:00"}
+            </span>
+
+            {/* Skip back */}
+            <button
+              onClick={() => isThisLecture && skip(-10)}
+              className="text-gray-400 hover:text-white transition-colors relative"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-0.5">10</span>
+            </button>
+
+            {/* Play / Pause */}
+            <button
+              onClick={() => isThisLecture ? (isPlaying ? pause() : resume()) : undefined}
+              className="w-12 h-12 rounded-full bg-orange-500 hover:bg-orange-600 active:scale-95 flex items-center justify-center shadow-lg shadow-orange-900/40 transition-all"
+            >
+              {isPlaying && isThisLecture ? (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-5 h-5 ml-0.5">
+                  <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" />
+                </svg>
+              )}
+            </button>
+
+            {/* Skip forward */}
+            <button
+              onClick={() => isThisLecture && skip(10)}
+              className="text-gray-400 hover:text-white transition-colors relative"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-0.5">10</span>
+            </button>
+
+            {/* Duration */}
+            <span className="text-xs text-gray-500 tabular-nums w-14 text-right">
+              {isThisLecture && duration > 0 ? fmtTime(duration) : "--:--"}
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );

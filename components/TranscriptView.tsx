@@ -17,6 +17,8 @@ interface Props {
   startTime?: number;  // recording start offset in seconds
   autoScroll: boolean;
   onSeek?: (seconds: number) => void;
+  onEnterReadingMode?: () => void;
+  onExitReadingMode?: () => void;
 }
 
 /**
@@ -83,7 +85,14 @@ export default function TranscriptView({
   startTime,
   autoScroll,
   onSeek,
+  onEnterReadingMode,
+  onExitReadingMode,
 }: Props) {
+  // Stable refs so observer callback never goes stale
+  const onEnterRef = useRef(onEnterReadingMode);
+  const onExitRef  = useRef(onExitReadingMode);
+  useEffect(() => { onEnterRef.current = onEnterReadingMode; }, [onEnterReadingMode]);
+  useEffect(() => { onExitRef.current  = onExitReadingMode;  }, [onExitReadingMode]);
   const activeRef = useRef<HTMLParagraphElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [showBackBtn, setShowBackBtn] = useState(false);
@@ -147,7 +156,11 @@ export default function TranscriptView({
     if (!el || !container) return;
 
     const observer = new IntersectionObserver(
-      ([entry]) => setShowBackBtn(!entry.isIntersecting),
+      ([entry]) => {
+        const outOfView = !entry.isIntersecting;
+        setShowBackBtn(outOfView);
+        if (outOfView) onEnterRef.current?.();
+      },
       { root: container, threshold: 0.1 }
     );
     observer.observe(el);
@@ -155,6 +168,7 @@ export default function TranscriptView({
   }, [activeIndex, hasTiming, search]);
 
   const scrollToActive = () => {
+    onExitRef.current?.();
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
