@@ -24,7 +24,7 @@ export default function LecturePage() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
-  const { currentTime } = usePlayer();
+  const { currentTime, seekToSeconds } = usePlayer();
 
   // Fetch current lecture
   const fetchVideo = useCallback(
@@ -201,6 +201,7 @@ export default function LecturePage() {
             currentTime={currentTime}
             startTime={lecture?.startTime}
             autoScroll={autoScroll}
+            onSeek={seekToSeconds}
           />
         )}
 

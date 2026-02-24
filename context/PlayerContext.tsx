@@ -26,6 +26,7 @@ export interface PlayerContextType {
   resume: () => void;
   stop: () => void;
   seek: (pct: number) => void;
+  seekToSeconds: (seconds: number) => void;
   skip: (seconds: number) => void;
   setSpeed: (speed: number) => void;
 }
@@ -150,6 +151,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setDuration(0);
   }, []);
 
+  const seekToSeconds = useCallback((seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = seconds;
+    audio.play().then(() => setIsPlaying(true)).catch(() => {});
+  }, []);
+
   const seek = useCallback((pct: number) => {
     const audio = audioRef.current;
     if (!audio || !audio.duration) return;
@@ -173,7 +181,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   return (
     <PlayerContext.Provider
-      value={{ lecture, isPlaying, currentTime, duration, speed, play, pause, resume, stop, seek, skip, setSpeed }}
+      value={{ lecture, isPlaying, currentTime, duration, speed, play, pause, resume, stop, seek, seekToSeconds, skip, setSpeed }}
     >
       {children}
     </PlayerContext.Provider>

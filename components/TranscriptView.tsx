@@ -16,6 +16,7 @@ interface Props {
   currentTime: number; // seconds from audio player
   startTime?: number;  // recording start offset in seconds
   autoScroll: boolean;
+  onSeek?: (seconds: number) => void;
 }
 
 /**
@@ -81,6 +82,7 @@ export default function TranscriptView({
   currentTime,
   startTime,
   autoScroll,
+  onSeek,
 }: Props) {
   const activeRef = useRef<HTMLParagraphElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -183,20 +185,24 @@ export default function TranscriptView({
 
         {filtered.map((entry) => {
           const isActive = hasTiming && !search && entry.originalIndex === activeIndex;
+          const seekable = hasTiming && entry.startMs >= 0 && !!onSeek;
           return (
             <p
               key={entry.index}
               ref={isActive ? activeRef : undefined}
+              onClick={seekable ? () => onSeek!(entry.startMs / 1000) : undefined}
               className={`text-lg leading-relaxed mb-5 transition-colors duration-300 ${
+                seekable ? "cursor-pointer select-none" : ""
+              } ${
                 !autoScroll
                   ? "text-gray-300"
                   : isActive
                   ? "text-white font-medium"
                   : hasTiming && !search
                   ? entry.originalIndex < activeIndex
-                    ? "text-gray-600"
-                    : "text-gray-500"
-                  : "text-gray-300"
+                    ? "text-gray-600 hover:text-gray-400"
+                    : "text-gray-500 hover:text-gray-300"
+                  : "text-gray-300 hover:text-white"
               }`}
             >
               {entry.text}
