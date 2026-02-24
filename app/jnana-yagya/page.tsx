@@ -952,10 +952,6 @@ export default function JnanaYagyaPage() {
       ? [{ key: "True", text: "True" }, { key: "False", text: "False" }]
       : options;
 
-    // After answering: determine if correct
-    const lastAttemptResult = answered ? (attempts.length > 0 ? attempts[attempts.length - 1] : null) : null;
-    const wasCorrect = lastAttemptResult?.isCorrect ?? false;
-
     return (
       <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-6 flex flex-col">
         {/* Quiz header */}
@@ -998,12 +994,6 @@ export default function JnanaYagyaPage() {
                   {currentQ.type === "TRUE_FALSE" ? "True / False" : currentQ.type === "ASSERTION_REASONING" ? "Assertion & Reason" : "MCQ"}
                 </span>
               </div>
-              {/* Points feedback after answering */}
-              {answered && lastAttemptResult && (
-                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${wasCorrect ? "bg-green-500/15 text-green-400" : "bg-red-500/10 text-red-400"}`}>
-                  {wasCorrect ? `+${lastAttemptResult.pointsEarned} pts ✓` : "✗ No points"}
-                </div>
-              )}
             </div>
           </div>
 
@@ -1059,8 +1049,8 @@ export default function JnanaYagyaPage() {
           </div>
 
           {answered && !selectedOpt && (
-            <div className="mb-4 text-center rounded-xl border border-red-500/20 bg-red-500/8 py-3">
-              <p className="text-red-400 text-sm font-semibold">⏱ Time&apos;s up! — Marked as incorrect</p>
+            <div className="mb-4 text-center rounded-xl border border-orange-500/20 bg-orange-500/8 py-3">
+              <p className="text-orange-400 text-sm font-semibold">⏱ Time&apos;s up!</p>
             </div>
           )}
         </div>
