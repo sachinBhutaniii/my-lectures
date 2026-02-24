@@ -97,6 +97,20 @@ export default function TranscriptView({
   const containerRef = useRef<HTMLDivElement>(null);
   const [showBackBtn, setShowBackBtn] = useState(false);
 
+  // Flag to suppress reading-mode trigger during programmatic scrolls
+  const programmaticScrollRef = useRef(false);
+  const programmaticTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Call before any scrollIntoView so scroll events don't trigger reading mode */
+  const markProgrammaticScroll = () => {
+    programmaticScrollRef.current = true;
+    if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+    // smooth scroll can take ~800ms; give 1200ms buffer
+    programmaticTimerRef.current = setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 1200);
+  };
+
   // Parse SRT entries, fall back to plain transcript split by newlines
   const entries = useMemo(() => {
     if (transcriptSrt) {
@@ -141,8 +155,10 @@ export default function TranscriptView({
   // Auto-scroll to active entry only when autoScroll is on
   useEffect(() => {
     if (autoScroll && hasTiming && !search) {
+      markProgrammaticScroll();
       activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, hasTiming, search, autoScroll]);
 
   // Detect when the active cue scrolls out of view → show "back to current" button
@@ -155,11 +171,10 @@ export default function TranscriptView({
     const container = containerRef.current;
     if (!el || !container) return;
 
+    // IntersectionObserver: only drives the pin button visibility
     const observer = new IntersectionObserver(
       ([entry]) => {
-        const outOfView = !entry.isIntersecting;
-        setShowBackBtn(outOfView);
-        if (outOfView) onEnterRef.current?.();
+        setShowBackBtn(!entry.isIntersecting);
       },
       { root: container, threshold: 0.1 }
     );
@@ -167,8 +182,25 @@ export default function TranscriptView({
     return () => observer.disconnect();
   }, [activeIndex, hasTiming, search]);
 
+  // Detect genuine user scroll → enter reading mode
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (programmaticScrollRef.current) return; // ignore auto-scrolls
+      if (!hasTiming || search) return;
+      onEnterRef.current?.();
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTiming, search]);
+
   const scrollToActive = () => {
     onExitRef.current?.();
+    markProgrammaticScroll();
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
