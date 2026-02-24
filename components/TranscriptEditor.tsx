@@ -29,6 +29,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [cues, setCues] = useState<SrtCue[]>([]);
   const [l1Diff, setL1Diff] = useState<Map<number, CueDiff>>(new Map());
   const [l2Diff, setL2Diff] = useState<Map<number, CueDiff>>(new Map());
+  const [acceptedL1Ids, setAcceptedL1Ids] = useState<Set<number>>(new Set());
+  const [preAcceptAllSnapshot, setPreAcceptAllSnapshot] = useState<{ cues: SrtCue[]; acceptedIds: Set<number> } | null>(null);
 
   // Inline edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -292,8 +294,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           : c
       )
     );
+    setAcceptedL1Ids((prev) => new Set([...prev, cueId]));
+    setPreAcceptAllSnapshot(null); // individual accept invalidates the bulk undo
   };
   const acceptAllL1 = () => {
+    setPreAcceptAllSnapshot({ cues: [...cues], acceptedIds: new Set(acceptedL1Ids) });
     setCues((prev) =>
       prev.map((c) => {
         const diff = l1Diff.get(c.id);
@@ -301,6 +306,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         return { ...c, text: diff.newText, startTime: diff.newStart, endTime: diff.newEnd, startMs: timeToMs(diff.newStart), endMs: timeToMs(diff.newEnd) };
       })
     );
+    setAcceptedL1Ids(new Set(l1Diff.keys()));
+  };
+  const undoAcceptAll = () => {
+    if (!preAcceptAllSnapshot) return;
+    setCues(preAcceptAllSnapshot.cues);
+    setAcceptedL1Ids(preAcceptAllSnapshot.acceptedIds);
+    setPreAcceptAllSnapshot(null);
   };
 
   // ── Submit review ────────────────────────────────────────────────────────────
@@ -330,7 +342,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }
   };
 
-  const pendingL1Changes = l1Diff.size;
+  const pendingL1Changes = l1Diff.size - acceptedL1Ids.size;
+  const allAccepted = l1Diff.size > 0 && pendingL1Changes === 0;
   const hasL2 = data.level2Srt != null;
 
   if (submitted) return <SuccessScreen mode={mode} level={level} onBack={onBack} />;
@@ -500,17 +513,45 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       )}
 
       {/* ── L2: Accept All bar ────────────────────────────────────────────────── */}
-      {mode === "l2" && pendingL1Changes > 0 && (
-        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-purple-500/5 border-b border-purple-500/20">
-          <p className="text-xs text-purple-300">
-            <span className="font-semibold">{pendingL1Changes}</span> Level-1 edit{pendingL1Changes > 1 ? "s" : ""} to review
-          </p>
-          <button
-            onClick={acceptAllL1}
-            className="px-3 py-1 rounded-lg text-xs font-medium bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-colors"
-          >
-            Accept All Changes
-          </button>
+      {mode === "l2" && l1Diff.size > 0 && (
+        <div className={`flex-shrink-0 flex items-center justify-between px-4 py-2 border-b ${
+          allAccepted
+            ? "bg-green-500/5 border-green-500/20"
+            : "bg-purple-500/5 border-purple-500/20"
+        }`}>
+          {allAccepted ? (
+            <p className="text-xs text-green-400 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+              </svg>
+              All {l1Diff.size} Level-1 edit{l1Diff.size > 1 ? "s" : ""} accepted
+            </p>
+          ) : (
+            <p className="text-xs text-purple-300">
+              <span className="font-semibold">{pendingL1Changes}</span> Level-1 edit{pendingL1Changes > 1 ? "s" : ""} to review
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            {preAcceptAllSnapshot && (
+              <button
+                onClick={undoAcceptAll}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600 transition-colors flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                  <path fillRule="evenodd" d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z" clipRule="evenodd" />
+                </svg>
+                Undo
+              </button>
+            )}
+            {!allAccepted && (
+              <button
+                onClick={acceptAllL1}
+                className="px-3 py-1 rounded-lg text-xs font-medium bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-colors"
+              >
+                Accept All Changes
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -545,6 +586,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                 mode={mode}
                 l1Diff={l1Diff.get(cue.id)}
                 l2Diff={l2Diff.get(cue.id)}
+                isL1Accepted={acceptedL1Ids.has(cue.id)}
                 onEdit={() => startEdit(cue)}
                 onCancelEdit={cancelEdit}
                 onSaveEdit={saveEdit}
@@ -606,6 +648,7 @@ interface CueRowProps {
   mode: EditorMode;
   l1Diff?: CueDiff;
   l2Diff?: CueDiff;
+  isL1Accepted?: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -616,7 +659,7 @@ interface CueRowProps {
 
 function CueRow({
   cue, isActive, isEditing, draft, mode,
-  l1Diff, l2Diff,
+  l1Diff, l2Diff, isL1Accepted,
   onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1, onSeekTo,
 }: CueRowProps) {
   const inputCls = "w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-blue-500 transition-colors";
@@ -709,7 +752,7 @@ function CueRow({
           </div>
 
           {/* ── L1 diff panel (shown for L2 and admin) ── */}
-          {l1Diff && (
+          {l1Diff && !isL1Accepted && (
             <div className="mt-2 ml-10 rounded-lg border border-gray-800 bg-gray-950/60 overflow-hidden">
               <div className="px-3 py-1.5 border-b border-gray-800 flex items-center justify-between">
                 <span className="text-[10px] font-medium text-blue-400 uppercase tracking-wide">Level-1 Edit</span>
