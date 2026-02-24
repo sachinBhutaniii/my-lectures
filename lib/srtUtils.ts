@@ -21,12 +21,20 @@ export interface CueDiff {
 
 export function timeToMs(t: string): number {
   if (!t) return 0;
-  const [hms, ms = "0"] = t.split(",");
+  t = t.trim();
+  const [hms, msStr = "0"] = t.split(",");
+  const ms = parseInt(msStr.padEnd(3, "0").slice(0, 3), 10);
   const parts = hms.split(":");
-  const h = parseInt(parts[0] ?? "0", 10);
-  const m = parseInt(parts[1] ?? "0", 10);
-  const s = parseInt(parts[2] ?? "0", 10);
-  return h * 3600000 + m * 60000 + s * 1000 + parseInt(ms, 10);
+  let h = 0, m = 0, s = 0;
+  if (parts.length === 3) {
+    h = parseInt(parts[0], 10);
+    m = parseInt(parts[1], 10);
+    s = parseInt(parts[2], 10);
+  } else if (parts.length === 2) {
+    m = parseInt(parts[0], 10);
+    s = parseInt(parts[1], 10);
+  }
+  return h * 3600000 + m * 60000 + s * 1000 + ms;
 }
 
 export function msToTime(ms: number): string {
@@ -51,8 +59,9 @@ export function parseSrt(srt: string): SrtCue[] {
     if (lines.length < 3) continue;
     const id = parseInt(lines[0], 10);
     if (isNaN(id)) continue;
+    // Match flexible SRT timestamps: HH:MM:SS,mmm or MM:SS,mmm (with 1-3 ms digits)
     const m = lines[1].match(
-      /(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})/
+      /(\d{1,2}(?::\d{1,2}){1,2},\d{1,3})\s*-->\s*(\d{1,2}(?::\d{1,2}){1,2},\d{1,3})/
     );
     if (!m) continue;
     const text = lines.slice(2).join("\n").trim();
