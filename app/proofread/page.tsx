@@ -31,7 +31,7 @@ export default function ProofreadPage() {
     (t) => t.level1ProofreaderId != null && t.approvalStatus === "DRAFT"
   );
   const level2Items = (items ?? []).filter(
-    (t) => t.level2ProofreaderId != null && t.approvalStatus === "LEVEL1_APPROVED"
+    (t) => t.level2ProofreaderId != null
   );
 
   return (

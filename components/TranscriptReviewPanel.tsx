@@ -26,7 +26,7 @@ function getL1Status(item: TranscriptReviewItem): LevelStatus {
 
 function getL2Status(item: TranscriptReviewItem): LevelStatus {
   if (item.approvalStatus === "APPROVED") return "approved";
-  if (item.level2ProofreaderId != null && item.approvalStatus === "LEVEL1_APPROVED") return "assigned";
+  if (item.level2ProofreaderId != null) return "assigned";
   return "neutral";
 }
 
