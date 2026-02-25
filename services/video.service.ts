@@ -201,12 +201,12 @@ export const getAllLocales = async (): Promise<LocaleInfo[]> => {
 };
 
 export const createLocale = async (code: string, name: string): Promise<LocaleInfo> => {
-  const res = await apiClient.post<LocaleInfo>("/locales", { code, name });
+  const res = await apiClient.post<LocaleInfo>("/api/locales", { code, name });
   return res.data;
 };
 
 export const deleteLocale = async (id: number): Promise<void> => {
-  await apiClient.delete(`/locales/${id}`);
+  await apiClient.delete(`/api/locales/${id}`);
 };
 
 // ── S3 upload ─────────────────────────────────────────────────────────────────
