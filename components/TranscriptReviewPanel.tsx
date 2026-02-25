@@ -156,17 +156,22 @@ export default function TranscriptReviewPanel() {
         </div>
       ) : (
         <div className="space-y-2">
-          {list.map((item) => (
-            <TranscriptRow
-              key={item.id}
-              item={item}
+          {Object.values(
+            list.reduce<Record<number, TranscriptReviewItem[]>>((acc, item) => {
+              (acc[item.videoId] ??= []).push(item);
+              return acc;
+            }, {})
+          ).map((group) => (
+            <VideoGroup
+              key={group[0].videoId}
+              items={group}
               isParentAdmin={isParentAdmin}
               isAdmin={isAdmin}
-              acting={acting === item.id}
-              onOpenModal={(level) => setModal({ item, level })}
-              onApprove={() => handleApprove(item)}
-              onReject={() => handleReject(item)}
-              onDeploy={() => handleDeploy(item)}
+              acting={acting}
+              onOpenModal={(item, level) => setModal({ item, level })}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onDeploy={handleDeploy}
             />
           ))}
         </div>
@@ -246,6 +251,146 @@ function LevelButton({
   );
 }
 
+// ── Video group (expandable) ──────────────────────────────────────────────────
+
+type VideoGroupProps = {
+  items: TranscriptReviewItem[];
+  isParentAdmin: boolean;
+  isAdmin: boolean;
+  acting: number | null;
+  onOpenModal: (item: TranscriptReviewItem, level: 1 | 2) => void;
+  onApprove: (item: TranscriptReviewItem) => void;
+  onReject: (item: TranscriptReviewItem) => void;
+  onDeploy: (item: TranscriptReviewItem) => void;
+};
+
+function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onApprove, onReject, onDeploy }: VideoGroupProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
+
+  const first = items[0];
+  const selectedItem = selectedLocale ? items.find((i) => i.localeCode === selectedLocale) : null;
+
+  // Count statuses for the summary badges
+  const deployedCount = items.filter((i) => i.deployed).length;
+  const approvedCount = items.filter((i) => i.approvalStatus === "APPROVED" && !i.deployed).length;
+
+  return (
+    <div className={`rounded-xl border overflow-hidden transition-colors ${
+      deployedCount === items.length && items.length > 0 ? "border-green-500/20" : "border-gray-800"
+    } bg-gray-900/60`}>
+      {/* Video header row — click to expand */}
+      <button
+        onClick={() => { setExpanded(!expanded); if (expanded) setSelectedLocale(null); }}
+        className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-800/30 transition-colors"
+      >
+        {/* Expand chevron */}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+        >
+          <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
+        </svg>
+
+        {/* Thumbnail */}
+        {first.videoThumbnailUrl ? (
+          <img src={first.videoThumbnailUrl} alt={first.videoTitle} className="w-12 h-9 object-cover rounded-lg flex-shrink-0" />
+        ) : (
+          <div className="w-12 h-9 rounded-lg bg-gray-800 flex-shrink-0" />
+        )}
+
+        {/* Title + summary */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-100 truncate leading-tight">{first.videoTitle}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[11px] text-gray-500">
+              {items.length} language{items.length !== 1 ? "s" : ""}
+            </span>
+            {deployedCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 border border-green-500/30 text-green-400 font-medium">
+                {deployedCount} deployed
+              </span>
+            )}
+            {approvedCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400 font-medium">
+                {approvedCount} approved
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Language pills preview (collapsed) */}
+        {!expanded && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {items.map((i) => (
+              <span
+                key={i.id}
+                className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                  i.deployed
+                    ? "border-green-500/30 bg-green-500/10 text-green-400"
+                    : i.approvalStatus === "APPROVED"
+                    ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                    : "border-gray-700 bg-gray-800 text-gray-500"
+                }`}
+              >
+                {i.localeCode.toUpperCase()}
+              </span>
+            ))}
+          </div>
+        )}
+      </button>
+
+      {/* Expanded: language tabs + transcript details */}
+      {expanded && (
+        <div className="border-t border-gray-800">
+          {/* Language tabs */}
+          <div className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-900/80">
+            {items.map((i) => {
+              const isActive = selectedLocale === i.localeCode;
+              return (
+                <button
+                  key={i.id}
+                  onClick={() => setSelectedLocale(isActive ? null : i.localeCode)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    isActive
+                      ? "border-orange-500/50 bg-orange-500/15 text-orange-300"
+                      : i.deployed
+                      ? "border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/15"
+                      : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  {i.localeName}
+                  {i.deployed && (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 inline ml-1 -mt-0.5">
+                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selected language transcript details */}
+          {selectedItem && (
+            <TranscriptRow
+              item={selectedItem}
+              isParentAdmin={isParentAdmin}
+              isAdmin={isAdmin}
+              acting={acting === selectedItem.id}
+              onOpenModal={(level) => onOpenModal(selectedItem, level)}
+              onApprove={() => onApprove(selectedItem)}
+              onReject={() => onReject(selectedItem)}
+              onDeploy={() => onDeploy(selectedItem)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Transcript row ────────────────────────────────────────────────────────────
 
 type RowProps = {
@@ -268,31 +413,23 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
   const canDeploy = item.approvalStatus === "APPROVED" && !item.deployed && isParentAdmin;
 
   return (
-    <div className={`rounded-xl border bg-gray-900/60 overflow-hidden transition-colors ${
-      item.deployed ? "border-green-500/20" : "border-gray-800"
-    }`}>
-      <div className="flex items-center gap-3 p-3">
-        {/* Thumbnail */}
-        {item.videoThumbnailUrl ? (
-          <img
-            src={item.videoThumbnailUrl}
-            alt={item.videoTitle}
-            className="w-12 h-9 object-cover rounded-lg flex-shrink-0"
-          />
-        ) : (
-          <div className="w-12 h-9 rounded-lg bg-gray-800 flex-shrink-0" />
-        )}
-
-        {/* Info */}
+    <div className="border-t border-gray-800">
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Status info */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-100 truncate leading-tight">{item.videoTitle}</p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[11px] text-gray-500">{item.localeName}</span>
-            {item.deployed && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 border border-green-500/30 text-green-400 font-medium">
-                Deployed
-              </span>
-            )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 font-medium">{item.localeName}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+              item.deployed
+                ? "bg-green-500/15 border border-green-500/30 text-green-400"
+                : item.approvalStatus === "APPROVED"
+                ? "bg-blue-500/15 border border-blue-500/30 text-blue-400"
+                : item.approvalStatus === "LEVEL1_APPROVED"
+                ? "bg-yellow-500/15 border border-yellow-500/30 text-yellow-400"
+                : "bg-gray-800 border border-gray-700 text-gray-500"
+            }`}>
+              {item.deployed ? "Deployed" : item.approvalStatus === "APPROVED" ? "Approved" : item.approvalStatus === "LEVEL1_APPROVED" ? "L1 Approved" : "Draft"}
+            </span>
           </div>
         </div>
 
