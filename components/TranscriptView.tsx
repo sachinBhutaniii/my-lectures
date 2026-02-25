@@ -217,17 +217,7 @@ export default function TranscriptView({
     <div className="flex-1 relative overflow-hidden">
       {/* Scrollable transcript */}
       <div ref={containerRef} className="absolute inset-0 overflow-y-auto px-5 py-2">
-        {/* Start time indicator */}
-        {startTime != null && startTime > 0 && (
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-orange-400 flex-shrink-0">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-orange-400 text-sm font-medium">
-              Transcription starts at {formatStartTime(startTime)}
-            </span>
-          </div>
-        )}
+        {/* Start time indicator — removed per user request */}
 
         {filtered.map((entry) => {
           const isActive = hasTiming && !search && entry.originalIndex === activeIndex;
