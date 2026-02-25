@@ -390,22 +390,33 @@ type ModalProps = {
 };
 
 function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove, onReject, onClose }: ModalProps) {
+  const [locales, setLocales] = useState<LocaleInfo[]>([]);
+  const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
   const [proofreaders, setProofreaders] = useState<UserSearchResult[]>([]);
-  const [loadingProofreaders, setLoadingProofreaders] = useState(true);
+  const [loadingLocales, setLoadingLocales] = useState(true);
+  const [loadingProofreaders, setLoadingProofreaders] = useState(false);
 
+  // Load available languages on mount
   useEffect(() => {
     let cancelled = false;
+    getAllLocales()
+      .then((data) => { if (!cancelled) { setLocales(data); setLoadingLocales(false); } })
+      .catch(() => { if (!cancelled) setLoadingLocales(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // When a language is selected, fetch proofreaders for that language
+  useEffect(() => {
+    if (!selectedLocale) { setProofreaders([]); return; }
+    let cancelled = false;
     setLoadingProofreaders(true);
-    getProofreaders(item.localeCode).then((data) => {
-      if (!cancelled) {
-        setProofreaders(data);
-        setLoadingProofreaders(false);
-      }
+    getProofreaders(selectedLocale).then((data) => {
+      if (!cancelled) { setProofreaders(data); setLoadingProofreaders(false); }
     }).catch(() => {
       if (!cancelled) setLoadingProofreaders(false);
     });
     return () => { cancelled = true; };
-  }, [item.localeCode]);
+  }, [selectedLocale]);
 
   const currentProofreaderId = level === 1 ? item.level1ProofreaderId : item.level2ProofreaderId;
   const currentProofreaderName = level === 1 ? item.level1ProofreaderName : item.level2ProofreaderName;
@@ -454,49 +465,80 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove,
             </div>
           )}
 
-          {/* Proofreader list */}
-          {loadingProofreaders ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : proofreaders.length === 0 ? (
-            <div className="text-center py-6 text-gray-600">
-              <p className="text-sm">No proofreaders for {item.localeName}.</p>
-              <p className="text-xs mt-1 text-gray-700">Assign this language to proofreaders in the Users tab.</p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Select proofreader</p>
-              <div className="max-h-52 overflow-y-auto space-y-1.5">
-                {proofreaders.map((u) => (
+          {/* Step 1: Language selection */}
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">1. Select language</p>
+            {loadingLocales ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {locales.map((l) => (
                   <button
-                    key={u.id}
-                    onClick={() => onAssign(u.id)}
-                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
-                      currentProofreaderId === u.id
-                        ? "border-orange-500/40 bg-orange-500/10"
-                        : "border-gray-800 bg-gray-900 hover:border-gray-700"
+                    key={l.id}
+                    onClick={() => setSelectedLocale(l.code)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      selectedLocale === l.code
+                        ? "border-purple-500/50 bg-purple-500/20 text-purple-300"
+                        : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
                     }`}
                   >
-                    {u.avatarUrl ? (
-                      <img src={u.avatarUrl} alt={u.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-gray-300">{u.name.charAt(0).toUpperCase()}</span>
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-100 truncate leading-tight">{u.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{u.email}</p>
-                    </div>
-                    {currentProofreaderId === u.id && (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-orange-400 flex-shrink-0">
-                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-                      </svg>
-                    )}
+                    {l.name}
                   </button>
                 ))}
+                {locales.length === 0 && (
+                  <p className="text-xs text-gray-600">No languages configured. Add languages via Manage Languages.</p>
+                )}
               </div>
+            )}
+          </div>
+
+          {/* Step 2: Proofreader list (only after language is selected) */}
+          {selectedLocale && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">2. Select proofreader</p>
+              {loadingProofreaders ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : proofreaders.length === 0 ? (
+                <div className="text-center py-4 text-gray-600">
+                  <p className="text-sm">No proofreaders for this language.</p>
+                  <p className="text-xs mt-1 text-gray-700">Assign this language to proofreaders in the Users tab.</p>
+                </div>
+              ) : (
+                <div className="max-h-44 overflow-y-auto space-y-1.5">
+                  {proofreaders.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => onAssign(u.id)}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
+                        currentProofreaderId === u.id
+                          ? "border-orange-500/40 bg-orange-500/10"
+                          : "border-gray-800 bg-gray-900 hover:border-gray-700"
+                      }`}
+                    >
+                      {u.avatarUrl ? (
+                        <img src={u.avatarUrl} alt={u.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-medium text-gray-300">{u.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-100 truncate leading-tight">{u.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                      </div>
+                      {currentProofreaderId === u.id && (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-orange-400 flex-shrink-0">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
