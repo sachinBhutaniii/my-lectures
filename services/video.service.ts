@@ -93,6 +93,11 @@ export interface TranscriptReviewItem {
   audioUrl?: string;
 }
 
+export const addLocaleToVideo = async (videoId: number, localeId: number): Promise<TranscriptReviewItem> => {
+  const res = await apiClient.post<TranscriptReviewItem>("/api/transcripts/add-locale", { videoId, localeId });
+  return res.data;
+};
+
 export const getAllTranscripts = async (): Promise<TranscriptReviewItem[]> => {
   const res = await apiClient.get<TranscriptReviewItem[]>("/api/transcripts/all");
   return res.data;

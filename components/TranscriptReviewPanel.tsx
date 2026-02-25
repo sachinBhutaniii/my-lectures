@@ -9,9 +9,14 @@ import {
   assignProofreader,
   deployTranscript,
   getProofreaders,
+  getVideos,
+  getAllLocales,
+  addLocaleToVideo,
   TranscriptReviewItem,
   UserSearchResult,
+  LocaleInfo,
 } from "@/services/video.service";
+import { LectureVideo } from "@/types/videos";
 import { useAuth } from "@/context/AuthContext";
 
 // ── L1/L2 button status helpers ──────────────────────────────────────────────
@@ -52,6 +57,7 @@ export default function TranscriptReviewPanel() {
   const [modal, setModal] = useState<ModalState>(null);
   const [acting, setActing] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [showAddLang, setShowAddLang] = useState(false);
 
   const updateItem = (updated: TranscriptReviewItem) =>
     setData((prev) => (prev ?? []).map((t) => (t.id === updated.id ? updated : t)));
@@ -116,11 +122,23 @@ export default function TranscriptReviewPanel() {
               : "Assign proofreaders and give Level 1 approval."}
           </p>
         </div>
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-[11px] text-gray-500 flex-shrink-0">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Approved</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Assigned</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-600" />Pending</span>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Add Language button */}
+          <button
+            onClick={() => setShowAddLang(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+            </svg>
+            Add Language
+          </button>
+          {/* Legend */}
+          <div className="flex items-center gap-3 text-[11px] text-gray-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Approved</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Assigned</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-600" />Pending</span>
+          </div>
         </div>
       </div>
 
@@ -166,6 +184,17 @@ export default function TranscriptReviewPanel() {
           onApprove={() => { handleApprove(modal.item); setModal(null); }}
           onReject={() => { handleReject(modal.item); setModal(null); }}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* Add Language modal */}
+      {showAddLang && (
+        <AddLanguageModal
+          onAdd={(newItem) => {
+            setData((prev) => [newItem, ...(prev ?? [])]);
+            setShowAddLang(false);
+          }}
+          onClose={() => setShowAddLang(false)}
         />
       )}
     </div>
@@ -502,6 +531,158 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove,
                 </button>
               )}
             </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Add Language modal ────────────────────────────────────────────────────────
+
+function AddLanguageModal({
+  onAdd,
+  onClose,
+}: {
+  onAdd: (item: TranscriptReviewItem) => void;
+  onClose: () => void;
+}) {
+  const [videos, setVideos] = useState<LectureVideo[]>([]);
+  const [locales, setLocales] = useState<LocaleInfo[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
+  const [selectedLocaleId, setSelectedLocaleId] = useState<number | null>(null);
+  const [videoSearch, setVideoSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getVideos(), getAllLocales()])
+      .then(([videoRes, localeRes]) => {
+        if (!cancelled) {
+          setVideos(videoRes.videos ?? []);
+          setLocales(localeRes);
+          setLoadingData(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadingData(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const filteredVideos = videoSearch.length >= 2
+    ? videos.filter((v) => v.title.toLowerCase().includes(videoSearch.toLowerCase()))
+    : videos;
+
+  const handleSave = async () => {
+    if (!selectedVideoId || !selectedLocaleId) return;
+    setSaving(true);
+    setErr("");
+    try {
+      const newItem = await addLocaleToVideo(selectedVideoId, selectedLocaleId);
+      onAdd(newItem);
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { data?: { error?: string } } };
+      setErr(axiosErr?.response?.data?.error ?? "Failed to add language.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/70" onClick={onClose} />
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-md mx-auto bg-[#111] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <p className="text-sm font-semibold text-white">Add Language to Video</p>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {loadingData ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Video selection */}
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Select video</p>
+                <input
+                  type="text"
+                  value={videoSearch}
+                  onChange={(e) => setVideoSearch(e.target.value)}
+                  placeholder="Search videos…"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-3 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
+                />
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {filteredVideos.slice(0, 50).map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setSelectedVideoId(v.id)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
+                        selectedVideoId === v.id
+                          ? "border border-purple-500/40 bg-purple-500/10 text-purple-300"
+                          : "border border-gray-800 bg-gray-900 text-gray-300 hover:border-gray-700"
+                      }`}
+                    >
+                      <p className="truncate">{v.title}</p>
+                    </button>
+                  ))}
+                  {filteredVideos.length === 0 && (
+                    <p className="text-xs text-gray-600 py-2 text-center">No videos found.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Locale selection */}
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Select language</p>
+                <div className="flex flex-wrap gap-2">
+                  {locales.map((l) => (
+                    <button
+                      key={l.id}
+                      onClick={() => setSelectedLocaleId(l.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        selectedLocaleId === l.id
+                          ? "border-purple-500/50 bg-purple-500/20 text-purple-300"
+                          : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                      }`}
+                    >
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {err && <p className="text-red-400 text-xs">{err}</p>}
+
+              {/* Save */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleSave}
+                  disabled={!selectedVideoId || !selectedLocaleId || saving}
+                  className="flex-1 py-2 rounded-xl text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {saving ? (
+                    <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                  ) : "Add Language"}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
