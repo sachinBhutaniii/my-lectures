@@ -44,12 +44,19 @@ export const getLanguageData = async (): Promise<LanguageData[]> => {
 
 // ── User management ──────────────────────────────────────────────────────────
 
+export interface LocaleInfo {
+  id: number;
+  code: string;
+  name: string;
+}
+
 export interface UserSearchResult {
   id: number;
   email: string;
   name: string;
   avatarUrl?: string;
   role: string;
+  locales?: LocaleInfo[];
 }
 
 export const searchUsers = async (q?: string): Promise<UserSearchResult[]> => {
@@ -167,9 +174,34 @@ export const getSubmittedReviews = async (): Promise<TranscriptReviewItem[]> => 
   return res.data;
 };
 
-export const getProofreaders = async (): Promise<UserSearchResult[]> => {
-  const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
+export const getProofreaders = async (localeCode?: string): Promise<UserSearchResult[]> => {
+  const params = localeCode ? `?localeCode=${encodeURIComponent(localeCode)}` : "";
+  const res = await apiClient.get<UserSearchResult[]>(`/api/users/proofreaders${params}`);
   return res.data;
+};
+
+export const getUserLocales = async (userId: number): Promise<LocaleInfo[]> => {
+  const res = await apiClient.get<LocaleInfo[]>(`/api/users/${userId}/locales`);
+  return res.data;
+};
+
+export const setUserLocales = async (userId: number, localeIds: number[]): Promise<LocaleInfo[]> => {
+  const res = await apiClient.put<LocaleInfo[]>(`/api/users/${userId}/locales`, { localeIds });
+  return res.data;
+};
+
+export const getAllLocales = async (): Promise<LocaleInfo[]> => {
+  const res = await apiClient.get<LocaleInfo[]>("/locales");
+  return res.data;
+};
+
+export const createLocale = async (code: string, name: string): Promise<LocaleInfo> => {
+  const res = await apiClient.post<LocaleInfo>("/locales", { code, name });
+  return res.data;
+};
+
+export const deleteLocale = async (id: number): Promise<void> => {
+  await apiClient.delete(`/locales/${id}`);
 };
 
 // ── S3 upload ─────────────────────────────────────────────────────────────────

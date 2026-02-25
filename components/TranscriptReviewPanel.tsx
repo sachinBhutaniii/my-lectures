@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useFetch } from "@/hooks/useFetch";
 import {
@@ -48,9 +48,6 @@ export default function TranscriptReviewPanel() {
 
   const transcriptFn = useCallback(() => getAllTranscripts(), []);
   const { data: items, loading, setData } = useFetch<TranscriptReviewItem[]>(transcriptFn);
-
-  const proofreaderFn = useCallback(() => getProofreaders(), []);
-  const { data: proofreaders } = useFetch<UserSearchResult[]>(proofreaderFn);
 
   const [modal, setModal] = useState<ModalState>(null);
   const [acting, setActing] = useState<number | null>(null);
@@ -163,7 +160,6 @@ export default function TranscriptReviewPanel() {
         <AssignModal
           item={modal.item}
           level={modal.level}
-          proofreaders={proofreaders ?? []}
           isParentAdmin={isParentAdmin}
           isAdmin={isAdmin}
           onAssign={(userId) => handleAssign(modal.item.id, userId, modal.level)}
@@ -363,7 +359,6 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
 type ModalProps = {
   item: TranscriptReviewItem;
   level: 1 | 2;
-  proofreaders: UserSearchResult[];
   isParentAdmin: boolean;
   isAdmin: boolean;
   onAssign: (userId: number | null) => void;
@@ -372,7 +367,24 @@ type ModalProps = {
   onClose: () => void;
 };
 
-function AssignModal({ item, level, proofreaders, isParentAdmin, isAdmin, onAssign, onApprove, onReject, onClose }: ModalProps) {
+function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove, onReject, onClose }: ModalProps) {
+  const [proofreaders, setProofreaders] = useState<UserSearchResult[]>([]);
+  const [loadingProofreaders, setLoadingProofreaders] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingProofreaders(true);
+    getProofreaders(item.localeCode).then((data) => {
+      if (!cancelled) {
+        setProofreaders(data);
+        setLoadingProofreaders(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setLoadingProofreaders(false);
+    });
+    return () => { cancelled = true; };
+  }, [item.localeCode]);
+
   const currentProofreaderId = level === 1 ? item.level1ProofreaderId : item.level2ProofreaderId;
   const currentProofreaderName = level === 1 ? item.level1ProofreaderName : item.level2ProofreaderName;
 
@@ -421,10 +433,14 @@ function AssignModal({ item, level, proofreaders, isParentAdmin, isAdmin, onAssi
           )}
 
           {/* Proofreader list */}
-          {proofreaders.length === 0 ? (
+          {loadingProofreaders ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : proofreaders.length === 0 ? (
             <div className="text-center py-6 text-gray-600">
-              <p className="text-sm">No proofreaders assigned yet.</p>
-              <p className="text-xs mt-1 text-gray-700">Assign ROLE_PROOFREADER to users in the Users tab.</p>
+              <p className="text-sm">No proofreaders for {item.localeName}.</p>
+              <p className="text-xs mt-1 text-gray-700">Assign this language to proofreaders in the Users tab.</p>
             </div>
           ) : (
             <div className="space-y-1.5">

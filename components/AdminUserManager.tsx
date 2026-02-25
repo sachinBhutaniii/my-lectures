@@ -1,6 +1,16 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { searchUsers, updateUserRole, UserSearchResult } from "@/services/video.service";
+import {
+  searchUsers,
+  updateUserRole,
+  getProofreaders,
+  getAllLocales,
+  setUserLocales,
+  createLocale,
+  deleteLocale,
+  UserSearchResult,
+  LocaleInfo,
+} from "@/services/video.service";
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   ROLE_ADMIN:        { label: "Child Admin",  color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
@@ -18,6 +28,14 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function LocaleBadge({ locale }: { locale: LocaleInfo }) {
+  return (
+    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium border border-purple-500/30 bg-purple-500/10 text-purple-400">
+      {locale.name}
+    </span>
+  );
+}
+
 type ViewMode = "admins" | "proofreaders";
 
 export default function AdminUserManager() {
@@ -29,20 +47,36 @@ export default function AdminUserManager() {
   const [error, setError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const load = useCallback(async (q?: string, currentView: ViewMode = "admins") => {
+  // Locale state
+  const [allLocales, setAllLocales] = useState<LocaleInfo[]>([]);
+  const [localeFilter, setLocaleFilter] = useState<string>(""); // locale code filter for proofreaders
+  const [localeEditUserId, setLocaleEditUserId] = useState<number | null>(null);
+  const [localeEditSelection, setLocaleEditSelection] = useState<number[]>([]);
+  const [localeEditSaving, setLocaleEditSaving] = useState(false);
+
+  // Language management state
+  const [showLangMgmt, setShowLangMgmt] = useState(false);
+  const [newLangCode, setNewLangCode] = useState("");
+  const [newLangName, setNewLangName] = useState("");
+  const [langMgmtLoading, setLangMgmtLoading] = useState(false);
+  const [langMgmtError, setLangMgmtError] = useState("");
+
+  // Load all locales on mount
+  useEffect(() => {
+    getAllLocales().then(setAllLocales).catch(() => {});
+  }, []);
+
+  const load = useCallback(async (q?: string, currentView: ViewMode = "admins", filterLocale?: string) => {
     setLoading(true);
     setError("");
     try {
       if (q && q.length >= 2) {
-        // Search mode: show ALL matching users so any user can be found and assigned a role
         const results = await searchUsers(q);
         setUsers(results);
       } else if (currentView === "proofreaders") {
-        const { default: apiClient } = await import("@/lib/axios");
-        const res = await apiClient.get<UserSearchResult[]>("/api/users/proofreaders");
-        setUsers(res.data);
+        const results = await getProofreaders(filterLocale || undefined);
+        setUsers(results);
       } else {
-        // Default view: show all users
         const results = await searchUsers(undefined);
         setUsers(results);
       }
@@ -66,16 +100,16 @@ export default function AdminUserManager() {
 
   // Load when view changes or query is cleared
   useEffect(() => {
-    if (query.length === 0) load(undefined, view);
-  }, [load, view, query]);
+    if (query.length === 0) load(undefined, view, localeFilter);
+  }, [load, view, query, localeFilter]);
 
   // Debounced search when query has 2+ chars
   useEffect(() => {
     if (query.length < 2) return;
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => load(query, view), 300);
+    debounceRef.current = setTimeout(() => load(query, view, localeFilter), 300);
     return () => clearTimeout(debounceRef.current);
-  }, [query, load, view]);
+  }, [query, load, view, localeFilter]);
 
   const handleRoleChange = async (user: UserSearchResult, newRole: string) => {
     setUpdating({ id: user.id, role: newRole });
@@ -86,6 +120,68 @@ export default function AdminUserManager() {
       setError("Failed to update role. Please try again.");
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const openLocaleEdit = (user: UserSearchResult) => {
+    setLocaleEditUserId(user.id);
+    setLocaleEditSelection((user.locales ?? []).map((l) => l.id));
+  };
+
+  const saveLocaleEdit = async () => {
+    if (localeEditUserId == null) return;
+    setLocaleEditSaving(true);
+    try {
+      const updatedLocales = await setUserLocales(localeEditUserId, localeEditSelection);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === localeEditUserId ? { ...u, locales: updatedLocales } : u
+        )
+      );
+      setLocaleEditUserId(null);
+    } catch {
+      setError("Failed to save languages. Please try again.");
+    } finally {
+      setLocaleEditSaving(false);
+    }
+  };
+
+  const toggleLocaleSelection = (localeId: number) => {
+    setLocaleEditSelection((prev) =>
+      prev.includes(localeId) ? prev.filter((id) => id !== localeId) : [...prev, localeId]
+    );
+  };
+
+  const handleCreateLocale = async () => {
+    if (!newLangCode.trim() || !newLangName.trim()) {
+      setLangMgmtError("Both code and name are required.");
+      return;
+    }
+    setLangMgmtLoading(true);
+    setLangMgmtError("");
+    try {
+      const created = await createLocale(newLangCode.trim(), newLangName.trim());
+      setAllLocales((prev) => [...prev, created]);
+      setNewLangCode("");
+      setNewLangName("");
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      setLangMgmtError(axiosErr?.response?.data?.error ?? "Failed to create language.");
+    } finally {
+      setLangMgmtLoading(false);
+    }
+  };
+
+  const handleDeleteLocale = async (id: number) => {
+    setLangMgmtLoading(true);
+    setLangMgmtError("");
+    try {
+      await deleteLocale(id);
+      setAllLocales((prev) => prev.filter((l) => l.id !== id));
+    } catch {
+      setLangMgmtError("Failed to delete language.");
+    } finally {
+      setLangMgmtLoading(false);
     }
   };
 
@@ -102,7 +198,7 @@ export default function AdminUserManager() {
       {/* View toggle */}
       <div className="flex gap-1 p-1 bg-gray-900 border border-gray-800 rounded-xl w-fit">
         <button
-          onClick={() => { setView("admins"); setQuery(""); }}
+          onClick={() => { setView("admins"); setQuery(""); setLocaleFilter(""); }}
           className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
             view === "admins"
               ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
@@ -122,6 +218,23 @@ export default function AdminUserManager() {
           Proofreaders
         </button>
       </div>
+
+      {/* Locale filter — only in proofreaders view */}
+      {view === "proofreaders" && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Filter by language:</span>
+          <select
+            value={localeFilter}
+            onChange={(e) => setLocaleFilter(e.target.value)}
+            className="bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-1.5 outline-none focus:border-blue-500/50"
+          >
+            <option value="">All languages</option>
+            {allLocales.map((l) => (
+              <option key={l.id} value={l.code}>{l.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Search */}
       <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5">
@@ -163,7 +276,7 @@ export default function AdminUserManager() {
             <p className="text-red-400 text-sm">{error}</p>
           </div>
           <button
-            onClick={() => load(query.length >= 2 ? query : undefined, view)}
+            onClick={() => load(query.length >= 2 ? query : undefined, view, localeFilter)}
             className="flex-shrink-0 text-xs text-red-400 hover:text-red-200 border border-red-500/30 rounded-lg px-2.5 py-1 transition-colors"
           >
             Retry
@@ -197,73 +310,213 @@ export default function AdminUserManager() {
           {users.map((user) => (
             <div
               key={user.id}
-              className="flex items-center gap-3 p-3 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors"
+              className="rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors"
             >
-              {/* Avatar */}
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-medium text-gray-400">
-                    {user.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center gap-3 p-3">
+                {/* Avatar */}
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-medium text-gray-400">
+                      {user.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
-                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                </div>
+
+                {/* Locale badges — for proofreaders */}
+                {user.role === "ROLE_PROOFREADER" && (user.locales ?? []).length > 0 && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {(user.locales ?? []).map((l) => (
+                      <LocaleBadge key={l.id} locale={l} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Languages edit button — for proofreaders */}
+                {user.role === "ROLE_PROOFREADER" && (
+                  <button
+                    onClick={() => openLocaleEdit(user)}
+                    className="px-2 py-1 rounded-lg text-[11px] font-medium border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors flex-shrink-0"
+                  >
+                    Languages
+                  </button>
+                )}
+
+                {/* Role badge */}
+                <RoleBadge role={user.role} />
+
+                {/* Action buttons — skip for parent admin */}
+                {user.role !== "ROLE_PARENT_ADMIN" && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {user.role !== "ROLE_ADMIN" && (
+                      <button
+                        onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
+                        disabled={updating !== null}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
+                          <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
+                        ) : "Admin"}
+                      </button>
+                    )}
+
+                    {user.role !== "ROLE_PROOFREADER" && (
+                      <button
+                        onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
+                        disabled={updating !== null}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
+                          <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                        ) : "Proofreader"}
+                      </button>
+                    )}
+
+                    {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
+                      <button
+                        onClick={() => handleRoleChange(user, "ROLE_USER")}
+                        disabled={updating !== null}
+                        className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {updating?.id === user.id && updating.role === "ROLE_USER" ? (
+                          <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                        ) : "Revoke"}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Role badge */}
-              <RoleBadge role={user.role} />
-
-              {/* Action buttons — skip for parent admin */}
-              {user.role !== "ROLE_PARENT_ADMIN" && (
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {/* Make Admin button — show if not already admin */}
-                  {user.role !== "ROLE_ADMIN" && (
+              {/* Locale edit popover — inline below the user row */}
+              {localeEditUserId === user.id && (
+                <div className="border-t border-gray-800 px-3 py-3">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Assign languages</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {allLocales.map((l) => (
+                      <button
+                        key={l.id}
+                        onClick={() => toggleLocaleSelection(l.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                          localeEditSelection.includes(l.id)
+                            ? "border-purple-500/50 bg-purple-500/20 text-purple-300"
+                            : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                        }`}
+                      >
+                        {l.name}
+                      </button>
+                    ))}
+                    {allLocales.length === 0 && (
+                      <p className="text-xs text-gray-600">No languages available. Add languages below.</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
-                      disabled={updating !== null}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                      onClick={saveLocaleEdit}
+                      disabled={localeEditSaving}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
                     >
-                      {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
-                        <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
-                      ) : "Admin"}
+                      {localeEditSaving ? (
+                        <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />
+                      ) : "Save"}
                     </button>
-                  )}
-
-                  {/* Make Proofreader button — show if not already proofreader */}
-                  {user.role !== "ROLE_PROOFREADER" && (
                     <button
-                      onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
-                      disabled={updating !== null}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                      onClick={() => setLocaleEditUserId(null)}
+                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
                     >
-                      {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
-                        <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-                      ) : "Proofreader"}
+                      Cancel
                     </button>
-                  )}
-
-                  {/* Revoke — reset to ROLE_USER */}
-                  {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
-                    <button
-                      onClick={() => handleRoleChange(user, "ROLE_USER")}
-                      disabled={updating !== null}
-                      className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                    >
-                      {updating?.id === user.id && updating.role === "ROLE_USER" ? (
-                        <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                      ) : "Revoke"}
-                    </button>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Manage Languages section — proofreaders view */}
+      {view === "proofreaders" && (
+        <div className="border-t border-gray-800 pt-5 mt-5">
+          <button
+            onClick={() => setShowLangMgmt(!showLangMgmt)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`w-4 h-4 transition-transform ${showLangMgmt ? "rotate-90" : ""}`}
+            >
+              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
+            </svg>
+            Manage Languages
+          </button>
+
+          {showLangMgmt && (
+            <div className="mt-3 space-y-3">
+              {langMgmtError && (
+                <p className="text-red-400 text-xs">{langMgmtError}</p>
+              )}
+
+              {/* Existing languages */}
+              <div className="space-y-1.5">
+                {allLocales.map((l) => (
+                  <div
+                    key={l.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800"
+                  >
+                    <div>
+                      <span className="text-sm text-gray-200">{l.name}</span>
+                      <span className="text-xs text-gray-500 ml-2">({l.code})</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteLocale(l.id)}
+                      disabled={langMgmtLoading}
+                      className="text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                {allLocales.length === 0 && (
+                  <p className="text-xs text-gray-600 py-2">No languages configured yet.</p>
+                )}
+              </div>
+
+              {/* Add language form */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newLangCode}
+                  onChange={(e) => setNewLangCode(e.target.value)}
+                  placeholder="Code (e.g. bn)"
+                  className="w-24 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
+                />
+                <input
+                  type="text"
+                  value={newLangName}
+                  onChange={(e) => setNewLangName(e.target.value)}
+                  placeholder="Name (e.g. Bengali)"
+                  className="flex-1 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
+                />
+                <button
+                  onClick={handleCreateLocale}
+                  disabled={langMgmtLoading}
+                  className="px-3 py-2 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                >
+                  {langMgmtLoading ? (
+                    <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  ) : "Add"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
