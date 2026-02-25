@@ -9,14 +9,13 @@ import {
   assignProofreader,
   deployTranscript,
   getProofreaders,
-  getVideos,
   getAllLocales,
-  addLocaleToVideo,
+  createLocale,
+  deleteLocale,
   TranscriptReviewItem,
   UserSearchResult,
   LocaleInfo,
 } from "@/services/video.service";
-import { LectureVideo } from "@/types/videos";
 import { useAuth } from "@/context/AuthContext";
 
 // ── L1/L2 button status helpers ──────────────────────────────────────────────
@@ -123,7 +122,7 @@ export default function TranscriptReviewPanel() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          {/* Add Language button */}
+          {/* Manage Languages button */}
           <button
             onClick={() => setShowAddLang(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors"
@@ -131,7 +130,7 @@ export default function TranscriptReviewPanel() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
               <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
             </svg>
-            Add Language
+            Manage Languages
           </button>
           {/* Legend */}
           <div className="flex items-center gap-3 text-[11px] text-gray-500">
@@ -187,15 +186,9 @@ export default function TranscriptReviewPanel() {
         />
       )}
 
-      {/* Add Language modal */}
+      {/* Manage Languages modal */}
       {showAddLang && (
-        <AddLanguageModal
-          onAdd={(newItem) => {
-            setData((prev) => [newItem, ...(prev ?? [])]);
-            setShowAddLang(false);
-          }}
-          onClose={() => setShowAddLang(false)}
-        />
+        <ManageLanguagesModal onClose={() => setShowAddLang(false)} />
       )}
     </div>
   );
@@ -538,66 +531,62 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove,
   );
 }
 
-// ── Add Language modal ────────────────────────────────────────────────────────
+// ── Manage Languages modal ───────────────────────────────────────────────────
 
-function AddLanguageModal({
-  onAdd,
-  onClose,
-}: {
-  onAdd: (item: TranscriptReviewItem) => void;
-  onClose: () => void;
-}) {
-  const [videos, setVideos] = useState<LectureVideo[]>([]);
+function ManageLanguagesModal({ onClose }: { onClose: () => void }) {
   const [locales, setLocales] = useState<LocaleInfo[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
-  const [selectedLocaleId, setSelectedLocaleId] = useState<number | null>(null);
-  const [videoSearch, setVideoSearch] = useState("");
+  const [newCode, setNewCode] = useState("");
+  const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getVideos(), getAllLocales()])
-      .then(([videoRes, localeRes]) => {
-        if (!cancelled) {
-          setVideos(videoRes.videos ?? []);
-          setLocales(localeRes);
-          setLoadingData(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoadingData(false);
-      });
+    getAllLocales()
+      .then((data) => { if (!cancelled) { setLocales(data); setLoadingData(false); } })
+      .catch(() => { if (!cancelled) setLoadingData(false); });
     return () => { cancelled = true; };
   }, []);
 
-  const filteredVideos = videoSearch.length >= 2
-    ? videos.filter((v) => v.title.toLowerCase().includes(videoSearch.toLowerCase()))
-    : videos;
-
-  const handleSave = async () => {
-    if (!selectedVideoId || !selectedLocaleId) return;
+  const handleCreate = async () => {
+    if (!newCode.trim() || !newName.trim()) { setErr("Both code and name are required."); return; }
     setSaving(true);
     setErr("");
     try {
-      const newItem = await addLocaleToVideo(selectedVideoId, selectedLocaleId);
-      onAdd(newItem);
+      const created = await createLocale(newCode.trim(), newName.trim());
+      setLocales((prev) => [...prev, created]);
+      setNewCode("");
+      setNewName("");
     } catch (e: unknown) {
       const axiosErr = e as { response?: { data?: { error?: string } } };
-      setErr(axiosErr?.response?.data?.error ?? "Failed to add language.");
+      setErr(axiosErr?.response?.data?.error ?? "Failed to create language.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    setDeleting(id);
+    setErr("");
+    try {
+      await deleteLocale(id);
+      setLocales((prev) => prev.filter((l) => l.id !== id));
+    } catch {
+      setErr("Failed to delete language.");
+    } finally {
+      setDeleting(null);
     }
   };
 
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/70" onClick={onClose} />
-      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-md mx-auto bg-[#111] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-sm mx-auto bg-[#111] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-          <p className="text-sm font-semibold text-white">Add Language to Video</p>
+          <p className="text-sm font-semibold text-white">Manage Languages</p>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -607,80 +596,67 @@ function AddLanguageModal({
 
         <div className="p-4 space-y-4">
           {loadingData ? (
-            <div className="flex items-center justify-center py-10">
+            <div className="flex items-center justify-center py-8">
               <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <>
-              {/* Video selection */}
-              <div className="space-y-2">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Select video</p>
-                <input
-                  type="text"
-                  value={videoSearch}
-                  onChange={(e) => setVideoSearch(e.target.value)}
-                  placeholder="Search videos…"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-3 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
-                />
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                  {filteredVideos.slice(0, 50).map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => setSelectedVideoId(v.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
-                        selectedVideoId === v.id
-                          ? "border border-purple-500/40 bg-purple-500/10 text-purple-300"
-                          : "border border-gray-800 bg-gray-900 text-gray-300 hover:border-gray-700"
-                      }`}
-                    >
-                      <p className="truncate">{v.title}</p>
-                    </button>
-                  ))}
-                  {filteredVideos.length === 0 && (
-                    <p className="text-xs text-gray-600 py-2 text-center">No videos found.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Locale selection */}
-              <div className="space-y-2">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Select language</p>
-                <div className="flex flex-wrap gap-2">
-                  {locales.map((l) => (
-                    <button
-                      key={l.id}
-                      onClick={() => setSelectedLocaleId(l.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        selectedLocaleId === l.id
-                          ? "border-purple-500/50 bg-purple-500/20 text-purple-300"
-                          : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
-                      }`}
-                    >
-                      {l.name}
-                    </button>
-                  ))}
-                </div>
+              {/* Existing languages */}
+              <div className="space-y-1.5">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Current languages</p>
+                {locales.length === 0 ? (
+                  <p className="text-xs text-gray-600 py-2">No languages configured yet.</p>
+                ) : (
+                  locales.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800">
+                      <div>
+                        <span className="text-sm text-gray-200">{l.name}</span>
+                        <span className="text-xs text-gray-500 ml-2">({l.code})</span>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(l.id)}
+                        disabled={deleting !== null}
+                        className="text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {deleting === l.id ? (
+                          <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                        ) : "Delete"}
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               {err && <p className="text-red-400 text-xs">{err}</p>}
 
-              {/* Save */}
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={handleSave}
-                  disabled={!selectedVideoId || !selectedLocaleId || saving}
-                  className="flex-1 py-2 rounded-xl text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {saving ? (
-                    <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                  ) : "Add Language"}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
+              {/* Add new language */}
+              <div className="space-y-2 border-t border-gray-800 pt-3">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Add new language</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value)}
+                    placeholder="Code (e.g. bn)"
+                    className="w-20 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
+                  />
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Name (e.g. Bengali)"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
+                  />
+                  <button
+                    onClick={handleCreate}
+                    disabled={saving}
+                    className="px-3 py-2 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />
+                    ) : "Add"}
+                  </button>
+                </div>
               </div>
             </>
           )}
