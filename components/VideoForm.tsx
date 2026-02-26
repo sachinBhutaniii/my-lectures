@@ -278,8 +278,9 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
           return prev;
         });
       })
-      .catch(() => {
-        setAudioError("Audio extraction failed. You can add the audio URL manually.");
+      .catch((err) => {
+        const msg = err?.response?.data?.error || err?.message || "Unknown error";
+        setAudioError(`Audio extraction failed: ${msg}`);
       })
       .finally(() => {
         setAudioExtracting(false);
