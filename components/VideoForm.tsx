@@ -1,7 +1,7 @@
 "use client";
 import { LectureVideo, LanguageData } from "@/types/videos";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { uploadImage, getVideoById, getLanguageData } from "@/services/video.service";
+import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio } from "@/services/video.service";
 
 type VideoFormProps = {
   initialData?: Partial<LectureVideo>;
@@ -19,6 +19,62 @@ const CATEGORY_OPTIONS = [
   { code: "minars", label: "Seminars" },
   { code: "others", label: "Others" },
 ];
+
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?.*v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function detectCategory(title: string): string | null {
+  if (/\bSB\s+\d/i.test(title)) return "sb";
+  if (/\bBG\s+\d/i.test(title)) return "bg";
+  if (/\bCC\s+\d/i.test(title)) return "cc";
+  return null;
+}
+
+function extractStartTime(url: string): number | null {
+  // Matches ?t=90, &t=90, ?t=1h30m5s, ?t=5m, ?t=90s, ?start=120
+  const m = url.match(/[?&](?:t|start)=([^&]+)/);
+  if (!m) return null;
+  const val = m[1];
+  // Pure number = seconds
+  if (/^\d+$/.test(val)) return parseInt(val, 10);
+  // Duration format: 1h30m5s, 5m, 90s, etc.
+  let total = 0;
+  const hours = val.match(/(\d+)h/);
+  const mins = val.match(/(\d+)m/);
+  const secs = val.match(/(\d+)s/);
+  if (hours) total += parseInt(hours[1], 10) * 3600;
+  if (mins) total += parseInt(mins[1], 10) * 60;
+  if (secs) total += parseInt(secs[1], 10);
+  return total > 0 ? total : null;
+}
+
+function formatStartTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function generateKey(title: string, date: string): string {
+  // Try to extract scripture reference like "SB 5.14.28" → "SB-5.14.28"
+  const refMatch = title.match(/\b(SB|BG|CC)\s+([\d.]+)/i);
+  if (refMatch) {
+    const ref = `${refMatch[1].toUpperCase()}-${refMatch[2]}`;
+    return date ? `${ref}-${date}` : ref;
+  }
+  // Fallback: first 3 words
+  const words = title.replace(/[^\w\s]/g, "").trim().split(/\s+/).slice(0, 3).join("-").toLowerCase();
+  return date ? `${words}-${date}` : words;
+}
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div>
@@ -46,12 +102,20 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     description: "",
     keywords: [],
     locale: "en",
+    startTime: undefined,
     visibility: "PUBLIC",
   });
 
   const [keywordInput, setKeywordInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  // YouTube auto-populate
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [ytFetching, setYtFetching] = useState(false);
+  const [ytError, setYtError] = useState("");
+  const [audioExtracting, setAudioExtracting] = useState(false);
+  const [audioError, setAudioError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Transcript locale state
@@ -84,6 +148,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
         category: initialData.category || [],
         description: initialData.description || "",
         keywords: initialData.keywords || [],
+        startTime: initialData.startTime,
         locale: "en",
         visibility: initialData.visibility || "PUBLIC",
       });
@@ -168,6 +233,59 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     }
   };
 
+  const handleYoutubeFetch = async () => {
+    setYtError("");
+    setAudioError("");
+    const vid = extractVideoId(youtubeUrl.trim());
+    if (!vid) {
+      setYtError("Invalid YouTube URL");
+      return;
+    }
+    setYtFetching(true);
+    const urlStr = youtubeUrl.trim();
+    const startSeconds = extractStartTime(urlStr);
+
+    try {
+      const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vid}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const title = data.title || "";
+      const cat = detectCategory(title);
+
+      setFormData((prev) => {
+        const updates: Partial<typeof prev> = {};
+        if (!prev.title && title) updates.title = title;
+        if (!prev.videoUrl) updates.videoUrl = urlStr;
+        if (!prev.thumbnailUrl) updates.thumbnailUrl = `https://img.youtube.com/vi/${vid}/maxresdefault.jpg`;
+        if (cat && (!prev.category || prev.category.length === 0)) updates.category = [cat];
+        if (!prev.key) updates.key = generateKey(title, prev.date || "");
+        if (startSeconds != null && prev.startTime == null) updates.startTime = startSeconds;
+        return { ...prev, ...updates };
+      });
+    } catch {
+      setYtError("Failed to fetch video info. Check the URL and try again.");
+    } finally {
+      setYtFetching(false);
+    }
+
+    // Extract audio in parallel (fire-and-forget, fills audioUrl when done)
+    setAudioExtracting(true);
+    extractYouTubeAudio(urlStr, startSeconds ?? undefined)
+      .then((s3Url) => {
+        setFormData((prev) => {
+          if (!prev.audioUrl) return { ...prev, audioUrl: s3Url };
+          return prev;
+        });
+      })
+      .catch(() => {
+        setAudioError("Audio extraction failed. You can add the audio URL manually.");
+      })
+      .finally(() => {
+        setAudioExtracting(false);
+      });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
@@ -180,6 +298,31 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Populate from YouTube */}
+      <div className="border border-gray-700 rounded-xl p-4 space-y-3 bg-gray-900/40">
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Populate from YouTube</span>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={youtubeUrl}
+            onChange={(e) => { setYoutubeUrl(e.target.value); setYtError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleYoutubeFetch(); } }}
+            placeholder="Paste YouTube URL…"
+            className={inputCls + " flex-1"}
+          />
+          <button
+            type="button"
+            onClick={handleYoutubeFetch}
+            disabled={ytFetching || !youtubeUrl.trim()}
+            className="px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-sm font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {ytFetching && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            Fetch
+          </button>
+        </div>
+        {ytError && <p className="text-red-400 text-xs">{ytError}</p>}
+      </div>
+
       {/* Title */}
       <Field label="Title">
         <input
@@ -367,11 +510,40 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
         <input type="text" name="videoUrl" required value={formData.videoUrl} onChange={handleChange} placeholder="https://…" className={inputCls} />
       </Field>
       <Field label="Audio URL">
-        <input type="text" name="audioUrl" value={formData.audioUrl} onChange={handleChange} placeholder="https://…" className={inputCls} />
+        <div className="relative">
+          <input type="text" name="audioUrl" value={formData.audioUrl} onChange={handleChange} placeholder="https://…" className={inputCls} />
+          {audioExtracting && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-orange-400">
+              <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+              Extracting audio…
+            </span>
+          )}
+        </div>
+        {audioError && <p className="text-red-400 text-xs mt-1">{audioError}</p>}
       </Field>
-      <Field label="Key (SKU)">
-        <input type="text" name="key" value={formData.key} onChange={handleChange} placeholder="e.g. sb-1-1-001" className={inputCls} />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Key (SKU)">
+          <input type="text" name="key" value={formData.key} onChange={handleChange} placeholder="e.g. sb-1-1-001" className={inputCls} />
+        </Field>
+        <Field label="Start Time (seconds)">
+          <div className="relative">
+            <input
+              type="number"
+              name="startTime"
+              min={0}
+              value={formData.startTime ?? ""}
+              onChange={(e) => setFormData((prev) => ({ ...prev, startTime: e.target.value ? parseInt(e.target.value, 10) : undefined }))}
+              placeholder="e.g. 5400"
+              className={inputCls}
+            />
+            {formData.startTime != null && formData.startTime > 0 && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">
+                {formatStartTime(formData.startTime)}
+              </span>
+            )}
+          </div>
+        </Field>
+      </div>
 
       {/* ── Transcript section ── */}
       <div className="border border-gray-800 rounded-xl p-4 space-y-4 bg-gray-900/30">

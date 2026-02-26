@@ -209,6 +209,15 @@ export const deleteLocale = async (id: number): Promise<void> => {
   await apiClient.delete(`/api/locales/${id}`);
 };
 
+// ── YouTube audio extraction ─────────────────────────────────────────────────
+
+export const extractYouTubeAudio = async (url: string, startTime?: number): Promise<string> => {
+  const body: { url: string; startTime?: number } = { url };
+  if (startTime != null) body.startTime = startTime;
+  const res = await apiClient.post<{ audioUrl: string }>("/api/youtube/extract-audio", body);
+  return res.data.audioUrl;
+};
+
 // ── S3 upload ─────────────────────────────────────────────────────────────────
 
 export const uploadImage = async (file: File): Promise<string> => {
