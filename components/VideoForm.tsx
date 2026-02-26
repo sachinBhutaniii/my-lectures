@@ -1,7 +1,7 @@
 "use client";
 import { LectureVideo, LanguageData } from "@/types/videos";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio } from "@/services/video.service";
+import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio, startPipeline, confirmPipeline, getPipelineStatus } from "@/services/video.service";
 
 type VideoFormProps = {
   initialData?: Partial<LectureVideo>;
@@ -125,6 +125,11 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [transcriptLoaded, setTranscriptLoaded] = useState(false);
   const [showLangDropdown, setShowLangDropdown] = useState(false);
   const [langSearch, setLangSearch] = useState("");
+
+  // Transcription pipeline state
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcriptionProgress, setTranscriptionProgress] = useState("");
+  const [transcriptionError, setTranscriptionError] = useState("");
 
   // Load available languages once
   useEffect(() => {
@@ -285,6 +290,98 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
       .finally(() => {
         setAudioExtracting(false);
       });
+  };
+
+  const handleTranscribe = async () => {
+    const url = youtubeUrl.trim() || formData.videoUrl;
+    if (!url) {
+      setTranscriptionError("Enter a YouTube URL first");
+      return;
+    }
+
+    setTranscribing(true);
+    setTranscriptionError("");
+    setTranscriptionProgress("Extracting metadata...");
+
+    try {
+      // Phase 1: Start pipeline (extracts metadata)
+      const startTimestamp = formData.startTime ? String(formData.startTime) : undefined;
+      const metadata = await startPipeline(url, startTimestamp);
+      setTranscriptionProgress("Metadata extracted. Starting transcription...");
+
+      // Auto-fill form fields from pipeline metadata if empty
+      setFormData((prev) => {
+        const updates: Partial<typeof prev> = {};
+        if (!prev.title && metadata.title) updates.title = metadata.title;
+        if (!prev.thumbnailUrl && metadata.thumbnailUrl) updates.thumbnailUrl = metadata.thumbnailUrl;
+        if (!prev.key && metadata.generatedKey) updates.key = metadata.generatedKey;
+        if ((!prev.category || prev.category.length === 0) && metadata.categories?.length > 0) updates.category = metadata.categories;
+        if (!prev.place?.city && metadata.city) updates.place = { city: metadata.city, country: metadata.country || prev.place?.country || "" };
+        if (!prev.place?.country && metadata.country) updates.place = { city: prev.place?.city || metadata.city || "", country: metadata.country };
+        if (metadata.uploadDate && !prev.date) {
+          const d = metadata.uploadDate;
+          if (d.length === 8) updates.date = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+        }
+        return { ...prev, ...updates };
+      });
+
+      // Phase 2: Confirm and start transcription
+      await confirmPipeline(metadata.jobId, {
+        city: formData.place?.city || metadata.city || undefined,
+        country: formData.place?.country || metadata.country || undefined,
+        categories: formData.category?.length ? formData.category : metadata.categories,
+        speaker: formData.speaker || undefined,
+        generatedKey: formData.key || metadata.generatedKey || undefined,
+      });
+      setTranscriptionProgress("Transcribing audio with Gemini AI...");
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await getPipelineStatus(metadata.jobId);
+          if (status.progressLog) {
+            const lines = status.progressLog.split("\n");
+            setTranscriptionProgress(lines[lines.length - 1]);
+          }
+
+          if (status.status === "COMPLETED") {
+            clearInterval(pollInterval);
+            setTranscribing(false);
+            setTranscriptionProgress("");
+
+            // Load the created video's transcript data
+            if (status.resultVideoId) {
+              try {
+                const video = await getVideoById(status.resultVideoId, "en");
+                setFormData((prev) => ({
+                  ...prev,
+                  transcript: video.transcript || prev.transcript,
+                  transcriptSrt: video.transcriptSrt || prev.transcriptSrt,
+                  audioUrl: video.audioUrl || prev.audioUrl,
+                }));
+              } catch {
+                // Video was created but we couldn't load it — user can refresh
+              }
+            }
+          } else if (status.status === "FAILED") {
+            clearInterval(pollInterval);
+            setTranscribing(false);
+            setTranscriptionError(status.errorMessage || "Transcription failed");
+            setTranscriptionProgress("");
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setTranscribing(false);
+          setTranscriptionError("Lost connection while checking transcription status");
+          setTranscriptionProgress("");
+        }
+      }, 5000);
+    } catch (err: unknown) {
+      setTranscribing(false);
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setTranscriptionError(`Transcription failed: ${msg}`);
+      setTranscriptionProgress("");
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -623,6 +720,40 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
               </button>
             )}
           </div>
+        </div>
+
+        {/* Transcribe with AI button */}
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleTranscribe}
+            disabled={transcribing || (!youtubeUrl.trim() && !formData.videoUrl)}
+            className="w-full py-2.5 rounded-xl border border-purple-500/40 text-sm font-medium text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 hover:border-purple-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {transcribing ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                Transcribing…
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+                </svg>
+                Transcribe with AI
+              </>
+            )}
+          </button>
+
+          {transcriptionProgress && (
+            <p className="text-xs text-purple-400 flex items-center gap-1.5">
+              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
+              {transcriptionProgress}
+            </p>
+          )}
+          {transcriptionError && (
+            <p className="text-xs text-red-400">{transcriptionError}</p>
+          )}
         </div>
 
         {/* Status badge */}

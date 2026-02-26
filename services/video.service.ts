@@ -218,6 +218,54 @@ export const extractYouTubeAudio = async (url: string, startTime?: number): Prom
   return res.data.audioUrl;
 };
 
+// ── Transcription pipeline ────────────────────────────────────────────────────
+
+export interface PipelineMetadata {
+  jobId: number;
+  videoIdYt: string;
+  title: string;
+  thumbnailUrl: string;
+  uploadDate: string;
+  duration: number;
+  generatedKey: string;
+  categories: string[];
+  city: string;
+  country: string;
+  speaker: string;
+  startSeconds: number;
+  missingCategory: boolean;
+  missingPlace: boolean;
+}
+
+export interface PipelineJobStatus {
+  jobId: number;
+  status: string; // METADATA_EXTRACTED, TRANSCRIBING, COMPLETED, FAILED
+  title: string;
+  progressLog: string;
+  errorMessage: string | null;
+  resultVideoId: number | null;
+}
+
+export const startPipeline = async (url: string, startTimestamp?: string): Promise<PipelineMetadata> => {
+  const body: { url: string; startTimestamp?: string } = { url };
+  if (startTimestamp) body.startTimestamp = startTimestamp;
+  const res = await apiClient.post<PipelineMetadata>("/api/pipeline/start", body);
+  return res.data;
+};
+
+export const confirmPipeline = async (
+  jobId: number,
+  overrides?: { city?: string; country?: string; categories?: string[]; speaker?: string; generatedKey?: string }
+): Promise<PipelineJobStatus> => {
+  const res = await apiClient.put<PipelineJobStatus>(`/api/pipeline/${jobId}/confirm`, overrides || {});
+  return res.data;
+};
+
+export const getPipelineStatus = async (jobId: number): Promise<PipelineJobStatus> => {
+  const res = await apiClient.get<PipelineJobStatus>(`/api/pipeline/${jobId}/status`);
+  return res.data;
+};
+
 // ── S3 upload ─────────────────────────────────────────────────────────────────
 
 export const uploadImage = async (file: File): Promise<string> => {
