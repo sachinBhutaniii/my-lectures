@@ -255,7 +255,7 @@ export const startPipeline = async (url: string, startTimestamp?: string): Promi
 
 export const confirmPipeline = async (
   jobId: number,
-  overrides?: { city?: string; country?: string; categories?: string[]; speaker?: string; generatedKey?: string }
+  overrides?: { city?: string; country?: string; categories?: string[]; speaker?: string; generatedKey?: string; audioUrl?: string }
 ): Promise<PipelineJobStatus> => {
   const res = await apiClient.put<PipelineJobStatus>(`/api/pipeline/${jobId}/confirm`, overrides || {});
   return res.data;
