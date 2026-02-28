@@ -33,7 +33,6 @@ export default function LecturePage() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
-  const [readingMode, setReadingMode] = useState(false);
   const { currentTime, seekToSeconds, isPlaying, pause, resume, seek, skip, duration, lecture: playingLecture } = usePlayer();
   const isThisLecture = playingLecture?.id === videoId;
   const progress = isThisLecture && duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -67,15 +66,9 @@ export default function LecturePage() {
       router.push(`/${queueLectures[currentIdx + 1].id}`);
   };
 
-  const handleEnterReadingMode = useCallback(() => {
-    setReadingMode(true);
-    setAutoScroll(false);
-  }, []);
 
-  const handleExitReadingMode = useCallback(() => {
-    setReadingMode(false);
-    setAutoScroll(true);
-  }, []);
+  // Reading mode is active when auto-scroll is off — compact layout, mini player
+  const readingMode = !autoScroll;
 
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
@@ -111,7 +104,7 @@ export default function LecturePage() {
         </div>
       </div>
 
-      {/* ── Transcript toolbar (search + language) — hidden in reading mode ── */}
+      {/* ── Transcript toolbar (search + language) — collapses in reading mode ── */}
       {activeTab === "transcript" && (
         <div className={`flex items-center gap-2 px-4 flex-shrink-0 transition-all duration-300 ${readingMode ? "max-h-0 opacity-0 pb-0 overflow-hidden" : "max-h-20 opacity-100 pb-3 overflow-visible"}`}>
           <div className="flex-1 flex items-center gap-2 border border-gray-700 rounded-lg px-3 py-2 bg-gray-900/50">
@@ -224,8 +217,6 @@ export default function LecturePage() {
             startTime={lecture?.startTime}
             autoScroll={autoScroll}
             onSeek={seekToSeconds}
-            onEnterReadingMode={handleEnterReadingMode}
-            onExitReadingMode={handleExitReadingMode}
           />
         )}
 
@@ -266,7 +257,7 @@ export default function LecturePage() {
               {isThisLecture ? fmtTime(currentTime) : "0:00"}
             </span>
 
-            {/* Skip back */}
+            {/* Skip back 10s */}
             <button
               onClick={() => isThisLecture && skip(-10)}
               className="text-gray-400 hover:text-white transition-colors relative"
@@ -293,7 +284,7 @@ export default function LecturePage() {
               )}
             </button>
 
-            {/* Skip forward */}
+            {/* Skip forward 10s */}
             <button
               onClick={() => isThisLecture && skip(10)}
               className="text-gray-400 hover:text-white transition-colors relative"

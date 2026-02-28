@@ -17,8 +17,6 @@ interface Props {
   startTime?: number;  // recording start offset in seconds
   autoScroll: boolean;
   onSeek?: (seconds: number) => void;
-  onEnterReadingMode?: () => void;
-  onExitReadingMode?: () => void;
 }
 
 /**
@@ -85,27 +83,25 @@ export default function TranscriptView({
   startTime,
   autoScroll,
   onSeek,
-  onEnterReadingMode,
-  onExitReadingMode,
 }: Props) {
-  // Stable refs so observer callback never goes stale
-  const onEnterRef = useRef(onEnterReadingMode);
-  const onExitRef  = useRef(onExitReadingMode);
-  useEffect(() => { onEnterRef.current = onEnterReadingMode; }, [onEnterReadingMode]);
-  useEffect(() => { onExitRef.current  = onExitReadingMode;  }, [onExitReadingMode]);
-  const activeRef = useRef<HTMLParagraphElement>(null);
+  const activeRef    = useRef<HTMLParagraphElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [showBackBtn, setShowBackBtn] = useState(false);
 
-  // Flag to suppress reading-mode trigger during programmatic scrolls
+  // True while a programmatic scrollIntoView is in flight — prevents it from
+  // being mistaken for a user scroll.
   const programmaticScrollRef = useRef(false);
   const programmaticTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** Call before any scrollIntoView so scroll events don't trigger reading mode */
+  // True once the user has manually scrolled away — suppresses programmatic
+  // scrollIntoView so the view stays where the user placed it. Resets when the
+  // user taps "back to current" or clicks a transcript line to seek.
+  const userScrolledRef = useRef(false);
+
+  /** Call before any scrollIntoView so the scroll event doesn't flip userScrolledRef. */
   const markProgrammaticScroll = () => {
     programmaticScrollRef.current = true;
     if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
-    // smooth scroll can take ~800ms; give 1200ms buffer
     programmaticTimerRef.current = setTimeout(() => {
       programmaticScrollRef.current = false;
     }, 1200);
@@ -152,9 +148,10 @@ export default function TranscriptView({
       .filter((e) => e.text.toLowerCase().includes(search.toLowerCase()));
   }, [entries, search]);
 
-  // Auto-scroll to active entry only when autoScroll is on
+  // Auto-scroll to active entry only when autoScroll is on AND the user hasn't
+  // manually scrolled away.
   useEffect(() => {
-    if (autoScroll && hasTiming && !search) {
+    if (autoScroll && hasTiming && !search && !userScrolledRef.current) {
       markProgrammaticScroll();
       activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
@@ -182,7 +179,8 @@ export default function TranscriptView({
     return () => observer.disconnect();
   }, [activeIndex, hasTiming, search]);
 
-  // Detect genuine user scroll → enter reading mode
+  // Detect genuine user scroll → mark that the user has scrolled away so we
+  // stop chasing them with scrollIntoView (highlight still follows the audio).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -190,7 +188,7 @@ export default function TranscriptView({
     const handleScroll = () => {
       if (programmaticScrollRef.current) return; // ignore auto-scrolls
       if (!hasTiming || search) return;
-      onEnterRef.current?.();
+      userScrolledRef.current = true;
     };
 
     container.addEventListener("scroll", handleScroll, { passive: true });
@@ -199,7 +197,7 @@ export default function TranscriptView({
   }, [hasTiming, search]);
 
   const scrollToActive = () => {
-    onExitRef.current?.();
+    userScrolledRef.current = false; // resume auto-scroll
     markProgrammaticScroll();
     activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
@@ -226,7 +224,10 @@ export default function TranscriptView({
             <p
               key={entry.index}
               ref={isActive ? activeRef : undefined}
-              onClick={seekable ? () => onSeek!(entry.startMs / 1000) : undefined}
+              onClick={seekable ? () => {
+                userScrolledRef.current = false; // resume auto-scroll to clicked position
+                onSeek!(entry.startMs / 1000);
+              } : undefined}
               className={`text-lg leading-relaxed mb-5 transition-colors duration-300 ${
                 seekable ? "cursor-pointer select-none" : ""
               } ${
