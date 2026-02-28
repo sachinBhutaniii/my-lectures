@@ -10,6 +10,7 @@ import {
   submitTranscriptReview,
   publishTranscript,
 } from "@/services/video.service";
+import { useStreak } from "@/hooks/useStreak";
 
 type EditorMode = "l1" | "l2" | "admin";
 
@@ -39,6 +40,12 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   // Audio player
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const { addListeningTime } = useStreak();
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => addListeningTime(1), 1000);
+    return () => clearInterval(id);
+  }, [isPlaying, addListeningTime]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
