@@ -91,6 +91,13 @@ export interface TranscriptReviewItem {
   l1ReviewSubmitted: boolean;
   l2ReviewSubmitted: boolean;
   audioUrl?: string;
+  l1AssignedAt: string | null;
+  l2AssignedAt: string | null;
+  l1SubmittedAt: string | null;
+  l2SubmittedAt: string | null;
+  l1ApprovedAt: string | null;
+  l2ApprovedAt: string | null;
+  deployedAt: string | null;
 }
 
 export const addLocaleToVideo = async (videoId: number, localeId: number): Promise<TranscriptReviewItem> => {

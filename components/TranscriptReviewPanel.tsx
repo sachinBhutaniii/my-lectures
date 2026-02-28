@@ -18,6 +18,36 @@ import {
 } from "@/services/video.service";
 import { useAuth } from "@/context/AuthContext";
 
+// ── Language pill status helpers ───────────────────────────────────────────────
+
+type PillStatus = "deployed" | "l2submitted" | "l2assigned" | "l1assigned" | "neutral";
+
+function getLangPillStatus(item: TranscriptReviewItem): PillStatus {
+  if (item.deployed) return "deployed";
+  if (item.l2ReviewSubmitted) return "l2submitted";
+  if (item.level2ProofreaderId != null) return "l2assigned";
+  if (item.level1ProofreaderId != null) return "l1assigned";
+  return "neutral";
+}
+
+function getLangPillName(item: TranscriptReviewItem): string | null {
+  if (item.deployed) return null;
+  const name = item.level2ProofreaderId != null
+    ? item.level2ProofreaderName
+    : item.level1ProofreaderId != null
+    ? item.level1ProofreaderName
+    : null;
+  return name?.split(" ")[0] ?? null;
+}
+
+const PILL_STYLE: Record<PillStatus, string> = {
+  deployed:    "border-green-500/40 bg-green-500/15 text-green-400",
+  l2submitted: "border-blue-500/40 bg-blue-500/15 text-blue-400",
+  l2assigned:  "border-orange-600/50 bg-orange-600/20 text-orange-300",
+  l1assigned:  "border-orange-400/40 bg-orange-400/10 text-orange-400",
+  neutral:     "border-gray-700 bg-gray-800/80 text-gray-500",
+};
+
 // ── L1/L2 button status helpers ──────────────────────────────────────────────
 
 type LevelStatus = "approved" | "submitted" | "assigned" | "neutral";
@@ -133,10 +163,12 @@ export default function TranscriptReviewPanel() {
             Manage Languages
           </button>
           {/* Legend */}
-          <div className="flex items-center gap-3 text-[11px] text-gray-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Approved</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Assigned</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-600" />Pending</span>
+          <div className="flex items-center gap-2.5 text-[10px] text-gray-500 flex-wrap">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-gray-700 bg-gray-800" />—</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-orange-400/40 bg-orange-400/10" />L1</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-orange-600/50 bg-orange-600/20" />L2</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-blue-500/40 bg-blue-500/15" />Submitted</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-green-500/40 bg-green-500/15" />Deployed</span>
           </div>
         </div>
       </div>
@@ -323,21 +355,22 @@ function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onAppr
 
         {/* Language pills preview (collapsed) */}
         {!expanded && (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {items.map((i) => (
-              <span
-                key={i.id}
-                className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                  i.deployed
-                    ? "border-green-500/30 bg-green-500/10 text-green-400"
-                    : i.approvalStatus === "APPROVED"
-                    ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
-                    : "border-gray-700 bg-gray-800 text-gray-500"
-                }`}
-              >
-                {i.localeCode.toUpperCase()}
-              </span>
-            ))}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {items.map((i) => {
+              const pillStatus = getLangPillStatus(i);
+              const name = getLangPillName(i);
+              return (
+                <div
+                  key={i.id}
+                  className={`flex flex-col items-center px-1.5 py-0.5 rounded border font-medium min-w-[28px] ${PILL_STYLE[pillStatus]}`}
+                >
+                  <span className="text-[10px] leading-tight">{i.localeCode.toUpperCase()}</span>
+                  {name && (
+                    <span className="text-[8px] font-normal leading-tight opacity-80 truncate max-w-[40px]">{name}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </button>
@@ -346,26 +379,24 @@ function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onAppr
       {expanded && (
         <div className="border-t border-gray-800">
           {/* Language tabs */}
-          <div className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-900/80">
+          <div className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-900/80 flex-wrap">
             {items.map((i) => {
               const isActive = selectedLocale === i.localeCode;
+              const pillStatus = getLangPillStatus(i);
+              const name = getLangPillName(i);
               return (
                 <button
                   key={i.id}
                   onClick={() => setSelectedLocale(isActive ? null : i.localeCode)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`flex flex-col items-center px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
                     isActive
                       ? "border-orange-500/50 bg-orange-500/15 text-orange-300"
-                      : i.deployed
-                      ? "border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/15"
-                      : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                      : `${PILL_STYLE[pillStatus]} hover:opacity-80`
                   }`}
                 >
-                  {i.localeName}
-                  {i.deployed && (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 inline ml-1 -mt-0.5">
-                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
-                    </svg>
+                  <span>{i.localeName}</span>
+                  {!isActive && name && (
+                    <span className="text-[9px] font-normal leading-tight opacity-70">{name}</span>
                   )}
                 </button>
               );
@@ -411,6 +442,9 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
   const canApproveFinal = item.approvalStatus === "LEVEL1_APPROVED" && isParentAdmin;
   const canReset = item.approvalStatus !== "DRAFT" && isParentAdmin;
   const canDeploy = item.approvalStatus === "APPROVED" && !item.deployed && isParentAdmin;
+
+  const hasHistory = item.level1ProofreaderName || item.level2ProofreaderName ||
+    item.level1ApprovedByName || item.finalApprovedByName || item.deployed;
 
   return (
     <div className="border-t border-gray-800">
@@ -509,6 +543,70 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
           )}
         </div>
       </div>
+
+      {/* Audit trail */}
+      {hasHistory && (
+        <div className="px-4 pb-3 pt-0.5">
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-2 font-medium">History</p>
+          <div className="space-y-1.5">
+            {item.level1ProofreaderName && (
+              <AuditEntry
+                label="L1 allotted to"
+                name={item.level1ProofreaderName}
+                date={item.l1AssignedAt}
+                color="orange"
+              />
+            )}
+            {item.l1ReviewSubmitted && (
+              <AuditEntry
+                label="L1 submitted by"
+                name={item.level1ProofreaderName}
+                date={item.l1SubmittedAt}
+                color="orange"
+              />
+            )}
+            {item.level1ApprovedByName && (
+              <AuditEntry
+                label="L1 approved by"
+                name={item.level1ApprovedByName}
+                date={item.l1ApprovedAt}
+                color="blue"
+              />
+            )}
+            {item.level2ProofreaderName && (
+              <AuditEntry
+                label="L2 allotted to"
+                name={item.level2ProofreaderName}
+                date={item.l2AssignedAt}
+                color="orange"
+              />
+            )}
+            {item.l2ReviewSubmitted && (
+              <AuditEntry
+                label="L2 submitted by"
+                name={item.level2ProofreaderName}
+                date={item.l2SubmittedAt}
+                color="blue"
+              />
+            )}
+            {item.finalApprovedByName && (
+              <AuditEntry
+                label="Final approved by"
+                name={item.finalApprovedByName}
+                date={item.l2ApprovedAt}
+                color="blue"
+              />
+            )}
+            {item.deployed && (
+              <AuditEntry
+                label="Deployed"
+                date={item.deployedAt}
+                color="green"
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -842,6 +940,35 @@ function ManageLanguagesModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </>
+  );
+}
+
+// ── Audit entry ───────────────────────────────────────────────────────────────
+
+function AuditEntry({ label, name, date, color = "gray" }: {
+  label: string;
+  name?: string | null;
+  date?: string | null;
+  color?: "orange" | "blue" | "green" | "gray";
+}) {
+  const dotColor = {
+    orange: "bg-orange-500",
+    blue:   "bg-blue-500",
+    green:  "bg-green-500",
+    gray:   "bg-gray-600",
+  }[color];
+
+  const formatted = date
+    ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : null;
+
+  return (
+    <div className="flex items-start gap-2 text-[11px]">
+      <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${dotColor}`} />
+      <span className="text-gray-500 flex-shrink-0">{label}</span>
+      {name && <span className="text-gray-200 font-medium truncate">{name}</span>}
+      {formatted && <span className="text-gray-600 ml-auto flex-shrink-0 pl-2">{formatted}</span>}
+    </div>
   );
 }
 
