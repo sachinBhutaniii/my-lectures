@@ -82,18 +82,10 @@ export default function WisdomModal({ open, onClose }: Props) {
 
           <div className="relative p-6">
             {/* ── Top row ── */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center mb-5">
               <span className="text-orange-500 text-[10px] font-bold tracking-[0.18em] uppercase">
                 ✦ Wisdom of the Day
               </span>
-              <button
-                onClick={dismiss}
-                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-600 hover:text-gray-300 hover:bg-white/[0.08] transition-colors"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-3.5 h-3.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
 
             {/* ── Emoji + category pill ── */}
@@ -118,19 +110,13 @@ export default function WisdomModal({ open, onClose }: Props) {
             {/* ── Attribution ── */}
             <p className="text-gray-600 text-[11px] mt-4 italic">— Srila Prabhupada</p>
 
-            {/* ── CTAs ── */}
-            <div className="mt-6 flex items-center gap-2.5">
+            {/* ── CTA ── */}
+            <div className="mt-6">
               <button
                 onClick={dismiss}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 active:scale-[0.97] text-white text-sm font-semibold py-3 rounded-xl transition-all"
+                className="w-full bg-orange-500 hover:bg-orange-600 active:scale-[0.97] text-white text-sm font-semibold py-3 rounded-xl transition-all"
               >
                 Begin Listening
-              </button>
-              <button
-                onClick={dismiss}
-                className="px-4 py-3 rounded-xl border border-gray-700/80 text-gray-500 text-sm hover:text-gray-300 hover:bg-white/5 active:scale-[0.97] transition-all"
-              >
-                Close
               </button>
             </div>
           </div>
