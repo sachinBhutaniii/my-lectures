@@ -384,6 +384,7 @@ export default function Home() {
         onTabChange={(tab) => {
           if (tab === "bhajans") { setShowBhajansModal(true); return; }
           if (tab === "jnana") { router.push("/jnana-yagya"); return; }
+          if (tab === "sadhna") { router.push("/sadhana"); return; }
           setActiveTab(tab);
         }}
       />
