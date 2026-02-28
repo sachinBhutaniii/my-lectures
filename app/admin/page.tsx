@@ -9,9 +9,11 @@ import TranscriptReviewPanel from "@/components/TranscriptReviewPanel";
 import JnanaYagyaAdmin from "@/components/JnanaYagyaAdmin";
 import AdminNotificationPanel, {
   deriveNotifications,
+  deriveVolunteerNotifications,
   AdminNotif,
 } from "@/components/AdminNotificationPanel";
 import { getAllTranscripts } from "@/services/video.service";
+import { getAllVolunteerRequests } from "@/services/volunteer.service";
 
 type Tab = "videos" | "transcripts" | "users" | "jnana";
 
@@ -77,11 +79,22 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Fetch all transcripts to derive notifications
+  // Fetch transcripts + volunteer requests to derive all notifications
   useEffect(() => {
     if (!isAdmin) return;
-    getAllTranscripts()
-      .then((items) => setNotifications(deriveNotifications(items)))
+    Promise.all([getAllTranscripts(), getAllVolunteerRequests()])
+      .then(([transcripts, volRequests]) => {
+        const all: AdminNotif[] = [
+          ...deriveNotifications(transcripts),
+          ...deriveVolunteerNotifications(volRequests),
+        ].sort((a, b) => {
+          if (!a.submittedAt && !b.submittedAt) return 0;
+          if (!a.submittedAt) return 1;
+          if (!b.submittedAt) return -1;
+          return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+        });
+        setNotifications(all);
+      })
       .catch(() => {});
   }, [isAdmin]);
 

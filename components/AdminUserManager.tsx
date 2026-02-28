@@ -11,6 +11,19 @@ import {
   UserSearchResult,
   LocaleInfo,
 } from "@/services/video.service";
+import {
+  getAllVolunteerRequests,
+  approveVolunteerRequest,
+  rejectVolunteerRequest,
+  getAllVolunteerServices,
+  createVolunteerService,
+  updateVolunteerService,
+  deleteVolunteerService,
+  getVolunteerConfig,
+  updateVolunteerConfig,
+  VolunteerRequestItem,
+  VolunteerServiceItem,
+} from "@/services/volunteer.service";
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   ROLE_ADMIN:        { label: "Child Admin",  color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
@@ -36,10 +49,36 @@ function LocaleBadge({ locale }: { locale: LocaleInfo }) {
   );
 }
 
-type ViewMode = "admins" | "proofreaders";
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function formatCountdown(dateStr: string): string {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  if (diff <= 0) return "now";
+  const h = Math.floor(diff / 3600000);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+}
+
+// ── Outer tab type ────────────────────────────────────────────────────────────
+
+type OuterTab = "users" | "requests" | "services";
+type UserViewMode = "admins" | "proofreaders";
 
 export default function AdminUserManager() {
-  const [view, setView] = useState<ViewMode>("admins");
+  const [outerTab, setOuterTab] = useState<OuterTab>("users");
+
+  // ── Users tab state ──────────────────────────────────────────────────────
+  const [view, setView] = useState<UserViewMode>("admins");
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,38 +86,32 @@ export default function AdminUserManager() {
   const [error, setError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Locale state
   const [allLocales, setAllLocales] = useState<LocaleInfo[]>([]);
-  const [localeFilter, setLocaleFilter] = useState<string>(""); // locale code filter for proofreaders
+  const [localeFilter, setLocaleFilter] = useState<string>("");
   const [localeEditUserId, setLocaleEditUserId] = useState<number | null>(null);
   const [localeEditSelection, setLocaleEditSelection] = useState<number[]>([]);
   const [localeEditSaving, setLocaleEditSaving] = useState(false);
 
-  // Language management state
   const [showLangMgmt, setShowLangMgmt] = useState(false);
   const [newLangCode, setNewLangCode] = useState("");
   const [newLangName, setNewLangName] = useState("");
   const [langMgmtLoading, setLangMgmtLoading] = useState(false);
   const [langMgmtError, setLangMgmtError] = useState("");
 
-  // Load all locales on mount
   useEffect(() => {
     getAllLocales().then(setAllLocales).catch(() => {});
   }, []);
 
-  const load = useCallback(async (q?: string, currentView: ViewMode = "admins", filterLocale?: string) => {
+  const load = useCallback(async (q?: string, currentView: UserViewMode = "admins", filterLocale?: string) => {
     setLoading(true);
     setError("");
     try {
       if (q && q.length >= 2) {
-        const results = await searchUsers(q);
-        setUsers(results);
+        setUsers(await searchUsers(q));
       } else if (currentView === "proofreaders") {
-        const results = await getProofreaders(filterLocale || undefined);
-        setUsers(results);
+        setUsers(await getProofreaders(filterLocale || undefined));
       } else {
-        const results = await searchUsers(undefined);
-        setUsers(results);
+        setUsers(await searchUsers(undefined));
       }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status: number; data?: { error?: string } } };
@@ -98,12 +131,10 @@ export default function AdminUserManager() {
     }
   }, []);
 
-  // Load when view changes or query is cleared
   useEffect(() => {
     if (query.length === 0) load(undefined, view, localeFilter);
   }, [load, view, query, localeFilter]);
 
-  // Debounced search when query has 2+ chars
   useEffect(() => {
     if (query.length < 2) return;
     clearTimeout(debounceRef.current);
@@ -134,9 +165,7 @@ export default function AdminUserManager() {
     try {
       const updatedLocales = await setUserLocales(localeEditUserId, localeEditSelection);
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === localeEditUserId ? { ...u, locales: updatedLocales } : u
-        )
+        prev.map((u) => (u.id === localeEditUserId ? { ...u, locales: updatedLocales } : u))
       );
       setLocaleEditUserId(null);
     } catch {
@@ -185,338 +214,727 @@ export default function AdminUserManager() {
     }
   };
 
+  // ── Requests tab state ───────────────────────────────────────────────────
+  const [volRequests, setVolRequests] = useState<VolunteerRequestItem[]>([]);
+  const [volReqLoading, setVolReqLoading] = useState(false);
+  const [volReqError, setVolReqError] = useState("");
+  const volReqLoaded = useRef(false);
+
+  type ReqAction = { id: number; action: "approve" | "reject"; message: string; saving: boolean };
+  const [reqAction, setReqAction] = useState<ReqAction | null>(null);
+
+  const loadVolRequests = useCallback(async () => {
+    setVolReqLoading(true);
+    setVolReqError("");
+    try {
+      setVolRequests(await getAllVolunteerRequests());
+      volReqLoaded.current = true;
+    } catch {
+      setVolReqError("Failed to load requests. Please retry.");
+    } finally {
+      setVolReqLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (outerTab === "requests" && !volReqLoaded.current) {
+      loadVolRequests();
+    }
+  }, [outerTab, loadVolRequests]);
+
+  const startReqAction = (id: number, action: "approve" | "reject") => {
+    setReqAction({ id, action, message: "", saving: false });
+  };
+
+  const handleReqConfirm = async () => {
+    if (!reqAction) return;
+    if (reqAction.action === "reject" && !reqAction.message.trim()) return;
+    setReqAction((prev) => prev ? { ...prev, saving: true } : null);
+    try {
+      let updated: VolunteerRequestItem;
+      if (reqAction.action === "approve") {
+        updated = await approveVolunteerRequest(reqAction.id, reqAction.message.trim() || undefined);
+      } else {
+        updated = await rejectVolunteerRequest(reqAction.id, reqAction.message.trim());
+      }
+      setVolRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setReqAction(null);
+    } catch {
+      setReqAction((prev) => prev ? { ...prev, saving: false } : null);
+      setVolReqError("Action failed. Please try again.");
+    }
+  };
+
+  // ── Services tab state ────────────────────────────────────────────────────
+  const [volServices, setVolServices] = useState<VolunteerServiceItem[]>([]);
+  const [volSvcLoading, setVolSvcLoading] = useState(false);
+  const [volSvcError, setVolSvcError] = useState("");
+  const volSvcLoaded = useRef(false);
+  const [cooldownDays, setCooldownDays] = useState(1);
+  const [cooldownSaving, setCooldownSaving] = useState(false);
+
+  type SvcEdit = { id: number | null; name: string; description: string; slug: string; active: boolean; sortOrder: number; saving: boolean };
+  const [svcEdit, setSvcEdit] = useState<SvcEdit | null>(null);
+
+  const loadVolServices = useCallback(async () => {
+    setVolSvcLoading(true);
+    setVolSvcError("");
+    try {
+      const [svcs, cfg] = await Promise.all([getAllVolunteerServices(), getVolunteerConfig()]);
+      setVolServices(svcs);
+      setCooldownDays(cfg.rejectionCooldownDays);
+      volSvcLoaded.current = true;
+    } catch {
+      setVolSvcError("Failed to load services. Please retry.");
+    } finally {
+      setVolSvcLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (outerTab === "services" && !volSvcLoaded.current) {
+      loadVolServices();
+    }
+  }, [outerTab, loadVolServices]);
+
+  const openSvcEdit = (svc?: VolunteerServiceItem) => {
+    setSvcEdit(
+      svc
+        ? { id: svc.id, name: svc.name, description: svc.description, slug: svc.slug, active: svc.active, sortOrder: svc.sortOrder, saving: false }
+        : { id: null, name: "", description: "", slug: "", active: true, sortOrder: 0, saving: false }
+    );
+  };
+
+  const handleSvcSave = async () => {
+    if (!svcEdit) return;
+    setSvcEdit((prev) => prev ? { ...prev, saving: true } : null);
+    try {
+      if (svcEdit.id == null) {
+        const created = await createVolunteerService({ name: svcEdit.name, description: svcEdit.description, slug: svcEdit.slug, sortOrder: svcEdit.sortOrder });
+        setVolServices((prev) => [...prev, created]);
+      } else {
+        const updated = await updateVolunteerService(svcEdit.id, { name: svcEdit.name, description: svcEdit.description, slug: svcEdit.slug, active: svcEdit.active, sortOrder: svcEdit.sortOrder });
+        setVolServices((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      }
+      setSvcEdit(null);
+    } catch {
+      setSvcEdit((prev) => prev ? { ...prev, saving: false } : null);
+      setVolSvcError("Failed to save service.");
+    }
+  };
+
+  const handleSvcDelete = async (id: number) => {
+    try {
+      await deleteVolunteerService(id);
+      setVolServices((prev) => prev.filter((s) => s.id !== id));
+    } catch {
+      setVolSvcError("Failed to delete service.");
+    }
+  };
+
+  const handleCooldownSave = async () => {
+    setCooldownSaving(true);
+    try {
+      const res = await updateVolunteerConfig(cooldownDays);
+      setCooldownDays(res.rejectionCooldownDays);
+    } catch {
+      setVolSvcError("Failed to save cooldown setting.");
+    } finally {
+      setCooldownSaving(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div>
         <h2 className="text-base font-semibold text-white">User Management</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          Assign Child Admin, Proofreader, or User roles.
-        </p>
+        <p className="text-xs text-gray-500 mt-1">Manage users, volunteer requests, and services.</p>
       </div>
 
-      {/* View toggle */}
+      {/* Outer tab bar */}
       <div className="flex gap-1 p-1 bg-gray-900 border border-gray-800 rounded-xl w-fit">
-        <button
-          onClick={() => { setView("admins"); setQuery(""); setLocaleFilter(""); }}
-          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            view === "admins"
-              ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
-              : "text-gray-500 hover:text-gray-300"
-          }`}
-        >
-          Admins
-        </button>
-        <button
-          onClick={() => { setView("proofreaders"); setQuery(""); }}
-          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            view === "proofreaders"
-              ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-              : "text-gray-500 hover:text-gray-300"
-          }`}
-        >
-          Proofreaders
-        </button>
-      </div>
-
-      {/* Locale filter — only in proofreaders view */}
-      {view === "proofreaders" && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Filter by language:</span>
-          <select
-            value={localeFilter}
-            onChange={(e) => setLocaleFilter(e.target.value)}
-            className="bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-1.5 outline-none focus:border-blue-500/50"
-          >
-            <option value="">All languages</option>
-            {allLocales.map((l) => (
-              <option key={l.id} value={l.code}>{l.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or email…"
-          className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none"
-        />
-        {query && (
-          <button onClick={() => setQuery("")} className="text-gray-600 hover:text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Section label */}
-      <p className="text-xs text-gray-600 uppercase tracking-wide">
-        {query.length >= 2
-          ? `Results for "${query}"`
-          : view === "admins"
-          ? "All users"
-          : "Current proofreaders"}
-      </p>
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-          </svg>
-          <div className="flex-1">
-            <p className="text-red-400 text-sm">{error}</p>
-          </div>
+        {(["users", "requests", "services"] as OuterTab[]).map((tab) => (
           <button
-            onClick={() => load(query.length >= 2 ? query : undefined, view, localeFilter)}
-            className="flex-shrink-0 text-xs text-red-400 hover:text-red-200 border border-red-500/30 rounded-lg px-2.5 py-1 transition-colors"
+            key={tab}
+            onClick={() => setOuterTab(tab)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+              outerTab === tab
+                ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
           >
-            Retry
+            {tab}
           </button>
-        </div>
+        ))}
+      </div>
+
+      {/* ═══════════════════ USERS TAB ═══════════════════ */}
+      {outerTab === "users" && (
+        <>
+          {/* View toggle */}
+          <div className="flex gap-1 p-1 bg-gray-900 border border-gray-800 rounded-xl w-fit">
+            <button
+              onClick={() => { setView("admins"); setQuery(""); setLocaleFilter(""); }}
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                view === "admins"
+                  ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Admins
+            </button>
+            <button
+              onClick={() => { setView("proofreaders"); setQuery(""); }}
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                view === "proofreaders"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Proofreaders
+            </button>
+          </div>
+
+          {/* Locale filter */}
+          {view === "proofreaders" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Filter by language:</span>
+              <select
+                value={localeFilter}
+                onChange={(e) => setLocaleFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-1.5 outline-none focus:border-blue-500/50"
+              >
+                <option value="">All languages</option>
+                {allLocales.map((l) => (
+                  <option key={l.id} value={l.code}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name or email…"
+              className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none"
+            />
+            {query && (
+              <button onClick={() => setQuery("")} className="text-gray-600 hover:text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <p className="text-xs text-gray-600 uppercase tracking-wide">
+            {query.length >= 2 ? `Results for "${query}"` : view === "admins" ? "All users" : "Current proofreaders"}
+          </p>
+
+          {error && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+              <p className="text-red-400 text-sm flex-1">{error}</p>
+              <button
+                onClick={() => load(query.length >= 2 ? query : undefined, view, localeFilter)}
+                className="flex-shrink-0 text-xs text-red-400 hover:text-red-200 border border-red-500/30 rounded-lg px-2.5 py-1"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-12 text-gray-600 text-sm">
+              {query.length >= 2 ? "No users found." : view === "admins" ? "No users found." : "No proofreaders assigned yet."}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {users.map((user) => (
+                <div key={user.id} className="rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors">
+                  <div className="flex items-center gap-3 p-3">
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-medium text-gray-400">{user.name.charAt(0).toUpperCase()}</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    </div>
+                    {user.role === "ROLE_PROOFREADER" && (user.locales ?? []).length > 0 && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {(user.locales ?? []).map((l) => <LocaleBadge key={l.id} locale={l} />)}
+                      </div>
+                    )}
+                    {user.role === "ROLE_PROOFREADER" && (
+                      <button
+                        onClick={() => openLocaleEdit(user)}
+                        className="px-2 py-1 rounded-lg text-[11px] font-medium border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors flex-shrink-0"
+                      >
+                        Languages
+                      </button>
+                    )}
+                    <RoleBadge role={user.role} />
+                    {user.role !== "ROLE_PARENT_ADMIN" && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {user.role !== "ROLE_ADMIN" && (
+                          <button
+                            onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
+                            disabled={updating !== null}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
+                              <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
+                            ) : "Admin"}
+                          </button>
+                        )}
+                        {user.role !== "ROLE_PROOFREADER" && (
+                          <button
+                            onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
+                            disabled={updating !== null}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
+                              <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                            ) : "Proofreader"}
+                          </button>
+                        )}
+                        {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
+                          <button
+                            onClick={() => handleRoleChange(user, "ROLE_USER")}
+                            disabled={updating !== null}
+                            className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {updating?.id === user.id && updating.role === "ROLE_USER" ? (
+                              <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                            ) : "Revoke"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {localeEditUserId === user.id && (
+                    <div className="border-t border-gray-800 px-3 py-3">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Assign languages</p>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {allLocales.map((l) => (
+                          <button
+                            key={l.id}
+                            onClick={() => toggleLocaleSelection(l.id)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              localeEditSelection.includes(l.id)
+                                ? "border-purple-500/50 bg-purple-500/20 text-purple-300"
+                                : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                            }`}
+                          >
+                            {l.name}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={saveLocaleEdit}
+                          disabled={localeEditSaving}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                        >
+                          {localeEditSaving ? <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" /> : "Save"}
+                        </button>
+                        <button onClick={() => setLocaleEditUserId(null)} className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Manage Languages section */}
+          {view === "proofreaders" && (
+            <div className="border-t border-gray-800 pt-5 mt-5">
+              <button
+                onClick={() => setShowLangMgmt(!showLangMgmt)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`w-4 h-4 transition-transform ${showLangMgmt ? "rotate-90" : ""}`}>
+                  <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
+                </svg>
+                Manage Languages
+              </button>
+              {showLangMgmt && (
+                <div className="mt-3 space-y-3">
+                  {langMgmtError && <p className="text-red-400 text-xs">{langMgmtError}</p>}
+                  <div className="space-y-1.5">
+                    {allLocales.map((l) => (
+                      <div key={l.id} className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800">
+                        <div>
+                          <span className="text-sm text-gray-200">{l.name}</span>
+                          <span className="text-xs text-gray-500 ml-2">({l.code})</span>
+                        </div>
+                        <button onClick={() => handleDeleteLocale(l.id)} disabled={langMgmtLoading} className="text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50">
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                    {allLocales.length === 0 && <p className="text-xs text-gray-600 py-2">No languages configured yet.</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="text" value={newLangCode} onChange={(e) => setNewLangCode(e.target.value)} placeholder="Code (e.g. bn)" className="w-24 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600" />
+                    <input type="text" value={newLangName} onChange={(e) => setNewLangName(e.target.value)} placeholder="Name (e.g. Bengali)" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600" />
+                    <button onClick={handleCreateLocale} disabled={langMgmtLoading} className="px-3 py-2 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50">
+                      {langMgmtLoading ? <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" /> : "Add"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {/* User list */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : users.length === 0 ? (
-        <div className="text-center py-12 text-gray-600">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-10 h-10 mx-auto mb-3">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-          </svg>
-          <p className="text-sm">
-            {query.length >= 2
-              ? "No users found. Try a different search."
-              : view === "admins"
-              ? "No users found."
-              : "No proofreaders assigned yet."}
-          </p>
-          {query.length >= 2 && (
-            <p className="text-xs mt-1 text-gray-700">The user must have registered in the app first.</p>
+      {/* ═══════════════════ REQUESTS TAB ═══════════════════ */}
+      {outerTab === "requests" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500">
+              Volunteer applications from users. Approve to grant access, reject with a message.
+            </p>
+            <button onClick={loadVolRequests} className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 rounded-lg px-2.5 py-1 transition-colors">
+              Refresh
+            </button>
+          </div>
+
+          {volReqError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{volReqError}</div>
+          )}
+
+          {volReqLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : volRequests.length === 0 ? (
+            <div className="text-center py-12 text-gray-600 text-sm">No volunteer requests yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {/* Pending first */}
+              {[...volRequests].sort((a, b) => {
+                if (a.status === "PENDING" && b.status !== "PENDING") return -1;
+                if (b.status === "PENDING" && a.status !== "PENDING") return 1;
+                return new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime();
+              }).map((req) => {
+                const isPending = req.status === "PENDING";
+                const isActing = reqAction?.id === req.id;
+                return (
+                  <div key={req.id} className={`rounded-xl border transition-colors ${
+                    isPending ? "bg-gray-900 border-gray-700" : "bg-gray-900/50 border-gray-800"
+                  }`}>
+                    <div className="flex items-start gap-3 p-3">
+                      {/* Avatar */}
+                      {req.userAvatarUrl ? (
+                        <img src={req.userAvatarUrl} alt={req.userName} className="w-9 h-9 rounded-full object-cover flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-sm font-medium text-gray-400">{req.userName.charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-100">{req.userName}</p>
+                            <p className="text-xs text-gray-500">{req.userEmail}</p>
+                          </div>
+                          {/* Status badge */}
+                          <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            req.status === "PENDING"  ? "border-amber-500/40 bg-amber-500/10 text-amber-400" :
+                            req.status === "APPROVED" ? "border-green-500/40 bg-green-500/10 text-green-400" :
+                                                        "border-red-500/40 bg-red-500/10 text-red-400"
+                          }`}>
+                            {req.status}
+                          </span>
+                        </div>
+
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-medium text-orange-400">{req.serviceName}</span>
+                          {req.languages && (
+                            <span className="text-[11px] text-gray-500">
+                              {req.languages.split(",").map(c => c.trim()).join(", ")}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-gray-700">{timeAgo(req.requestedAt)}</span>
+                        </div>
+
+                        {req.adminMessage && (
+                          <p className="text-xs text-gray-500 mt-1.5 italic">"{req.adminMessage}"</p>
+                        )}
+                        {req.status === "REJECTED" && req.canReapplyAt && (
+                          <p className="text-[10px] text-gray-700 mt-1">Reapply opens in {formatCountdown(req.canReapplyAt)}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Approve / Reject buttons for pending */}
+                    {isPending && !isActing && (
+                      <div className="flex gap-2 px-3 pb-3">
+                        <button
+                          onClick={() => startReqAction(req.id, "approve")}
+                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold border border-green-500/40 text-green-400 bg-green-500/10 hover:bg-green-500/15 transition-colors"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => startReqAction(req.id, "reject")}
+                          className="flex-1 py-1.5 rounded-lg text-xs font-semibold border border-red-500/40 text-red-400 bg-red-500/10 hover:bg-red-500/15 transition-colors"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Inline action form */}
+                    {isActing && (
+                      <div className="border-t border-gray-800 px-3 py-3 space-y-2">
+                        <p className="text-xs font-medium text-gray-300">
+                          {reqAction.action === "approve" ? "Add a message for the user (optional)" : "Reason for declining (required)"}
+                        </p>
+                        <textarea
+                          value={reqAction.message}
+                          onChange={(e) => setReqAction((prev) => prev ? { ...prev, message: e.target.value } : null)}
+                          rows={2}
+                          placeholder={reqAction.action === "approve" ? "e.g. Welcome aboard! We're excited to have you." : "e.g. Please improve your language skills first."}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-xl text-xs text-gray-200 px-3 py-2.5 outline-none placeholder-gray-600 resize-none focus:border-gray-600"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleReqConfirm}
+                            disabled={reqAction.saving || (reqAction.action === "reject" && !reqAction.message.trim())}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                              reqAction.action === "approve"
+                                ? "border-green-500/40 text-green-400 bg-green-500/10 hover:bg-green-500/20"
+                                : "border-red-500/40 text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                            }`}
+                          >
+                            {reqAction.saving ? (
+                              <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin mx-auto" />
+                            ) : (
+                              reqAction.action === "approve" ? "Confirm Approval" : "Confirm Decline"
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setReqAction(null)}
+                            disabled={reqAction.saving}
+                            className="px-4 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
-      ) : (
-        <div className="space-y-2">
-          {users.map((user) => (
-            <div
-              key={user.id}
-              className="rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors"
-            >
-              <div className="flex items-center gap-3 p-3">
-                {/* Avatar */}
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-medium text-gray-400">
-                      {user.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                )}
+      )}
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                </div>
+      {/* ═══════════════════ SERVICES TAB ═══════════════════ */}
+      {outerTab === "services" && (
+        <div className="space-y-5">
+          <p className="text-xs text-gray-500">
+            Manage volunteer service categories shown to users on their profile page.
+          </p>
 
-                {/* Locale badges — for proofreaders */}
-                {user.role === "ROLE_PROOFREADER" && (user.locales ?? []).length > 0 && (
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {(user.locales ?? []).map((l) => (
-                      <LocaleBadge key={l.id} locale={l} />
-                    ))}
-                  </div>
-                )}
+          {volSvcError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{volSvcError}</div>
+          )}
 
-                {/* Languages edit button — for proofreaders */}
-                {user.role === "ROLE_PROOFREADER" && (
-                  <button
-                    onClick={() => openLocaleEdit(user)}
-                    className="px-2 py-1 rounded-lg text-[11px] font-medium border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors flex-shrink-0"
-                  >
-                    Languages
-                  </button>
-                )}
+          {volSvcLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {volServices.map((svc) => {
+                const isEditing = svcEdit?.id === svc.id;
+                return (
+                  <div key={svc.id} className="rounded-xl bg-gray-900 border border-gray-800">
+                    <div className="flex items-start gap-3 p-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-100">{svc.name}</p>
+                          <span className="text-[10px] text-gray-600 font-mono">/{svc.slug}</span>
+                          {!svc.active && (
+                            <span className="text-[10px] border border-gray-700 rounded px-1.5 py-0.5 text-gray-600">Inactive</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{svc.description}</p>
+                      </div>
+                      <div className="flex gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => openSvcEdit(svc)}
+                          className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleSvcDelete(svc.id)}
+                          className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Role badge */}
-                <RoleBadge role={user.role} />
-
-                {/* Action buttons — skip for parent admin */}
-                {user.role !== "ROLE_PARENT_ADMIN" && (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {user.role !== "ROLE_ADMIN" && (
-                      <button
-                        onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
-                        disabled={updating !== null}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
-                      >
-                        {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
-                          <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
-                        ) : "Admin"}
-                      </button>
-                    )}
-
-                    {user.role !== "ROLE_PROOFREADER" && (
-                      <button
-                        onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
-                        disabled={updating !== null}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
-                      >
-                        {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
-                          <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-                        ) : "Proofreader"}
-                      </button>
-                    )}
-
-                    {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
-                      <button
-                        onClick={() => handleRoleChange(user, "ROLE_USER")}
-                        disabled={updating !== null}
-                        className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                      >
-                        {updating?.id === user.id && updating.role === "ROLE_USER" ? (
-                          <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                        ) : "Revoke"}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Locale edit popover — inline below the user row */}
-              {localeEditUserId === user.id && (
-                <div className="border-t border-gray-800 px-3 py-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Assign languages</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {allLocales.map((l) => (
-                      <button
-                        key={l.id}
-                        onClick={() => toggleLocaleSelection(l.id)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                          localeEditSelection.includes(l.id)
-                            ? "border-purple-500/50 bg-purple-500/20 text-purple-300"
-                            : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
-                        }`}
-                      >
-                        {l.name}
-                      </button>
-                    ))}
-                    {allLocales.length === 0 && (
-                      <p className="text-xs text-gray-600">No languages available. Add languages below.</p>
+                    {/* Inline edit form */}
+                    {isEditing && svcEdit && (
+                      <div className="border-t border-gray-800 px-3 py-3 space-y-2.5">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            value={svcEdit.name}
+                            onChange={(e) => setSvcEdit((p) => p ? { ...p, name: e.target.value } : null)}
+                            placeholder="Name"
+                            className="bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600 placeholder-gray-600"
+                          />
+                          <input
+                            value={svcEdit.slug}
+                            onChange={(e) => setSvcEdit((p) => p ? { ...p, slug: e.target.value } : null)}
+                            placeholder="slug (e.g. proofreading)"
+                            className="bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600 placeholder-gray-600"
+                          />
+                        </div>
+                        <textarea
+                          value={svcEdit.description}
+                          onChange={(e) => setSvcEdit((p) => p ? { ...p, description: e.target.value } : null)}
+                          rows={2}
+                          placeholder="Short description shown to users"
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600 placeholder-gray-600 resize-none"
+                        />
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={svcEdit.active}
+                              onChange={(e) => setSvcEdit((p) => p ? { ...p, active: e.target.checked } : null)}
+                              className="w-3.5 h-3.5 accent-orange-500"
+                            />
+                            <span className="text-xs text-gray-400">Active</span>
+                          </label>
+                          <input
+                            type="number"
+                            value={svcEdit.sortOrder}
+                            onChange={(e) => setSvcEdit((p) => p ? { ...p, sortOrder: parseInt(e.target.value) || 0 } : null)}
+                            placeholder="Order"
+                            className="w-20 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600"
+                          />
+                          <span className="text-xs text-gray-600">Sort order</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleSvcSave}
+                            disabled={svcEdit.saving || !svcEdit.name.trim()}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
+                          >
+                            {svcEdit.saving ? <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" /> : "Save"}
+                          </button>
+                          <button onClick={() => setSvcEdit(null)} className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
+                );
+              })}
+
+              {/* Add new service */}
+              {svcEdit?.id === null ? (
+                <div className="rounded-xl bg-gray-900 border border-dashed border-gray-700 p-3 space-y-2.5">
+                  <p className="text-xs font-medium text-gray-400">New Service</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={svcEdit.name}
+                      onChange={(e) => setSvcEdit((p) => p ? { ...p, name: e.target.value } : null)}
+                      placeholder="Name"
+                      className="bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600 placeholder-gray-600"
+                    />
+                    <input
+                      value={svcEdit.slug}
+                      onChange={(e) => setSvcEdit((p) => p ? { ...p, slug: e.target.value } : null)}
+                      placeholder="slug"
+                      className="bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600 placeholder-gray-600"
+                    />
+                  </div>
+                  <textarea
+                    value={svcEdit.description}
+                    onChange={(e) => setSvcEdit((p) => p ? { ...p, description: e.target.value } : null)}
+                    rows={2}
+                    placeholder="Short description"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-gray-600 placeholder-gray-600 resize-none"
+                  />
                   <div className="flex gap-2">
                     <button
-                      onClick={saveLocaleEdit}
-                      disabled={localeEditSaving}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                      onClick={handleSvcSave}
+                      disabled={svcEdit.saving || !svcEdit.name.trim()}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
                     >
-                      {localeEditSaving ? (
-                        <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />
-                      ) : "Save"}
+                      {svcEdit.saving ? <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" /> : "Create"}
                     </button>
-                    <button
-                      onClick={() => setLocaleEditUserId(null)}
-                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors"
-                    >
+                    <button onClick={() => setSvcEdit(null)} className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
                       Cancel
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Manage Languages section — proofreaders view */}
-      {view === "proofreaders" && (
-        <div className="border-t border-gray-800 pt-5 mt-5">
-          <button
-            onClick={() => setShowLangMgmt(!showLangMgmt)}
-            className="flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className={`w-4 h-4 transition-transform ${showLangMgmt ? "rotate-90" : ""}`}
-            >
-              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
-            </svg>
-            Manage Languages
-          </button>
-
-          {showLangMgmt && (
-            <div className="mt-3 space-y-3">
-              {langMgmtError && (
-                <p className="text-red-400 text-xs">{langMgmtError}</p>
-              )}
-
-              {/* Existing languages */}
-              <div className="space-y-1.5">
-                {allLocales.map((l) => (
-                  <div
-                    key={l.id}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900 border border-gray-800"
-                  >
-                    <div>
-                      <span className="text-sm text-gray-200">{l.name}</span>
-                      <span className="text-xs text-gray-500 ml-2">({l.code})</span>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteLocale(l.id)}
-                      disabled={langMgmtLoading}
-                      className="text-xs text-red-400 border border-red-500/30 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-                {allLocales.length === 0 && (
-                  <p className="text-xs text-gray-600 py-2">No languages configured yet.</p>
-                )}
-              </div>
-
-              {/* Add language form */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newLangCode}
-                  onChange={(e) => setNewLangCode(e.target.value)}
-                  placeholder="Code (e.g. bn)"
-                  className="w-24 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
-                />
-                <input
-                  type="text"
-                  value={newLangName}
-                  onChange={(e) => setNewLangName(e.target.value)}
-                  placeholder="Name (e.g. Bengali)"
-                  className="flex-1 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 px-2.5 py-2 outline-none focus:border-purple-500/50 placeholder-gray-600"
-                />
+              ) : (
                 <button
-                  onClick={handleCreateLocale}
-                  disabled={langMgmtLoading}
-                  className="px-3 py-2 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                  onClick={() => openSvcEdit()}
+                  className="w-full py-2.5 rounded-xl border border-dashed border-gray-700 text-xs text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-colors"
                 >
-                  {langMgmtLoading ? (
-                    <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />
-                  ) : "Add"}
+                  + Add new service
                 </button>
-              </div>
+              )}
             </div>
           )}
+
+          {/* Cooldown days config */}
+          <div className="border-t border-gray-800 pt-5">
+            <p className="text-xs font-semibold text-gray-400 mb-1">Rejection Cooldown</p>
+            <p className="text-xs text-gray-600 mb-3">How many days a user must wait before reapplying after rejection.</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={0}
+                value={cooldownDays}
+                onChange={(e) => setCooldownDays(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-24 bg-gray-900 border border-gray-700 rounded-xl text-sm text-gray-200 px-3 py-2 outline-none focus:border-orange-500/50 text-center"
+              />
+              <span className="text-xs text-gray-500">days</span>
+              <button
+                onClick={handleCooldownSave}
+                disabled={cooldownSaving}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-orange-500/40 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 transition-colors disabled:opacity-50"
+              >
+                {cooldownSaving ? <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" /> : "Save"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

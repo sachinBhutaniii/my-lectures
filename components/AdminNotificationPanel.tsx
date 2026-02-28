@@ -1,17 +1,22 @@
 "use client";
 import { useEffect } from "react";
 import { TranscriptReviewItem } from "@/services/video.service";
+import { VolunteerRequestItem } from "@/services/volunteer.service";
 
 // ── Notification data model ───────────────────────────────────────────────────
 
 export type AdminNotif = {
   id: string;
-  type: "review_submitted";
-  videoTitle: string;
-  localeName: string;
-  proofreaderName: string;
-  level: 1 | 2;
+  type: "review_submitted" | "volunteer_request";
   submittedAt: string | null;
+  // review_submitted
+  videoTitle?: string;
+  localeName?: string;
+  proofreaderName?: string;
+  level?: 1 | 2;
+  // volunteer_request
+  userName?: string;
+  serviceName?: string;
 };
 
 export function deriveNotifications(items: TranscriptReviewItem[]): AdminNotif[] {
@@ -40,12 +45,31 @@ export function deriveNotifications(items: TranscriptReviewItem[]): AdminNotif[]
       });
     }
   }
+
   return notifs.sort((a, b) => {
     if (!a.submittedAt && !b.submittedAt) return 0;
     if (!a.submittedAt) return 1;
     if (!b.submittedAt) return -1;
     return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
   });
+}
+
+export function deriveVolunteerNotifications(requests: VolunteerRequestItem[]): AdminNotif[] {
+  return requests
+    .filter((r) => r.status === "PENDING")
+    .map((r) => ({
+      id: `vol-${r.id}`,
+      type: "volunteer_request" as const,
+      submittedAt: r.requestedAt,
+      userName: r.userName,
+      serviceName: r.serviceName,
+    }))
+    .sort((a, b) => {
+      if (!a.submittedAt && !b.submittedAt) return 0;
+      if (!a.submittedAt) return 1;
+      if (!b.submittedAt) return -1;
+      return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+    });
 }
 
 function timeAgo(dateStr: string): string {
@@ -149,42 +173,55 @@ export default function AdminNotificationPanel({ open, notifications, unreadCuto
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      {/* Who did what */}
-                      <p className={`text-xs leading-snug ${unread ? "text-gray-100" : "text-gray-400"}`}>
-                        <span className="font-semibold">{n.proofreaderName.split(" ")[0]}</span>
-                        <span className={unread ? " text-gray-400" : " text-gray-600"}> submitted </span>
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
-                          n.level === 1
-                            ? "bg-orange-500/15 text-orange-400"
-                            : "bg-blue-500/15 text-blue-400"
-                        }`}>
-                          L{n.level}
-                        </span>
-                        <span className={unread ? " text-gray-400" : " text-gray-600"}> review</span>
-                      </p>
-
-                      {/* Video title */}
-                      <p className={`text-[11px] mt-1 font-medium truncate ${
-                        unread ? "text-gray-300" : "text-gray-600"
-                      }`}>
-                        {n.videoTitle}
-                      </p>
-
-                      {/* Language + time */}
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                          unread
-                            ? "border-gray-700 bg-gray-800 text-gray-400"
-                            : "border-gray-800 bg-gray-900 text-gray-600"
-                        }`}>
-                          {n.localeName}
-                        </span>
-                        {n.submittedAt && (
-                          <span className="text-[10px] text-gray-700">
-                            {timeAgo(n.submittedAt)}
-                          </span>
-                        )}
-                      </div>
+                      {n.type === "review_submitted" ? (
+                        <>
+                          <p className={`text-xs leading-snug ${unread ? "text-gray-100" : "text-gray-400"}`}>
+                            <span className="font-semibold">{n.proofreaderName!.split(" ")[0]}</span>
+                            <span className={unread ? " text-gray-400" : " text-gray-600"}> submitted </span>
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
+                              n.level === 1
+                                ? "bg-orange-500/15 text-orange-400"
+                                : "bg-blue-500/15 text-blue-400"
+                            }`}>
+                              L{n.level}
+                            </span>
+                            <span className={unread ? " text-gray-400" : " text-gray-600"}> review</span>
+                          </p>
+                          <p className={`text-[11px] mt-1 font-medium truncate ${unread ? "text-gray-300" : "text-gray-600"}`}>
+                            {n.videoTitle}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                              unread ? "border-gray-700 bg-gray-800 text-gray-400" : "border-gray-800 bg-gray-900 text-gray-600"
+                            }`}>
+                              {n.localeName}
+                            </span>
+                            {n.submittedAt && (
+                              <span className="text-[10px] text-gray-700">{timeAgo(n.submittedAt)}</span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className={`text-xs leading-snug ${unread ? "text-gray-100" : "text-gray-400"}`}>
+                            <span className="font-semibold">{n.userName!.split(" ")[0]}</span>
+                            <span className={unread ? " text-gray-400" : " text-gray-600"}> applied to volunteer</span>
+                          </p>
+                          <p className={`text-[11px] mt-1 font-medium truncate ${unread ? "text-gray-300" : "text-gray-600"}`}>
+                            {n.serviceName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                              unread ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-gray-800 bg-gray-900 text-gray-600"
+                            }`}>
+                              Pending Review
+                            </span>
+                            {n.submittedAt && (
+                              <span className="text-[10px] text-gray-700">{timeAgo(n.submittedAt)}</span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 );

@@ -4,6 +4,14 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile, Relationship } from "@/hooks/useProfile";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getVolunteerServices,
+  submitVolunteerRequest,
+  getMyVolunteerRequests,
+  VolunteerServiceItem,
+  VolunteerRequestItem,
+} from "@/services/volunteer.service";
+import { getAllLocales, LocaleInfo } from "@/services/video.service";
 
 // ── Reusable sub-components ───────────────────────────────────────────────────
 
@@ -104,6 +112,17 @@ const RELATIONSHIPS: { value: Relationship; label: string; sub?: string }[] = [
   { value: "seeker",   label: "Seeker", sub: "Not decided yet" },
 ];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatCountdown(dateStr: string): string {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  if (diff <= 0) return "now";
+  const h = Math.floor(diff / 3600000);
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"}`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"}`;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
@@ -113,6 +132,66 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [locating, setLocating] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  // ── Volunteer / contribute state ────────────────────────────────────────
+  const [volServices, setVolServices] = useState<VolunteerServiceItem[]>([]);
+  const [myRequests, setMyRequests] = useState<VolunteerRequestItem[]>([]);
+  const [volLocales, setVolLocales] = useState<LocaleInfo[]>([]);
+  const [volLoading, setVolLoading] = useState(false);
+  const [selectedLangs, setSelectedLangs] = useState<Record<number, string[]>>({});
+  const [submitting, setSubmitting] = useState<number | null>(null);
+  const [submitError, setSubmitError] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    if (!user) return;
+    setVolLoading(true);
+    Promise.all([
+      getVolunteerServices(),
+      getMyVolunteerRequests(),
+      getAllLocales(),
+    ])
+      .then(([svcs, reqs, locales]) => {
+        setVolServices(svcs);
+        setMyRequests(reqs);
+        setVolLocales(locales);
+      })
+      .catch(() => {})
+      .finally(() => setVolLoading(false));
+  }, [user]);
+
+  const toggleLang = (serviceId: number, code: string) => {
+    setSelectedLangs((prev) => {
+      const cur = prev[serviceId] ?? [];
+      return {
+        ...prev,
+        [serviceId]: cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code],
+      };
+    });
+  };
+
+  const handleSubmitRequest = async (svc: VolunteerServiceItem) => {
+    setSubmitting(svc.id);
+    setSubmitError((prev) => ({ ...prev, [svc.id]: "" }));
+    try {
+      const langs =
+        svc.slug === "proofreading"
+          ? (selectedLangs[svc.id] ?? []).join(",") || null
+          : null;
+      const newReq = await submitVolunteerRequest(svc.id, langs);
+      setMyRequests((prev) => [
+        ...prev.filter((r) => r.serviceId !== svc.id),
+        newReq,
+      ]);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      setSubmitError((prev) => ({
+        ...prev,
+        [svc.id]: axiosErr?.response?.data?.error ?? "Failed to submit. Please try again.",
+      }));
+    } finally {
+      setSubmitting(null);
+    }
+  };
 
   // When auth user loads, sync their data into profile for any empty fields
   useEffect(() => {
@@ -394,6 +473,147 @@ export default function ProfilePage() {
             </button>
           ))}
         </SectionCard>
+
+        {/* ── Contribute to the Mission ── */}
+        {user && (
+          <>
+            <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-5">
+              CONTRIBUTE TO THE MISSION
+            </p>
+            <p className="text-gray-400 text-xs mb-4 leading-relaxed">
+              Wish to grow this service? Use your skills in the{" "}
+              <span className="text-orange-400 font-medium">service of the mission</span>.
+            </p>
+
+            {volLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : volServices.length === 0 ? (
+              <p className="text-xs text-gray-600 text-center py-4">
+                No volunteer opportunities available right now.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {volServices.map((svc) => {
+                  const req = myRequests.find((r) => r.serviceId === svc.id);
+                  const canReapply =
+                    req?.status === "REJECTED" &&
+                    (!req.canReapplyAt || new Date(req.canReapplyAt) <= new Date());
+                  const showForm = !req || canReapply;
+                  const withinCooldown =
+                    req?.status === "REJECTED" &&
+                    req.canReapplyAt &&
+                    new Date(req.canReapplyAt) > new Date();
+
+                  return (
+                    <SectionCard key={svc.id}>
+                      <div className="px-4 py-4">
+                        {/* Service header */}
+                        <div className="flex items-start justify-between gap-3 mb-1">
+                          <p className="text-sm font-semibold text-white">{svc.name}</p>
+                          {/* Status badge */}
+                          {req && !canReapply && (
+                            <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              req.status === "PENDING"
+                                ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                                : req.status === "APPROVED"
+                                ? "border-green-500/40 bg-green-500/10 text-green-400"
+                                : "border-red-500/40 bg-red-500/10 text-red-400"
+                            }`}>
+                              {req.status === "PENDING"
+                                ? "In Review"
+                                : req.status === "APPROVED"
+                                ? "Approved"
+                                : "Declined"}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 leading-relaxed mb-3">{svc.description}</p>
+
+                        {/* Language selection — proofreading only, when form is visible */}
+                        {svc.slug === "proofreading" && showForm && volLocales.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">
+                              Select languages you can proofread
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {volLocales.map((l) => {
+                                const selected = (selectedLangs[svc.id] ?? []).includes(l.code);
+                                return (
+                                  <button
+                                    key={l.id}
+                                    onClick={() => toggleLang(svc.id, l.code)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                      selected
+                                        ? "border-orange-500/50 bg-orange-500/20 text-orange-300"
+                                        : "border-gray-700 bg-gray-800/80 text-gray-400 active:scale-95"
+                                    }`}
+                                  >
+                                    {l.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Admin message for approved */}
+                        {req?.status === "APPROVED" && req.adminMessage && (
+                          <div className="mb-3 p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
+                            <p className="text-xs text-green-300 leading-relaxed">"{req.adminMessage}"</p>
+                          </div>
+                        )}
+
+                        {/* Admin message for rejected */}
+                        {req?.status === "REJECTED" && req.adminMessage && (
+                          <div className="mb-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                            <p className="text-xs text-red-300 leading-relaxed">"{req.adminMessage}"</p>
+                          </div>
+                        )}
+
+                        {/* Cooldown countdown */}
+                        {withinCooldown && (
+                          <p className="text-xs text-gray-600 mb-3">
+                            You can reapply in{" "}
+                            <span className="text-gray-400 font-medium">
+                              {formatCountdown(req!.canReapplyAt!)}
+                            </span>
+                          </p>
+                        )}
+
+                        {/* Submit / Apply Again button */}
+                        {showForm && (
+                          <button
+                            onClick={() => handleSubmitRequest(svc)}
+                            disabled={submitting === svc.id}
+                            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-orange-500/40 text-orange-400 bg-orange-500/10 active:bg-orange-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {submitting === svc.id ? (
+                              <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                                </svg>
+                                {canReapply ? "Apply Again" : "Submit Application"}
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Error */}
+                        {submitError[svc.id] && (
+                          <p className="text-xs text-red-400 mt-2">{submitError[svc.id]}</p>
+                        )}
+                      </div>
+                    </SectionCard>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Bottom breathing room */}
         <div className="h-6" />
