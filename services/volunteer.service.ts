@@ -20,6 +20,7 @@ export interface VolunteerRequestItem {
   serviceSlug: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   languages: string | null;
+  approvedLanguages: string | null;
   adminMessage: string | null;
   requestedAt: string;
   reviewedAt: string | null;
@@ -89,10 +90,12 @@ export const getAllVolunteerRequests = async (): Promise<VolunteerRequestItem[]>
 
 export const approveVolunteerRequest = async (
   id: number,
-  adminMessage?: string
+  adminMessage?: string,
+  approvedLanguages?: string
 ): Promise<VolunteerRequestItem> => {
   const res = await apiClient.put<VolunteerRequestItem>(`/api/volunteer/requests/${id}/approve`, {
     adminMessage: adminMessage || "",
+    ...(approvedLanguages !== undefined ? { approvedLanguages } : {}),
   });
   return res.data;
 };

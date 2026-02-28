@@ -139,6 +139,7 @@ export default function ProfilePage() {
   const [volLocales, setVolLocales] = useState<LocaleInfo[]>([]);
   const [volLoading, setVolLoading] = useState(false);
   const [selectedLangs, setSelectedLangs] = useState<Record<number, string[]>>({});
+  const [optIn, setOptIn] = useState<Record<number, boolean>>({});
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<Record<number, string>>({});
 
@@ -496,6 +497,7 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-3">
                 {volServices.map((svc) => {
+                  const isProofreading = svc.slug === "proofreading";
                   const req = myRequests.find((r) => r.serviceId === svc.id);
                   const canReapply =
                     req?.status === "REJECTED" &&
@@ -505,14 +507,178 @@ export default function ProfilePage() {
                     req?.status === "REJECTED" &&
                     req.canReapplyAt &&
                     new Date(req.canReapplyAt) > new Date();
+                  const isOptIn = optIn[svc.id] ?? false;
 
+                  // Proofreading card — uses special title, description, toggle, and messaging
+                  if (isProofreading) {
+                    return (
+                      <SectionCard key={svc.id}>
+                        <div className="px-4 py-4">
+                          {/* Title + toggle */}
+                          <div className="flex items-start gap-3 mb-2">
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-white leading-snug">
+                                Want to be a Transcription Sevak?
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1 leading-relaxed italic">
+                                Listen. Refine. Serve. Become a guardian of divine words.
+                              </p>
+                            </div>
+                            {/* Toggle — only show when no active/pending request */}
+                            {showForm && (
+                              <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-0.5">
+                                <Toggle
+                                  on={isOptIn}
+                                  onToggle={() =>
+                                    setOptIn((prev) => ({ ...prev, [svc.id]: !isOptIn }))
+                                  }
+                                />
+                                <span className="text-[9px] text-gray-600 uppercase tracking-wide">
+                                  {isOptIn ? "Yes!" : "No"}
+                                </span>
+                              </div>
+                            )}
+                            {/* Status badge when request exists */}
+                            {req && !canReapply && (
+                              <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                req.status === "PENDING"
+                                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                                  : req.status === "APPROVED"
+                                  ? "border-green-500/40 bg-green-500/10 text-green-400"
+                                  : "border-red-500/40 bg-red-500/10 text-red-400"
+                              }`}>
+                                {req.status === "PENDING" ? "In Review"
+                                  : req.status === "APPROVED" ? "Approved"
+                                  : "Rejected"}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* ── APPROVED state ── */}
+                          {req?.status === "APPROVED" && !canReapply && (
+                            <div className="mt-3 p-3 rounded-xl bg-green-500/10 border border-green-500/25">
+                              <p className="text-xs text-green-300 font-medium leading-relaxed">
+                                🎉 Congratulations! You are on board with other transcription sevaks.
+                              </p>
+                              {req.approvedLanguages && (
+                                <p className="text-[10px] text-green-500/70 mt-1.5">
+                                  Approved for:{" "}
+                                  <span className="font-medium text-green-400">
+                                    {req.approvedLanguages.split(",").map((c) => c.trim()).join(", ")}
+                                  </span>
+                                </p>
+                              )}
+                              {req.adminMessage && (
+                                <p className="text-xs text-green-400/70 mt-2 italic">"{req.adminMessage}"</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── PENDING state ── */}
+                          {req?.status === "PENDING" && (
+                            <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
+                              <p className="text-xs text-amber-300 leading-relaxed">
+                                🙏 Hold on! We are thinking about you.
+                              </p>
+                              {req.languages && (
+                                <p className="text-[10px] text-amber-500/60 mt-1.5">
+                                  Requested for:{" "}
+                                  <span className="font-medium text-amber-400/80">
+                                    {req.languages.split(",").map((c) => c.trim()).join(", ")}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── REJECTED state ── */}
+                          {req?.status === "REJECTED" && !canReapply && (
+                            <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
+                              <p className="text-xs text-red-300 font-medium mb-1">Request Declined</p>
+                              {req.adminMessage ? (
+                                <p className="text-xs text-red-300/80 leading-relaxed italic">
+                                  "{req.adminMessage}"
+                                </p>
+                              ) : (
+                                <p className="text-xs text-red-400/60">
+                                  No reason provided.
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Cooldown countdown */}
+                          {withinCooldown && (
+                            <p className="text-xs text-gray-600 mt-2">
+                              You can reapply in{" "}
+                              <span className="text-gray-400 font-medium">
+                                {formatCountdown(req!.canReapplyAt!)}
+                              </span>
+                            </p>
+                          )}
+
+                          {/* Language picker — show when opted in and form is visible */}
+                          {showForm && isOptIn && volLocales.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">
+                                Choose your languages
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {volLocales.map((l) => {
+                                  const selected = (selectedLangs[svc.id] ?? []).includes(l.code);
+                                  return (
+                                    <button
+                                      key={l.id}
+                                      onClick={() => toggleLang(svc.id, l.code)}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                        selected
+                                          ? "border-orange-500/50 bg-orange-500/20 text-orange-300"
+                                          : "border-gray-700 bg-gray-800/80 text-gray-400 active:scale-95"
+                                      }`}
+                                    >
+                                      {l.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Submit button */}
+                          {showForm && isOptIn && (
+                            <button
+                              onClick={() => handleSubmitRequest(svc)}
+                              disabled={submitting === svc.id}
+                              className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold border border-orange-500/60 text-orange-300 bg-orange-500/15 active:bg-orange-500/25 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {submitting === svc.id ? (
+                                <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path d="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM1.49 15.326a.78.78 0 0 1-.358-.442 3 3 0 0 1 4.308-3.516 6.484 6.484 0 0 0-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 0 1-2.07-.655ZM16.44 15.98a4.97 4.97 0 0 0 2.07-.654.78.78 0 0 0 .357-.442 3 3 0 0 0-4.308-3.516 6.484 6.484 0 0 1 1.907 3.96 2.32 2.32 0 0 1-.026.654ZM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5.304 16.19a.844.844 0 0 1-.277-.71 5 5 0 0 1 9.947 0 .843.843 0 0 1-.277.71A6.975 6.975 0 0 1 10 18a6.974 6.974 0 0 1-4.696-1.81Z" />
+                                  </svg>
+                                  {canReapply ? "Apply Again" : "Join the Sewa"}
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          {/* Error */}
+                          {submitError[svc.id] && (
+                            <p className="text-xs text-red-400 mt-2">{submitError[svc.id]}</p>
+                          )}
+                        </div>
+                      </SectionCard>
+                    );
+                  }
+
+                  // ── Generic volunteer service card ──────────────────────────
                   return (
                     <SectionCard key={svc.id}>
                       <div className="px-4 py-4">
-                        {/* Service header */}
                         <div className="flex items-start justify-between gap-3 mb-1">
                           <p className="text-sm font-semibold text-white">{svc.name}</p>
-                          {/* Status badge */}
                           {req && !canReapply && (
                             <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                               req.status === "PENDING"
@@ -521,58 +687,24 @@ export default function ProfilePage() {
                                 ? "border-green-500/40 bg-green-500/10 text-green-400"
                                 : "border-red-500/40 bg-red-500/10 text-red-400"
                             }`}>
-                              {req.status === "PENDING"
-                                ? "In Review"
-                                : req.status === "APPROVED"
-                                ? "Approved"
+                              {req.status === "PENDING" ? "In Review"
+                                : req.status === "APPROVED" ? "Approved"
                                 : "Declined"}
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-gray-500 leading-relaxed mb-3">{svc.description}</p>
 
-                        {/* Language selection — proofreading only, when form is visible */}
-                        {svc.slug === "proofreading" && showForm && volLocales.length > 0 && (
-                          <div className="mb-3">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">
-                              Select languages you can proofread
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {volLocales.map((l) => {
-                                const selected = (selectedLangs[svc.id] ?? []).includes(l.code);
-                                return (
-                                  <button
-                                    key={l.id}
-                                    onClick={() => toggleLang(svc.id, l.code)}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                                      selected
-                                        ? "border-orange-500/50 bg-orange-500/20 text-orange-300"
-                                        : "border-gray-700 bg-gray-800/80 text-gray-400 active:scale-95"
-                                    }`}
-                                  >
-                                    {l.name}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Admin message for approved */}
                         {req?.status === "APPROVED" && req.adminMessage && (
                           <div className="mb-3 p-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
                             <p className="text-xs text-green-300 leading-relaxed">"{req.adminMessage}"</p>
                           </div>
                         )}
-
-                        {/* Admin message for rejected */}
                         {req?.status === "REJECTED" && req.adminMessage && (
                           <div className="mb-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
                             <p className="text-xs text-red-300 leading-relaxed">"{req.adminMessage}"</p>
                           </div>
                         )}
-
-                        {/* Cooldown countdown */}
                         {withinCooldown && (
                           <p className="text-xs text-gray-600 mb-3">
                             You can reapply in{" "}
@@ -581,8 +713,6 @@ export default function ProfilePage() {
                             </span>
                           </p>
                         )}
-
-                        {/* Submit / Apply Again button */}
                         {showForm && (
                           <button
                             onClick={() => handleSubmitRequest(svc)}
@@ -592,17 +722,10 @@ export default function ProfilePage() {
                             {submitting === svc.id ? (
                               <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-                                </svg>
-                                {canReapply ? "Apply Again" : "Submit Application"}
-                              </>
+                              <>{canReapply ? "Apply Again" : "Submit Application"}</>
                             )}
                           </button>
                         )}
-
-                        {/* Error */}
                         {submitError[svc.id] && (
                           <p className="text-xs text-red-400 mt-2">{submitError[svc.id]}</p>
                         )}

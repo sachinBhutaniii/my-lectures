@@ -220,7 +220,7 @@ export default function AdminUserManager() {
   const [volReqError, setVolReqError] = useState("");
   const volReqLoaded = useRef(false);
 
-  type ReqAction = { id: number; action: "approve" | "reject"; message: string; saving: boolean };
+  type ReqAction = { id: number; action: "approve" | "reject"; message: string; saving: boolean; requestedLanguages: string[]; approvedLanguages: string[] };
   const [reqAction, setReqAction] = useState<ReqAction | null>(null);
 
   const loadVolRequests = useCallback(async () => {
@@ -242,8 +242,19 @@ export default function AdminUserManager() {
     }
   }, [outerTab, loadVolRequests]);
 
-  const startReqAction = (id: number, action: "approve" | "reject") => {
-    setReqAction({ id, action, message: "", saving: false });
+  const startReqAction = (id: number, action: "approve" | "reject", req: VolunteerRequestItem) => {
+    const requestedLanguages = req.languages
+      ? req.languages.split(",").map((c) => c.trim()).filter(Boolean)
+      : [];
+    setReqAction({
+      id,
+      action,
+      message: "",
+      saving: false,
+      requestedLanguages,
+      // Default: approve all requested languages
+      approvedLanguages: action === "approve" ? [...requestedLanguages] : [],
+    });
   };
 
   const handleReqConfirm = async () => {
@@ -253,7 +264,10 @@ export default function AdminUserManager() {
     try {
       let updated: VolunteerRequestItem;
       if (reqAction.action === "approve") {
-        updated = await approveVolunteerRequest(reqAction.id, reqAction.message.trim() || undefined);
+        const approvedLangs = reqAction.approvedLanguages.length > 0
+          ? reqAction.approvedLanguages.join(",")
+          : undefined;
+        updated = await approveVolunteerRequest(reqAction.id, reqAction.message.trim() || undefined, approvedLangs);
       } else {
         updated = await rejectVolunteerRequest(reqAction.id, reqAction.message.trim());
       }
@@ -673,13 +687,31 @@ export default function AdminUserManager() {
 
                         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                           <span className="text-[11px] font-medium text-orange-400">{req.serviceName}</span>
-                          {req.languages && (
-                            <span className="text-[11px] text-gray-500">
-                              {req.languages.split(",").map(c => c.trim()).join(", ")}
-                            </span>
+                          <span className="text-[10px] text-gray-600">Applied {timeAgo(req.requestedAt)}</span>
+                          {req.reviewedAt && (
+                            <span className="text-[10px] text-gray-600">• Reviewed {timeAgo(req.reviewedAt)}</span>
                           )}
-                          <span className="text-[10px] text-gray-700">{timeAgo(req.requestedAt)}</span>
                         </div>
+
+                        {/* Requested languages */}
+                        {req.languages && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            <span className="text-[10px] text-gray-600 mr-0.5">Requested:</span>
+                            {req.languages.split(",").map((c) => c.trim()).filter(Boolean).map((code) => (
+                              <span key={code} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400">{code}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Approved languages (if approved) */}
+                        {req.status === "APPROVED" && req.approvedLanguages && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <span className="text-[10px] text-green-600 mr-0.5">Approved for:</span>
+                            {req.approvedLanguages.split(",").map((c) => c.trim()).filter(Boolean).map((code) => (
+                              <span key={code} className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400">{code}</span>
+                            ))}
+                          </div>
+                        )}
 
                         {req.adminMessage && (
                           <p className="text-xs text-gray-500 mt-1.5 italic">"{req.adminMessage}"</p>
@@ -694,13 +726,13 @@ export default function AdminUserManager() {
                     {isPending && !isActing && (
                       <div className="flex gap-2 px-3 pb-3">
                         <button
-                          onClick={() => startReqAction(req.id, "approve")}
+                          onClick={() => startReqAction(req.id, "approve", req)}
                           className="flex-1 py-1.5 rounded-lg text-xs font-semibold border border-green-500/40 text-green-400 bg-green-500/10 hover:bg-green-500/15 transition-colors"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={() => startReqAction(req.id, "reject")}
+                          onClick={() => startReqAction(req.id, "reject", req)}
                           className="flex-1 py-1.5 rounded-lg text-xs font-semibold border border-red-500/40 text-red-400 bg-red-500/10 hover:bg-red-500/15 transition-colors"
                         >
                           Decline
@@ -710,9 +742,52 @@ export default function AdminUserManager() {
 
                     {/* Inline action form */}
                     {isActing && (
-                      <div className="border-t border-gray-800 px-3 py-3 space-y-2">
+                      <div className="border-t border-gray-800 px-3 py-3 space-y-2.5">
+                        {/* Language selector — approve only, proofreading requests with languages */}
+                        {reqAction.action === "approve" && reqAction.requestedLanguages.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-1.5">
+                              Approve for languages
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {reqAction.requestedLanguages.map((code) => {
+                                const checked = reqAction.approvedLanguages.includes(code);
+                                return (
+                                  <button
+                                    key={code}
+                                    onClick={() =>
+                                      setReqAction((prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              approvedLanguages: checked
+                                                ? prev.approvedLanguages.filter((c) => c !== code)
+                                                : [...prev.approvedLanguages, code],
+                                            }
+                                          : null
+                                      )
+                                    }
+                                    className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${
+                                      checked
+                                        ? "border-green-500/50 bg-green-500/15 text-green-400"
+                                        : "border-gray-700 bg-gray-800 text-gray-500"
+                                    }`}
+                                  >
+                                    {code}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[10px] text-gray-700 mt-1">
+                              {reqAction.approvedLanguages.length === 0
+                                ? "No languages selected — user will be approved without specific language access."
+                                : `Approving for: ${reqAction.approvedLanguages.join(", ")}`}
+                            </p>
+                          </div>
+                        )}
+
                         <p className="text-xs font-medium text-gray-300">
-                          {reqAction.action === "approve" ? "Add a message for the user (optional)" : "Reason for declining (required)"}
+                          {reqAction.action === "approve" ? "Message for user (optional)" : "Reason for declining (required)"}
                         </p>
                         <textarea
                           value={reqAction.message}
