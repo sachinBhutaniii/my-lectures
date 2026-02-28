@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import AdminVideoList from "@/components/AdminVideoList";
 import AdminUserManager from "@/components/AdminUserManager";
 import TranscriptReviewPanel from "@/components/TranscriptReviewPanel";
 import JnanaYagyaAdmin from "@/components/JnanaYagyaAdmin";
-import { getSubmittedReviews, TranscriptReviewItem } from "@/services/video.service";
+import AdminNotificationPanel, {
+  deriveNotifications,
+  AdminNotif,
+} from "@/components/AdminNotificationPanel";
+import { getAllTranscripts } from "@/services/video.service";
 
 type Tab = "videos" | "transcripts" | "users" | "jnana";
 
@@ -55,19 +59,52 @@ export default function AdminPage() {
   const { user, authLoading, isAdmin, isParentAdmin } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("videos");
-  const [submittedReviews, setSubmittedReviews] = useState<TranscriptReviewItem[]>([]);
-  const [notifDismissed, setNotifDismissed] = useState(false);
 
+  // ── Notification state ──────────────────────────────────────────────────────
+  const [notifications, setNotifications] = useState<AdminNotif[]>([]);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
+  // lastNotifCheck: the cutoff used to compute the badge count
+  const [lastNotifCheck, setLastNotifCheck] = useState<string | null>(null);
+  // unreadCutoff: the value passed to the panel for showing dots (previous lastCheck)
+  const unreadCutoffRef = useRef<string | null>(null);
+
+  // Load lastNotifCheck from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("adminNotifLastCheck");
+      setLastNotifCheck(stored);
+      unreadCutoffRef.current = stored;
+    }
+  }, []);
+
+  // Fetch all transcripts to derive notifications
+  useEffect(() => {
+    if (!isAdmin) return;
+    getAllTranscripts()
+      .then((items) => setNotifications(deriveNotifications(items)))
+      .catch(() => {});
+  }, [isAdmin]);
+
+  // Badge count: notifications submitted after the last check
+  const unreadCount = notifications.filter(
+    (n) => n.submittedAt != null && (!lastNotifCheck || new Date(n.submittedAt) > new Date(lastNotifCheck))
+  ).length;
+
+  const openNotifPanel = () => {
+    // Capture the current cutoff for the panel to use when rendering dots
+    unreadCutoffRef.current = lastNotifCheck;
+    // Update lastNotifCheck to NOW — resets the badge to 0
+    const now = new Date().toISOString();
+    setLastNotifCheck(now);
+    localStorage.setItem("adminNotifLastCheck", now);
+    setNotifPanelOpen(true);
+  };
+
+  // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
     if (!user || !isAdmin) router.replace("/");
   }, [user, authLoading, isAdmin, router]);
-
-  // Poll for submitted reviews (notification badge)
-  useEffect(() => {
-    if (!isAdmin) return;
-    getSubmittedReviews().then(setSubmittedReviews).catch(() => {});
-  }, [isAdmin]);
 
   if (authLoading || !isAdmin) {
     return (
@@ -101,41 +138,28 @@ export default function AdminPage() {
             </span>
           )}
         </div>
-        <span className="ml-auto text-orange-500/70 text-xs font-mono">{user?.email}</span>
-      </div>
 
-      {/* Review submitted notification banner */}
-      {submittedReviews.length > 0 && !notifDismissed && (
-        <div className="mx-5 mt-3 flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
-          <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-400">
-              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-blue-200">
-              {submittedReviews.length} transcript review{submittedReviews.length > 1 ? "s" : ""} ready
-            </p>
-            <p className="text-xs text-gray-400 truncate">
-              {submittedReviews.map((r) => r.videoTitle).join(", ")}
-            </p>
-          </div>
+        {/* Right side: email + notification bell */}
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-orange-500/70 text-xs font-mono hidden sm:block">{user?.email}</span>
+
+          {/* Bell button */}
           <button
-            onClick={() => { setActiveTab("transcripts"); setNotifDismissed(true); }}
-            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+            onClick={openNotifPanel}
+            className="relative w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            title="Notifications"
           >
-            Review
-          </button>
-          <button
-            onClick={() => setNotifDismissed(true)}
-            className="flex-shrink-0 text-gray-600 hover:text-gray-400 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
             </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
         </div>
-      )}
+      </div>
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-gray-800">
@@ -162,6 +186,14 @@ export default function AdminPage() {
         {activeTab === "users"       && isParentAdmin && <AdminUserManager />}
         {activeTab === "jnana"       && <JnanaYagyaAdmin />}
       </div>
+
+      {/* Notification panel */}
+      <AdminNotificationPanel
+        open={notifPanelOpen}
+        notifications={notifications}
+        unreadCutoff={unreadCutoffRef.current}
+        onClose={() => setNotifPanelOpen(false)}
+      />
     </div>
   );
 }
