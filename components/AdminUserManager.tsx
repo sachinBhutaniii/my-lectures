@@ -5,11 +5,13 @@ import {
   updateUserRole,
   getProofreaders,
   getAllLocales,
+  getAllTranscripts,
   setUserLocales,
   createLocale,
   deleteLocale,
   UserSearchResult,
   LocaleInfo,
+  TranscriptReviewItem,
 } from "@/services/video.service";
 import {
   getAllVolunteerRequests,
@@ -69,6 +71,47 @@ function formatCountdown(dateStr: string): string {
   return `${d} day${d === 1 ? "" : "s"}`;
 }
 
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function getAssignmentStatus(t: TranscriptReviewItem, level: 1 | 2): "In Progress" | "Submitted" | "Approved" | "Deployed" {
+  if (t.deployed) return "Deployed";
+  if (level === 1) {
+    if (t.approvalStatus === "APPROVED" || t.approvalStatus === "LEVEL1_APPROVED") return "Approved";
+    if (t.l1ReviewSubmitted) return "Submitted";
+    return "In Progress";
+  } else {
+    if (t.approvalStatus === "APPROVED") return "Approved";
+    if (t.l2ReviewSubmitted) return "Submitted";
+    return "In Progress";
+  }
+}
+
+function getProofreaderAssignments(userId: number, transcripts: TranscriptReviewItem[]) {
+  const result: { transcript: TranscriptReviewItem; level: 1 | 2 }[] = [];
+  for (const t of transcripts) {
+    if (t.level1ProofreaderId === userId) result.push({ transcript: t, level: 1 });
+    if (t.level2ProofreaderId === userId) result.push({ transcript: t, level: 2 });
+  }
+  return result;
+}
+
+function getActiveAssignmentCount(userId: number, transcripts: TranscriptReviewItem[]): number {
+  return getProofreaderAssignments(userId, transcripts).filter(({ transcript: t, level }) => {
+    const s = getAssignmentStatus(t, level);
+    return s === "In Progress" || s === "Submitted";
+  }).length;
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  "In Progress": "border-amber-500/40 bg-amber-500/10 text-amber-400",
+  "Submitted":   "border-blue-500/40 bg-blue-500/10 text-blue-400",
+  "Approved":    "border-green-500/40 bg-green-500/10 text-green-400",
+  "Deployed":    "border-green-400/50 bg-green-400/15 text-green-300",
+};
+
 // ── Outer tab type ────────────────────────────────────────────────────────────
 
 type OuterTab = "users" | "requests" | "services";
@@ -98,9 +141,25 @@ export default function AdminUserManager() {
   const [langMgmtLoading, setLangMgmtLoading] = useState(false);
   const [langMgmtError, setLangMgmtError] = useState("");
 
+  // ── Proofreader assignment panel state ────────────────────────────────────
+  const [allTranscripts, setAllTranscripts] = useState<TranscriptReviewItem[]>([]);
+  const [transcriptsLoading, setTranscriptsLoading] = useState(false);
+  const transcriptsLoadedRef = useRef(false);
+  const [expandedProofreaderId, setExpandedProofreaderId] = useState<number | null>(null);
+
   useEffect(() => {
     getAllLocales().then(setAllLocales).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (view === "proofreaders" && !transcriptsLoadedRef.current) {
+      setTranscriptsLoading(true);
+      getAllTranscripts()
+        .then((t) => { setAllTranscripts(t); transcriptsLoadedRef.current = true; })
+        .catch(() => {})
+        .finally(() => setTranscriptsLoading(false));
+    }
+  }, [view]);
 
   const load = useCallback(async (q?: string, currentView: UserViewMode = "admins", filterLocale?: string) => {
     setLoading(true);
@@ -541,6 +600,35 @@ export default function AdminUserManager() {
                         )}
                       </div>
                     )}
+                    {/* Assignments expand toggle — proofreaders view only */}
+                    {view === "proofreaders" && user.role === "ROLE_PROOFREADER" && (() => {
+                      const activeCount = transcriptsLoadedRef.current
+                        ? getActiveAssignmentCount(user.id, allTranscripts)
+                        : null;
+                      const isExpanded = expandedProofreaderId === user.id;
+                      return (
+                        <button
+                          onClick={() => setExpandedProofreaderId(isExpanded ? null : user.id)}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors flex-shrink-0 ${
+                            isExpanded
+                              ? "border-blue-500/50 bg-blue-500/15 text-blue-300"
+                              : "border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300"
+                          }`}
+                        >
+                          {transcriptsLoading ? (
+                            <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                          ) : activeCount !== null && activeCount > 0 ? (
+                            <span className="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 text-[10px] flex items-center justify-center font-bold">
+                              {activeCount}
+                            </span>
+                          ) : null}
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                            className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}>
+                            <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      );
+                    })()}
                   </div>
                   {localeEditUserId === user.id && (
                     <div className="border-t border-gray-800 px-3 py-3">
@@ -574,6 +662,100 @@ export default function AdminUserManager() {
                       </div>
                     </div>
                   )}
+
+                  {/* ── Assignment detail panel ── */}
+                  {expandedProofreaderId === user.id && view === "proofreaders" && (() => {
+                    const assignments = getProofreaderAssignments(user.id, allTranscripts);
+                    const active = assignments.filter(({ transcript: t, level }) => {
+                      const s = getAssignmentStatus(t, level);
+                      return s === "In Progress" || s === "Submitted";
+                    });
+                    const completed = assignments.filter(({ transcript: t, level }) => {
+                      const s = getAssignmentStatus(t, level);
+                      return s === "Approved" || s === "Deployed";
+                    });
+
+                    if (transcriptsLoading) {
+                      return (
+                        <div className="border-t border-gray-800 flex items-center justify-center py-6">
+                          <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      );
+                    }
+                    if (assignments.length === 0) {
+                      return (
+                        <div className="border-t border-gray-800 px-3 py-4 text-center text-xs text-gray-600">
+                          No transcripts assigned yet.
+                        </div>
+                      );
+                    }
+
+                    const AssignmentRow = ({ transcript: t, level }: { transcript: TranscriptReviewItem; level: 1 | 2 }) => {
+                      const status = getAssignmentStatus(t, level);
+                      const assignedAt = level === 1 ? t.l1AssignedAt : t.l2AssignedAt;
+                      const submittedAt = level === 1 ? t.l1SubmittedAt : t.l2SubmittedAt;
+                      return (
+                        <div className="flex items-start gap-2.5 py-2.5 border-b border-gray-800/60 last:border-0">
+                          {t.videoThumbnailUrl && (
+                            <img src={t.videoThumbnailUrl} alt="" className="w-12 h-7 object-cover rounded flex-shrink-0 mt-0.5 opacity-80" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-200 leading-snug truncate font-medium">{t.videoTitle}</p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400">
+                                {t.localeName}
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border ${
+                                level === 1
+                                  ? "border-orange-500/40 bg-orange-500/10 text-orange-400"
+                                  : "border-purple-500/40 bg-purple-500/10 text-purple-400"
+                              }`}>
+                                L{level}
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${STATUS_STYLE[status]}`}>
+                                {status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                              <span className="text-[10px] text-gray-600">
+                                Assigned: <span className="text-gray-500">{formatDate(assignedAt)}</span>
+                              </span>
+                              {submittedAt && (
+                                <span className="text-[10px] text-gray-600">
+                                  Submitted: <span className="text-gray-500">{formatDate(submittedAt)}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div className="border-t border-gray-800">
+                        {active.length > 0 && (
+                          <div className="px-3 pt-3 pb-1">
+                            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                              Active — {active.length}
+                            </p>
+                            {active.map(({ transcript: t, level }) => (
+                              <AssignmentRow key={`${t.id}-${level}`} transcript={t} level={level} />
+                            ))}
+                          </div>
+                        )}
+                        {completed.length > 0 && (
+                          <div className="px-3 pt-2 pb-3">
+                            <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                              Completed — {completed.length}
+                            </p>
+                            {completed.map(({ transcript: t, level }) => (
+                              <AssignmentRow key={`${t.id}-${level}`} transcript={t} level={level} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
