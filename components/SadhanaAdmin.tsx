@@ -53,7 +53,7 @@ export default function SadhanaAdmin() {
   const [rev, setRev] = useState(0);
   const refetch = () => setRev((c) => c + 1);
   const fetchQuestions = useCallback(() => adminGetQuestions(), [rev]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { data: questions, loading } = useFetch<SadhanaQuestion[]>(fetchQuestions);
+  const { data: questions, loading, error: fetchError } = useFetch<SadhanaQuestion[]>(fetchQuestions);
 
   const [expandedId, setExpandedId] = useState<number | "new" | null>(null);
   const [form, setForm] = useState<EditForm>(emptyForm());
@@ -178,6 +178,18 @@ export default function SadhanaAdmin() {
     return (
       <div className="flex items-center justify-center h-48">
         <div className="w-7 h-7 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (fetchError || (!loading && questions === null)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-3">
+        <p className="text-red-400 text-sm font-medium">Failed to load questions</p>
+        <p className="text-gray-600 text-xs">Check that the backend is running and you are logged in as admin.</p>
+        <button onClick={refetch} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm hover:bg-gray-700 transition-colors">
+          Retry
+        </button>
       </div>
     );
   }

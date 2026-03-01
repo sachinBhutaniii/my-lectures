@@ -112,7 +112,7 @@ function AlreadySubmitted({
 // ── Main tracker ───────────────────────────────────────────────────────────
 export default function SadhanaTracker() {
   const fetchQuestions = useCallback(() => getSadhanaQuestions(), []);
-  const { data: questions, loading } = useFetch<SadhanaQuestion[]>(fetchQuestions);
+  const { data: questions, loading, error: questionsError } = useFetch<SadhanaQuestion[]>(fetchQuestions);
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [step, setStep] = useState(0); // 0 = landing, 1..n = questions, n+1 = review
@@ -181,6 +181,16 @@ export default function SadhanaTracker() {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Error loading questions ──────────────────────────────────────────────
+  if (questionsError || (!loading && questions === null)) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-red-400 text-sm font-medium">Could not load questions</p>
+        <p className="text-gray-600 text-xs">Please check your connection or try logging in again.</p>
       </div>
     );
   }
