@@ -98,7 +98,8 @@ export function useDownloads() {
     setProgress((p) => ({ ...p, [id]: 0 }));
 
     try {
-      const response = await fetch(lecture.audioUrl);
+      const proxyUrl = `/api/download?url=${encodeURIComponent(lecture.audioUrl)}`;
+      const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error("Fetch failed");
 
       const contentLength = response.headers.get("Content-Length");
