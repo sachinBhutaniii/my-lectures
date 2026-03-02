@@ -7,9 +7,13 @@ interface Props {
   lecture: LectureVideo;
   isActive: boolean;
   isFavourite?: boolean;
+  isDownloaded?: boolean;
+  downloadProgress?: number | null;
   onClick: () => void;
   onToggleFavourite?: (e: React.MouseEvent) => void;
   onAddToPlaylist?: () => void;
+  onDownload?: () => void;
+  onDeleteDownload?: () => void;
 }
 
 function formatDate(dateStr?: string) {
@@ -18,7 +22,7 @@ function formatDate(dateStr?: string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function LectureCard({ lecture, isActive, isFavourite, onClick, onToggleFavourite, onAddToPlaylist }: Props) {
+export default function LectureCard({ lecture, isActive, isFavourite, isDownloaded, downloadProgress, onClick, onToggleFavourite, onAddToPlaylist, onDownload, onDeleteDownload }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -75,6 +79,19 @@ export default function LectureCard({ lecture, isActive, isFavourite, onClick, o
               {lecture.title}
             </p>
             <div className="flex items-center gap-1 flex-shrink-0">
+              {/* Download state indicator */}
+              {downloadProgress != null && (
+                <div className="p-0.5">
+                  <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin block" />
+                </div>
+              )}
+              {isDownloaded && downloadProgress == null && (
+                <div className="p-0.5" title="Downloaded">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 text-green-500">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
               {/* Favourite toggle */}
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleFavourite?.(e); }}
@@ -115,6 +132,41 @@ export default function LectureCard({ lecture, isActive, isFavourite, onClick, o
                       </svg>
                       Add to Playlist
                     </button>
+                    {/* Download / downloading / remove download */}
+                    {downloadProgress != null ? (
+                      <div className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-500">
+                        <span className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                        Downloading {downloadProgress}%
+                      </div>
+                    ) : isDownloaded ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpen(false);
+                          onDeleteDownload?.();
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-3 text-sm text-red-400 hover:bg-white/10 transition-colors text-left"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                        Remove Download
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpen(false);
+                          onDownload?.();
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 transition-colors text-left"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-orange-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -23,6 +23,8 @@ import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import FlameIcon from "@/components/FlameIcon";
 import StreakPanel from "@/components/StreakPanel";
 import WisdomModal, { getWisdomForToday } from "@/components/WisdomModal";
+import DownloadsPanel from "@/components/DownloadsPanel";
+import { useDownloads } from "@/hooks/useDownloads";
 
 export default function Home() {
   const router = useRouter();
@@ -39,6 +41,8 @@ export default function Home() {
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistLecture | null>(null);
   const [showWisdom, setShowWisdom] = useState(false);
   const [showBhajansModal, setShowBhajansModal] = useState(false);
+  const [showDownloads, setShowDownloads] = useState(false);
+  const { downloads, isDownloaded, getDownloadProgress, downloadLecture, deleteDownload, getBlobUrl } = useDownloads();
   const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
 
   // Client-only: pick wisdom + auto-show once per session
@@ -160,7 +164,7 @@ export default function Home() {
       {showBhajansModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-0">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowBhajansModal(false)} />
-          <div className="relative w-full max-w-xl bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-10 shadow-2xl">
+          <div className="relative w-full max-w-xl bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-28 shadow-2xl">
             {/* Handle bar */}
             <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
             {/* Musical note emblem */}
@@ -199,6 +203,15 @@ export default function Home() {
         streakData={streakData}
       />
 
+      {/* ── Downloads Panel ── */}
+      <DownloadsPanel
+        open={showDownloads}
+        onClose={() => setShowDownloads(false)}
+        downloads={downloads}
+        onDelete={deleteDownload}
+        getBlobUrl={getBlobUrl}
+      />
+
       {/* ── Add to Playlist Modal ── */}
       <AddToPlaylistModal
         open={playlistTarget !== null}
@@ -232,18 +245,6 @@ export default function Home() {
           <span className="text-xl font-semibold tracking-wide">Home</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Placeholder avatar chips */}
-          <div className="flex items-center gap-1.5">
-            {["New", "AI"].map((label) => (
-              <div
-                key={label}
-                className="w-9 h-9 rounded-full border-2 border-orange-500 bg-[#2a1a08] flex items-center justify-center"
-              >
-                <span className="text-[9px] font-bold text-orange-400">{label}</span>
-              </div>
-            ))}
-          </div>
-
           {/* Streak / Flame button */}
           <button
             onClick={() => setShowStreak(true)}
@@ -262,11 +263,6 @@ export default function Home() {
             )}
           </button>
 
-          <button className="text-gray-400 ml-1">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
-              <path d="M12 6a2 2 0 110-4 2 2 0 010 4zM12 14a2 2 0 110-4 2 2 0 010 4zM12 22a2 2 0 110-4 2 2 0 010 4z" />
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -358,6 +354,8 @@ export default function Home() {
               lecture={lecture}
               isActive={false}
               isFavourite={isFavourite(lecture.id)}
+              isDownloaded={isDownloaded(lecture.id)}
+              downloadProgress={getDownloadProgress(lecture.id)}
               onClick={() => {
                 addToHistory(lecture);
                 router.push(`/${lecture.id}`);
@@ -373,6 +371,8 @@ export default function Home() {
                 speaker: lecture.speaker,
                 addedAt: Date.now(),
               })}
+              onDownload={() => downloadLecture(lecture)}
+              onDeleteDownload={() => deleteDownload(lecture.id)}
             />
           ))}
         </div>
@@ -385,6 +385,7 @@ export default function Home() {
           if (tab === "bhajans") { setShowBhajansModal(true); return; }
           if (tab === "jnana") { router.push("/jnana-yagya"); return; }
           if (tab === "sadhna") { router.push("/sadhana"); return; }
+          if (tab === "downloads") { setShowDownloads(true); return; }
           setActiveTab(tab);
         }}
       />
