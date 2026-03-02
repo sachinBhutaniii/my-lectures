@@ -142,21 +142,21 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       {/* Admin header */}
-      <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-gray-800">
+      <div className="flex items-center gap-2 px-4 pt-12 pb-4 border-b border-gray-800 min-w-0">
         <button onClick={() => router.push("/")} className="text-gray-400 hover:text-white">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
-        <div className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="w-7 h-7 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center flex-shrink-0">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5 text-orange-400">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
             </svg>
           </span>
-          <h1 className="text-white font-bold text-lg">Admin Panel</h1>
+          <h1 className="text-white font-bold text-lg truncate">Admin Panel</h1>
           {isParentAdmin && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 border border-amber-400/30 text-amber-300">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 border border-amber-400/30 text-amber-300 flex-shrink-0">
               Parent
             </span>
           )}
@@ -185,12 +185,12 @@ export default function AdminPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 px-5 pt-4 pb-0 border-b border-gray-800">
+      <div className="flex items-center gap-1 px-3 pt-4 pb-0 border-b border-gray-800 overflow-x-auto scrollbar-hide">
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap flex-shrink-0 ${
               activeTab === tab.id
                 ? "border-orange-500 text-orange-400"
                 : "border-transparent text-gray-500 hover:text-gray-300"
