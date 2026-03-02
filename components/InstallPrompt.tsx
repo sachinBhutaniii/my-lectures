@@ -83,10 +83,7 @@ export default function InstallPrompt() {
 
   return (
     <div style={containerStyle} className="pwa-install-banner">
-      <div style={textStyle}>
-        Install the app for quick access and offline support. (Offline support
-        coming soon!)
-      </div>
+      <div style={textStyle}>Install the app for quick access.</div>
       <div style={buttonsStyle}>
         <button onClick={onInstallClick} style={installBtnStyle}>
           Install
@@ -131,28 +128,33 @@ export default function InstallPrompt() {
 
 const iosModalBackdrop: React.CSSProperties = {
   position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.45)",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  top: 0,
+  background: "rgba(0,0,0,0.25)",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-end",
   justifyContent: "center",
   zIndex: 10000,
+  padding: "12px",
 };
 
 const iosModal: React.CSSProperties = {
   background: "#111",
   color: "#fff",
-  padding: "16px",
-  borderRadius: 10,
-  maxWidth: "92%",
-  width: 360,
-  boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+  padding: "14px",
+  borderRadius: "12px 12px 8px 8px",
+  maxWidth: "920px",
+  width: "min(720px, calc(100% - 32px))",
+  boxShadow: "0 -8px 24px rgba(0,0,0,0.5)",
+  transform: "translateY(0)",
 };
 
 const containerStyle: React.CSSProperties = {
   position: "fixed",
   left: "50%",
-  bottom: 20,
+  bottom: "calc(12px + env(safe-area-inset-bottom))",
   transform: "translateX(-50%)",
   background: "#111",
   color: "#fff",
