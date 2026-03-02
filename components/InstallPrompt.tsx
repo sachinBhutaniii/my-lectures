@@ -21,13 +21,10 @@ export default function InstallPrompt() {
     const ios = /iphone|ipad|ipod/.test(ua) && !isInStandaloneMode;
     setIsIos(ios);
 
-    // always show the banner on first render, regardless of platform
-    setVisible(true);
-
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // banner is already visible but we keep it just in case
+      // browser is signalling installability; ensure banner is visible
       setVisible(true);
     };
 
@@ -35,6 +32,9 @@ export default function InstallPrompt() {
       "beforeinstallprompt",
       onBeforeInstall as EventListener,
     );
+
+    // always show banner on first render, regardless of platform/event
+    setVisible(true);
 
     return () =>
       window.removeEventListener(
@@ -68,8 +68,12 @@ export default function InstallPrompt() {
         "To install on iOS: tap the Share button in Safari (the square with an arrow), then choose 'Add to Home Screen'.",
       );
     } else {
-      // Fallback: open manifest url
-      window.open("/manifest.json", "_blank");
+      // Desktop or unsupported environment - provide manual instructions
+      alert(
+        "Installation isn't automatic on this browser. " +
+          "Look for the install option in your browser's menu (e.g. " +
+          "Chrome/Edge 'Install app' or the plus icon in the address bar).",
+      );
     }
 
     markInstalled();
