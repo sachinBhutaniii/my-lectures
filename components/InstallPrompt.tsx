@@ -1,18 +1,18 @@
 "use client";
 import React, { useEffect, useState } from "react";
 
-const STORAGE_KEY = "pwa-install-shown";
+// track whether the install flow was triggered at least once
+const INSTALLED_KEY = "pwa-installed";
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [visible, setVisible] = useState(false);
   const [isIos, setIsIos] = useState(false);
-  const [showIosInstructions, setShowIosInstructions] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const shown = localStorage.getItem(STORAGE_KEY);
-    if (shown) return;
+    // don't show again if the user has previously tapped install
+    if (localStorage.getItem(INSTALLED_KEY)) return;
 
     const ua = window.navigator.userAgent.toLowerCase();
     const isInStandaloneMode =
@@ -21,9 +21,13 @@ export default function InstallPrompt() {
     const ios = /iphone|ipad|ipod/.test(ua) && !isInStandaloneMode;
     setIsIos(ios);
 
+    // always show the banner on first render, regardless of platform
+    setVisible(true);
+
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      // banner is already visible but we keep it just in case
       setVisible(true);
     };
 
@@ -32,9 +36,6 @@ export default function InstallPrompt() {
       onBeforeInstall as EventListener,
     );
 
-    // If iOS (no beforeinstallprompt), show the banner once on first visit
-    if (ios) setVisible(true);
-
     return () =>
       window.removeEventListener(
         "beforeinstallprompt",
@@ -42,9 +43,9 @@ export default function InstallPrompt() {
       );
   }, []);
 
-  const markSeen = () => {
+  const markInstalled = () => {
     try {
-      localStorage.setItem(STORAGE_KEY, "1");
+      localStorage.setItem(INSTALLED_KEY, "1");
     } catch {}
   };
 
@@ -62,20 +63,22 @@ export default function InstallPrompt() {
         /* ignore */
       }
     } else if (isIos) {
-      // Show an inline instruction modal for iOS users instead of alert
-      setShowIosInstructions(true);
+      // For iOS we can't prompt programmatically; show a simple alert like before
+      alert(
+        "To install on iOS: tap the Share button in Safari (the square with an arrow), then choose 'Add to Home Screen'.",
+      );
     } else {
       // Fallback: open manifest url
       window.open("/manifest.json", "_blank");
     }
 
-    markSeen();
+    markInstalled();
     setVisible(false);
     setDeferredPrompt(null);
   };
 
   const onDismiss = () => {
-    markSeen();
+    // don't treat dismissal as installation; just hide until next full load
     setVisible(false);
   };
 
@@ -92,64 +95,9 @@ export default function InstallPrompt() {
           Dismiss
         </button>
       </div>
-      {showIosInstructions && (
-        <div
-          style={iosModalBackdrop}
-          onClick={() => {
-            setShowIosInstructions(false);
-            markSeen();
-          }}
-        >
-          <div style={iosModal} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: 0, marginBottom: 8 }}>Install on iOS</h3>
-            <p style={{ margin: 0, marginBottom: 12, fontSize: 14 }}>
-              Tap the Share button in Safari (the square with an arrow), then
-              choose <strong>Add to Home Screen</strong>.
-            </p>
-            <div
-              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
-            >
-              <button
-                onClick={() => {
-                  setShowIosInstructions(false);
-                  markSeen();
-                }}
-                style={installBtnStyle}
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
-const iosModalBackdrop: React.CSSProperties = {
-  position: "fixed",
-  left: 0,
-  right: 0,
-  bottom: 0,
-  top: 0,
-  background: "rgba(0,0,0,0.25)",
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "center",
-  zIndex: 10000,
-  padding: "12px",
-};
-
-const iosModal: React.CSSProperties = {
-  background: "#111",
-  color: "#fff",
-  padding: "14px",
-  borderRadius: "12px 12px 8px 8px",
-  maxWidth: "920px",
-  width: "min(720px, calc(100% - 32px))",
-  boxShadow: "0 -8px 24px rgba(0,0,0,0.5)",
-  transform: "translateY(0)",
-};
 
 const containerStyle: React.CSSProperties = {
   position: "fixed",
