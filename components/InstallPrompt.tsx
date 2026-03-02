@@ -83,7 +83,8 @@ export default function InstallPrompt() {
   return (
     <div style={containerStyle} className="pwa-install-banner">
       <div style={textStyle}>
-        Install the app for quick access and offline support.
+        Install the app for quick access and offline support. (Offline support
+        coming soon!)
       </div>
       <div style={buttonsStyle}>
         <button onClick={onInstallClick} style={installBtnStyle}>
