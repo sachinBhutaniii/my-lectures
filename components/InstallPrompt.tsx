@@ -1,8 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 
-// track whether the install flow was triggered at least once
-const INSTALLED_KEY = "pwa-installed";
+const STORAGE_KEY = "pwa-install-shown";
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -11,8 +10,8 @@ export default function InstallPrompt() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // don't show again if the user has previously tapped install
-    if (localStorage.getItem(INSTALLED_KEY)) return;
+    const shown = localStorage.getItem(STORAGE_KEY);
+    if (shown) return;
 
     const ua = window.navigator.userAgent.toLowerCase();
     const isInStandaloneMode =
@@ -24,7 +23,6 @@ export default function InstallPrompt() {
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // browser is signalling installability; ensure banner is visible
       setVisible(true);
     };
 
@@ -33,8 +31,8 @@ export default function InstallPrompt() {
       onBeforeInstall as EventListener,
     );
 
-    // always show banner on first render, regardless of platform/event
-    setVisible(true);
+    // If iOS (no beforeinstallprompt), show the banner once on first visit
+    if (ios) setVisible(true);
 
     return () =>
       window.removeEventListener(
@@ -43,9 +41,9 @@ export default function InstallPrompt() {
       );
   }, []);
 
-  const markInstalled = () => {
+  const markSeen = () => {
     try {
-      localStorage.setItem(INSTALLED_KEY, "1");
+      localStorage.setItem(STORAGE_KEY, "1");
     } catch {}
   };
 
@@ -68,21 +66,17 @@ export default function InstallPrompt() {
         "To install on iOS: tap the Share button in Safari (the square with an arrow), then choose 'Add to Home Screen'.",
       );
     } else {
-      // Desktop or unsupported environment - provide manual instructions
-      alert(
-        "Installation isn't automatic on this browser. " +
-          "Look for the install option in your browser's menu (e.g. " +
-          "Chrome/Edge 'Install app' or the plus icon in the address bar).",
-      );
+      // Fallback: open manifest url
+      window.open("/manifest.json", "_blank");
     }
 
-    markInstalled();
+    markSeen();
     setVisible(false);
     setDeferredPrompt(null);
   };
 
   const onDismiss = () => {
-    // don't treat dismissal as installation; just hide until next full load
+    markSeen();
     setVisible(false);
   };
 
