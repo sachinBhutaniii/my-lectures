@@ -5,6 +5,7 @@ const ASSETS = [
   "/manifest.json",
   "/icons/icon-192.svg",
   "/icons/icon-512.svg",
+  "/bdds.jpg",
 ];
 
 self.addEventListener("install", (event) => {
@@ -57,16 +58,14 @@ self.addEventListener("fetch", (event) => {
           return networkResponse;
         })
         .catch(() =>
-          caches
-            .match(event.request)
-            .then(
-              (cached) =>
-                cached ||
-                new Response(JSON.stringify({ error: "offline" }), {
-                  status: 503,
-                  headers: { "Content-Type": "application/json" },
-                }),
-            ),
+          caches.match(event.request).then(
+            (cached) =>
+              cached ||
+              new Response(JSON.stringify({ error: "offline" }), {
+                status: 503,
+                headers: { "Content-Type": "application/json" },
+              }),
+          ),
         ),
     );
     return;

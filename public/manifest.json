@@ -1,21 +1,21 @@
 {
   "name": "BDD Swami Lectures",
-  "short_name": "Lectures",
+  "short_name": "BDD Swami Lectures",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1208",
   "theme_color": "#1a1208",
   "icons": [
     {
-      "src": "/icons/icon-192.svg",
+      "src": "/bdds.jpg",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.svg",
+      "src": "/bdds.jpg",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/jpeg",
       "purpose": "any"
     }
   ]

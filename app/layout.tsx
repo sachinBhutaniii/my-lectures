@@ -33,8 +33,8 @@ export default function RootLayout({
       <head>
         <meta name="theme-color" content="#1a1208" />
         <link rel="manifest" href="/manifest.json" />
-        <link rel="icon" href="/icons/icon-192.svg" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+        <link rel="icon" href="/bdds.jpg" />
+        <link rel="apple-touch-icon" href="/bdds.jpg" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#1a1208] text-white`}
