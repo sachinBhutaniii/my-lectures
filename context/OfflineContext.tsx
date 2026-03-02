@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 
 interface OfflineContextType {
   isOnline: boolean;
@@ -11,38 +11,29 @@ const OfflineContext = createContext<OfflineContextType | undefined>(undefined);
 export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [hasServiceWorker, setHasServiceWorker] = useState(false);
+  const offlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Set initial state
     setIsOnline(navigator.onLine);
     setHasServiceWorker("serviceWorker" in navigator);
 
     const handleOnline = () => {
-      console.log("[Offline] Connection restored");
+      if (offlineTimer.current) clearTimeout(offlineTimer.current);
       setIsOnline(true);
     };
 
+    // Only mark offline after 5 s of sustained disconnection to avoid false positives
     const handleOffline = () => {
-      console.log("[Offline] Connection lost");
-      setIsOnline(false);
+      offlineTimer.current = setTimeout(() => setIsOnline(false), 5000);
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Verify connectivity with periodic ping
-    const connectivityCheck = setInterval(() => {
-      if (navigator.onLine) {
-        fetch("/manifest.json", { method: "HEAD", cache: "no-cache" })
-          .then(() => setIsOnline(true))
-          .catch(() => setIsOnline(false));
-      }
-    }, 30000); // Check every 30 seconds
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      clearInterval(connectivityCheck);
+      if (offlineTimer.current) clearTimeout(offlineTimer.current);
     };
   }, []);
 

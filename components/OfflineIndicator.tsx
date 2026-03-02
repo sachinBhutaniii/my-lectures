@@ -7,7 +7,7 @@ export default function OfflineIndicator() {
   if (isOnline || !hasServiceWorker) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-3 flex items-center justify-between animate-pulse">
+    <div className="fixed top-0 left-0 right-0 z-50 bg-red-700 text-white px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 bg-red-900 rounded-full"></div>
         <span className="text-sm font-medium">
