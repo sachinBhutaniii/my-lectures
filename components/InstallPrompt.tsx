@@ -7,6 +7,7 @@ export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [visible, setVisible] = useState(false);
   const [isIos, setIsIos] = useState(false);
+  const [showIosInstructions, setShowIosInstructions] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -61,8 +62,8 @@ export default function InstallPrompt() {
         /* ignore */
       }
     } else if (isIos) {
-      // Simple iOS instruction fallback
-      alert("To install: open Safari menu and choose 'Add to Home Screen'.");
+      // Show an inline instruction modal for iOS users instead of alert
+      setShowIosInstructions(true);
     } else {
       // Fallback: open manifest url
       window.open("/manifest.json", "_blank");
@@ -94,9 +95,59 @@ export default function InstallPrompt() {
           Dismiss
         </button>
       </div>
+      {showIosInstructions && (
+        <div
+          style={iosModalBackdrop}
+          onClick={() => {
+            setShowIosInstructions(false);
+            markSeen();
+          }}
+        >
+          <div style={iosModal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0, marginBottom: 8 }}>Install on iOS</h3>
+            <p style={{ margin: 0, marginBottom: 12, fontSize: 14 }}>
+              Tap the Share button in Safari (the square with an arrow), then
+              choose <strong>Add to Home Screen</strong>.
+            </p>
+            <div
+              style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
+            >
+              <button
+                onClick={() => {
+                  setShowIosInstructions(false);
+                  markSeen();
+                }}
+                style={installBtnStyle}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const iosModalBackdrop: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 10000,
+};
+
+const iosModal: React.CSSProperties = {
+  background: "#111",
+  color: "#fff",
+  padding: "16px",
+  borderRadius: 10,
+  maxWidth: "92%",
+  width: 360,
+  boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+};
 
 const containerStyle: React.CSSProperties = {
   position: "fixed",

@@ -33,6 +33,46 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  const requestUrl = new URL(event.request.url);
+  const isSameOrigin = requestUrl.origin === self.location.origin;
+
+  // Heuristic for API/JSON requests: same-origin and path includes '/api' or accepts JSON
+  const acceptsJson = event.request.headers
+    .get("accept")
+    ?.includes("application/json");
+  const isApiRequest =
+    isSameOrigin && (requestUrl.pathname.startsWith("/api") || acceptsJson);
+
+  if (isApiRequest) {
+    // Network-first for API requests: try network, update cache, fallback to cache on failure
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          // store a clone in runtime cache
+          const cloned = networkResponse.clone();
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, cloned));
+          return networkResponse;
+        })
+        .catch(() =>
+          caches
+            .match(event.request)
+            .then(
+              (cached) =>
+                cached ||
+                new Response(JSON.stringify({ error: "offline" }), {
+                  status: 503,
+                  headers: { "Content-Type": "application/json" },
+                }),
+            ),
+        ),
+    );
+    return;
+  }
+
+  // Default: try cache first, then network, then offline fallback
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
