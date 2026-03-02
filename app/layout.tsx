@@ -5,6 +5,8 @@ import { AuthProvider } from "@/context/AuthContext";
 import { PlayerProvider } from "@/context/PlayerContext";
 import MiniPlayerBar from "@/components/MiniPlayerBar";
 import TripleTapFullscreen from "@/components/TripleTapFullscreen";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +30,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="theme-color" content="#1a1208" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/icons/icon-192.svg" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#1a1208] text-white`}
       >
@@ -36,6 +44,8 @@ export default function RootLayout({
             <TripleTapFullscreen>
               {children}
               <MiniPlayerBar />
+              <ServiceWorkerRegister />
+              <InstallPrompt />
             </TripleTapFullscreen>
           </PlayerProvider>
         </AuthProvider>

@@ -2,7 +2,8 @@
 
 /* ── Flame icon animation ── */
 @keyframes flame-pulse {
-  0%, 100% {
+  0%,
+  100% {
     filter: drop-shadow(0 0 4px #f97316) drop-shadow(0 0 8px #fb923c);
     transform: scale(1);
   }
@@ -18,8 +19,13 @@
 }
 
 /* Hide scrollbar on horizontal scroll rows */
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 /* Progress bar scrubber thumb */
 input[type="range"] {
@@ -35,7 +41,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: white;
   cursor: pointer;
   border: none;
-  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }
 input[type="range"]::-moz-range-thumb {
   width: 14px;
@@ -70,3 +76,16 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 } */
+
+/* PWA install banner adjustments */
+.pwa-install-banner {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 520px) {
+  .pwa-install-banner {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: calc(100% - 28px) !important;
+  }
+}
