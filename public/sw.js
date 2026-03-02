@@ -1,4 +1,7 @@
-const CACHE_NAME = "my-lectures-pwa-v1";
+const CACHE_VERSION = "1";
+const CACHE_NAME = `my-lectures-pwa-v${CACHE_VERSION}-${new Date().toISOString().split("T")[0]}`;
+const STATIC_CACHE = `my-lectures-static-v${CACHE_VERSION}`;
+
 const ASSETS = [
   "/",
   "/offline.html",
@@ -9,26 +12,38 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
+  console.log("[SW] Installing service worker with cache:", CACHE_NAME);
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
+      .then((cache) => {
+        console.log("[SW] Caching offline assets");
+        return cache.addAll(ASSETS);
+      })
       .then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener("activate", (event) => {
+  console.log("[SW] Activating service worker");
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(
+      .then((keys) => {
+        return Promise.all(
           keys.map((key) => {
-            if (key !== CACHE_NAME) return caches.delete(key);
+            // Delete caches that don't match current version
+            if (!key.includes(`v${CACHE_VERSION}`)) {
+              console.log("[SW] Deleting old cache:", key);
+              return caches.delete(key);
+            }
           }),
-        ),
-      )
-      .then(() => self.clients.claim()),
+        );
+      })
+      .then(() => {
+        console.log("[SW] Claiming clients");
+        return self.clients.claim();
+      }),
   );
 });
 
@@ -37,6 +52,28 @@ self.addEventListener("fetch", (event) => {
 
   const requestUrl = new URL(event.request.url);
   const isSameOrigin = requestUrl.origin === self.location.origin;
+
+  // Next.js static assets with hash - should almost never change
+  if (requestUrl.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request)
+          .then((res) => {
+            // Clone and cache immutable assets
+            if (res.status === 200) {
+              const cloned = res.clone();
+              caches.open(STATIC_CACHE).then((cache) => {
+                cache.put(event.request, cloned);
+              });
+            }
+            return res;
+          })
+          .catch(() => caches.match("/offline.html"));
+      }),
+    );
+    return;
+  }
 
   // Heuristic for API/JSON requests: same-origin and path includes '/api' or accepts JSON
   const acceptsJson = event.request.headers
@@ -77,12 +114,37 @@ self.addEventListener("fetch", (event) => {
       if (cached) return cached;
       return fetch(event.request)
         .then((res) => {
+          // Only cache successful responses
+          if (res.status !== 200) return res;
+
           return caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, res.clone());
             return res;
           });
         })
-        .catch(() => caches.match("/offline.html"));
+        .catch(() => {
+          console.log(
+            "[SW] Offline - serving offline page for:",
+            requestUrl.pathname,
+          );
+          return caches.match("/offline.html");
+        });
     }),
   );
+});
+
+// Handle messages from clients
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    console.log("[SW] Client requested skip waiting");
+    self.skipWaiting();
+  }
+
+  if (event.data && event.data.type === "GET_STATUS") {
+    event.ports[0].postMessage({
+      type: "SW_STATUS",
+      version: CACHE_VERSION,
+      caches: { static: STATIC_CACHE, runtime: CACHE_NAME },
+    });
+  }
 });

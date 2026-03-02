@@ -3,10 +3,12 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { PlayerProvider } from "@/context/PlayerContext";
+import { OfflineProvider } from "@/context/OfflineContext";
 import MiniPlayerBar from "@/components/MiniPlayerBar";
 import TripleTapFullscreen from "@/components/TripleTapFullscreen";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import InstallPrompt from "@/components/InstallPrompt";
+import OfflineIndicator from "@/components/OfflineIndicator";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,16 +41,19 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#1a1208] text-white`}
       >
-        <AuthProvider>
-          <PlayerProvider>
-            <TripleTapFullscreen>
-              {children}
-              <MiniPlayerBar />
-              <ServiceWorkerRegister />
-              <InstallPrompt />
-            </TripleTapFullscreen>
-          </PlayerProvider>
-        </AuthProvider>
+        <OfflineProvider>
+          <AuthProvider>
+            <PlayerProvider>
+              <TripleTapFullscreen>
+                <OfflineIndicator />
+                {children}
+                <MiniPlayerBar />
+                <ServiceWorkerRegister />
+                <InstallPrompt />
+              </TripleTapFullscreen>
+            </PlayerProvider>
+          </AuthProvider>
+        </OfflineProvider>
       </body>
     </html>
   );
