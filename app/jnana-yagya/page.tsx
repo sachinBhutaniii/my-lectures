@@ -599,7 +599,7 @@ export default function JnanaYagyaPage() {
   // ═══════════════════════════════════════════════════════════════════════════
   if (view === "courses") {
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
         {showSplash && <JnanaYagyaSplash onDismiss={() => setShowSplash(false)} />}
 
         <style>{`
@@ -711,7 +711,7 @@ export default function JnanaYagyaPage() {
     }).length;
 
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
         <PageHeader title={selectedCourse.title} subtitle="Select a chapter" onBack={() => setView("courses")} />
 
         {!sectionsLoading && sections.length > 0 && (
@@ -806,7 +806,7 @@ export default function JnanaYagyaPage() {
   // ═══════════════════════════════════════════════════════════════════════════
   if (view === "quiz-levels" && selectedSection) {
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
         <PageHeader title={selectedSection.title} subtitle="Choose a level" onBack={() => setView("sections")} />
         <div className="px-4 pt-5">
           {questionsLoading && <Spinner />}
@@ -892,7 +892,7 @@ export default function JnanaYagyaPage() {
     const mins = Math.floor(totalTime / 60), secs = totalTime % 60;
 
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
         <PageHeader title={levelName} subtitle={selectedSection.title} onBack={() => setView("quiz-levels")} />
         <div className="px-5 pt-6 flex flex-col gap-5">
           <div className="grid grid-cols-3 gap-2">
@@ -953,7 +953,7 @@ export default function JnanaYagyaPage() {
       : options;
 
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-6 flex flex-col">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-6 flex flex-col">
         {/* Quiz header */}
         <div className="px-4 pt-10 pb-3 border-b border-amber-900/20">
           <div className="flex items-center justify-between mb-2">
@@ -1121,15 +1121,15 @@ export default function JnanaYagyaPage() {
     const nextLvl     = !isLastLevel ? computedLevels[selectedLevelIdx + 1] : null;
 
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
-        <div className="px-4 pt-12 pb-4 border-b border-amber-900/30">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
+        <div className="px-4 pt-12 pb-4 border-b border-amber-900/30 max-w-3xl mx-auto w-full">
           <p className="text-amber-700 text-[10px] tracking-widest uppercase text-center mb-1">
             {getLevelName(selectedLevelIdx, computedLevels.length)} — Results
           </p>
           <h1 className="text-white font-bold text-lg text-center">{selectedSection.title}</h1>
         </div>
 
-        <div className="px-5 pt-5 flex flex-col gap-4">
+        <div className="px-5 pt-5 flex flex-col gap-4 max-w-3xl mx-auto w-full">
           {/* Score card */}
           <div className={`rounded-2xl border px-6 py-5 text-center ${passed ? "border-amber-500/30 bg-gradient-to-br from-amber-900/20 to-[#1c1300]" : "border-red-500/20 bg-red-900/10"}`}>
             <div className="text-4xl font-black mb-1" style={{ color: passed ? "#fbbf24" : "#ef4444" }}>
@@ -1250,7 +1250,7 @@ export default function JnanaYagyaPage() {
     const improvement   = prevLevelResult ? combinedScore - prevLevelResult.score : null;
 
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
         <div className="px-4 pt-12 pb-4 border-b border-amber-900/30">
           <p className="text-amber-700 text-[10px] tracking-widest uppercase text-center mb-1">Re-attempt Results</p>
           <h1 className="text-white font-bold text-lg text-center">{selectedSection.title}</h1>
@@ -1331,7 +1331,7 @@ export default function JnanaYagyaPage() {
     const giftMsg   = GURUDEV_MESSAGES[giftIdx.current] ?? GURUDEV_MESSAGES[0];
 
     return (
-      <div className="min-h-screen bg-[#1a1208] max-w-md mx-auto pb-24">
+      <div className="min-h-screen bg-[#1a1208] w-full max-w-4xl xl:max-w-6xl mx-auto pb-24">
         <div className="px-4 pt-10 pb-4 flex items-center gap-3 border-b border-amber-900/30">
           <button onClick={() => setView("sections")} className="text-gray-400 hover:text-white p-1"><ChevronLeft /></button>
           <p className="text-amber-700 text-[10px] tracking-widest uppercase">Course Certificate</p>

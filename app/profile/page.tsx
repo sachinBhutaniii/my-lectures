@@ -261,7 +261,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white max-w-md mx-auto pb-16">
+    <div className="min-h-screen bg-[#0a0a0a] text-white w-full max-w-4xl xl:max-w-6xl mx-auto pb-16">
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 pt-12 pb-4">
         <button onClick={() => router.back()} className="text-gray-300 p-1">

@@ -143,7 +143,7 @@ const AdminVideoList = () => {
           <div className="flex-1 bg-black/60 backdrop-blur-sm" onClick={closePanel} />
 
           {/* Panel */}
-          <div className="w-full max-w-md bg-[#0d0d0d] border-l border-gray-800 flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-200">
+          <div className="w-full max-w-2xl bg-[#0d0d0d] border-l border-gray-800 flex flex-col h-full overflow-hidden animate-in slide-in-from-right duration-200">
             {/* Panel header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-800 flex-shrink-0">
               <button onClick={closePanel} className="text-gray-500 hover:text-gray-200 transition-colors">

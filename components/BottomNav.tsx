@@ -54,8 +54,8 @@ const tabs = [
 
 export default function BottomNav({ activeTab, onTabChange }: Props) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#130d04] border-t border-gray-800 z-50">
-      <div className="flex">
+    <div className="fixed inset-x-0 bottom-0 bg-[#130d04] border-t border-gray-800 z-50">
+      <div className="mx-auto w-full max-w-4xl xl:max-w-6xl flex">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
           return (

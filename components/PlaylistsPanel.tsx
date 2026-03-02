@@ -183,7 +183,7 @@ export default function PlaylistsPanel({ open, playlists, onClose, onDelete, onR
 
       {/* Panel */}
       <div
-        className={`fixed inset-y-0 right-0 z-50 w-full max-w-md bg-[#0d0d0d] flex flex-col
+        className={`fixed inset-y-0 right-0 z-50 w-full max-w-4xl xl:max-w-6xl bg-[#0d0d0d] flex flex-col
           transition-transform duration-300 ease-in-out
           ${open ? "translate-x-0" : "translate-x-full"}`}
       >

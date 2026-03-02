@@ -24,7 +24,7 @@ export default function SadhanaPage() {
   }
 
   return (
-    <div className="h-screen bg-black text-white max-w-md mx-auto flex flex-col overflow-hidden">
+    <div className="h-screen bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-3 flex-shrink-0">
         <button

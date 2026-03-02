@@ -109,7 +109,7 @@ export default function Home() {
   }, [filtered, sortAsc]);
 
   return (
-    <div className="min-h-screen bg-[#1a1208] text-white max-w-md mx-auto relative">
+    <div className="min-h-screen bg-[#1a1208] text-white w-full max-w-4xl xl:max-w-6xl mx-auto relative">
       {/* ── Wisdom of the Day ── */}
       <WisdomModal open={showWisdom} onClose={() => setShowWisdom(false)} />
 
@@ -160,7 +160,7 @@ export default function Home() {
       {showBhajansModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-0">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowBhajansModal(false)} />
-          <div className="relative w-full max-w-md bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-10 shadow-2xl">
+          <div className="relative w-full max-w-xl bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-10 shadow-2xl">
             {/* Handle bar */}
             <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
             {/* Musical note emblem */}

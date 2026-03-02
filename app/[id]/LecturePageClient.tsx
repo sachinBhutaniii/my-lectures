@@ -74,7 +74,7 @@ export default function LecturePage() {
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
 
   return (
-    <div className="h-screen bg-black text-white max-w-md mx-auto flex flex-col overflow-hidden">
+    <div className="h-screen bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden">
       {/* ── Top header ── */}
       <div className={`flex items-center px-4 gap-3 flex-shrink-0 transition-all duration-300 ${readingMode ? "pt-3 pb-2" : "pt-5 pb-3"}`}>
         {/* Back / minimize */}
