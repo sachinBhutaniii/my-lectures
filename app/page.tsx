@@ -248,16 +248,20 @@ export default function Home() {
           {/* Streak / Flame button */}
           <button
             onClick={() => setShowStreak(true)}
-            className="relative flex items-center gap-1 ml-1"
             title="View streak"
+            className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-95 ${
+              streakData.currentStreak > 0 || streakData.listenedToday
+                ? "bg-orange-500/15 border border-orange-500/40"
+                : "bg-gray-800/60 border border-gray-700"
+            }`}
           >
             <FlameIcon
-              size={26}
+              size={22}
               lit={streakData.currentStreak > 0 || streakData.listenedToday}
               animated
             />
             {streakData.currentStreak > 0 && (
-              <span className="text-orange-400 text-xs font-bold leading-none">
+              <span className="absolute -bottom-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
                 {streakData.currentStreak}
               </span>
             )}
