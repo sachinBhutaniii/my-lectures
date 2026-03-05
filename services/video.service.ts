@@ -62,7 +62,7 @@ export interface UserSearchResult {
 export const searchUsers = async (q?: string): Promise<UserSearchResult[]> => {
   const params = q ? `?q=${encodeURIComponent(q)}` : "";
   const res = await apiClient.get<UserSearchResult[]>(`/api/users/search${params}`);
-  return res.data;
+  return Array.isArray(res.data) ? res.data : [];
 };
 
 export const updateUserRole = async (userId: number, role: string): Promise<UserSearchResult> => {
@@ -189,7 +189,7 @@ export const getSubmittedReviews = async (): Promise<TranscriptReviewItem[]> => 
 export const getProofreaders = async (localeCode?: string): Promise<UserSearchResult[]> => {
   const params = localeCode ? `?localeCode=${encodeURIComponent(localeCode)}` : "";
   const res = await apiClient.get<UserSearchResult[]>(`/api/users/proofreaders${params}`);
-  return res.data;
+  return Array.isArray(res.data) ? res.data : [];
 };
 
 export const getUserLocales = async (userId: number): Promise<LocaleInfo[]> => {

@@ -53,6 +53,11 @@ self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   const isSameOrigin = requestUrl.origin === self.location.origin;
 
+  // Never intercept cross-origin requests (e.g. Railway backend API).
+  // Let the browser handle them directly so CORS errors propagate correctly
+  // instead of being swallowed and replaced with the offline HTML page.
+  if (!isSameOrigin) return;
+
   // Next.js static assets with hash - should almost never change
   if (requestUrl.pathname.startsWith("/_next/static/")) {
     event.respondWith(

@@ -85,7 +85,7 @@ export const getMyVolunteerRequests = async (): Promise<VolunteerRequestItem[]> 
 
 export const getAllVolunteerRequests = async (): Promise<VolunteerRequestItem[]> => {
   const res = await apiClient.get<VolunteerRequestItem[]>("/api/volunteer/requests");
-  return res.data;
+  return Array.isArray(res.data) ? res.data : [];
 };
 
 export const approveVolunteerRequest = async (
