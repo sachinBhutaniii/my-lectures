@@ -142,34 +142,34 @@ export default function TranscriptReviewPanel() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-white">Transcript Review</h2>
-          <p className="text-xs text-gray-500 mt-1">
-            {isParentAdmin
-              ? "Assign proofreaders, approve transcripts, and deploy."
-              : "Assign proofreaders and give Level 1 approval."}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-white">Transcript Review</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              {isParentAdmin
+                ? "Assign proofreaders, approve transcripts, and deploy."
+                : "Assign proofreaders and give Level 1 approval."}
+            </p>
+          </div>
           {/* Manage Languages button */}
           <button
             onClick={() => setShowAddLang(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 transition-colors flex-shrink-0"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
               <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
             </svg>
             Manage Languages
           </button>
-          {/* Legend */}
-          <div className="flex items-center gap-2.5 text-[10px] text-gray-500 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-gray-700 bg-gray-800" />—</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-orange-400/40 bg-orange-400/10" />L1</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-orange-600/50 bg-orange-600/20" />L2</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-blue-500/40 bg-blue-500/15" />Submitted</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-green-500/40 bg-green-500/15" />Deployed</span>
-          </div>
+        </div>
+        {/* Legend — own row, wraps naturally */}
+        <div className="flex items-center gap-3 text-[10px] text-gray-500 flex-wrap">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-gray-700 bg-gray-800" />Unassigned</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-orange-400/40 bg-orange-400/10" />L1</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-orange-600/50 bg-orange-600/20" />L2</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-blue-500/40 bg-blue-500/15" />Submitted</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-green-500/40 bg-green-500/15" />Deployed</span>
         </div>
       </div>
 
