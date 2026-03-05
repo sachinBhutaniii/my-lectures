@@ -112,7 +112,7 @@ export default function PlayerBar({ lecture, onPrev, onNext, onAddToPlaylist }: 
           {showMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 bottom-10 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl min-w-[180px] overflow-hidden">
+              <div className="absolute right-0 bottom-full mb-2 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl min-w-[180px] overflow-hidden">
                 <button
                   onClick={() => { downloadLecture(lecture); setShowMenu(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-800 transition-colors text-left"
