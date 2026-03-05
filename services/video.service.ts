@@ -65,6 +65,12 @@ export const searchUsers = async (q?: string): Promise<UserSearchResult[]> => {
   return Array.isArray(res.data) ? res.data : [];
 };
 
+export const searchUsersPublic = async (q: string): Promise<UserSearchResult[]> => {
+  if (q.trim().length < 2) return [];
+  const res = await apiClient.get<UserSearchResult[]>(`/api/users/search-public?q=${encodeURIComponent(q.trim())}`);
+  return Array.isArray(res.data) ? res.data : [];
+};
+
 export const updateUserRole = async (userId: number, role: string): Promise<UserSearchResult> => {
   const res = await apiClient.put<UserSearchResult>(`/api/users/${userId}/role`, { role });
   return res.data;

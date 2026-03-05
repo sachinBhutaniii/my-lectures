@@ -55,6 +55,39 @@ export const submitSadhanaEntry = async (
   return res.data;
 };
 
+// ── Mentor linking ─────────────────────────────────────────────────────────
+
+export interface MentorUser {
+  id: number;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  role: string;
+}
+
+export const getMyMentors = async (): Promise<MentorUser[]> => {
+  const res = await apiClient.get<MentorUser[]>("/api/sadhana/mentors");
+  return res.data;
+};
+
+export const linkMentor = async (mentorUserId: number): Promise<void> => {
+  await apiClient.post("/api/sadhana/mentors", { mentorUserId });
+};
+
+export const unlinkMentor = async (mentorUserId: number): Promise<void> => {
+  await apiClient.delete(`/api/sadhana/mentors/${mentorUserId}`);
+};
+
+export const getMyMentees = async (): Promise<MentorUser[]> => {
+  const res = await apiClient.get<MentorUser[]>("/api/sadhana/mentees");
+  return res.data;
+};
+
+export const getMenteeEntries = async (userId: number): Promise<SadhanaEntryResponse[]> => {
+  const res = await apiClient.get<SadhanaEntryResponse[]>(`/api/sadhana/mentees/${userId}/entries`);
+  return res.data;
+};
+
 // ── Admin ──────────────────────────────────────────────────────────────────
 
 export const adminGetQuestions = async (): Promise<SadhanaQuestion[]> => {
