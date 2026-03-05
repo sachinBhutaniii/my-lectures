@@ -129,6 +129,7 @@ export default function Home() {
         onFavourites={() => { setMenuOpen(false); setShowFavourites(true); }}
         onPlaylists={() => { setMenuOpen(false); setShowPlaylists(true); }}
         onProfile={() => { setMenuOpen(false); router.push("/profile"); }}
+        onStatistics={() => { setMenuOpen(false); setShowStreak(true); }}
       />
 
       {/* ── Playback History Panel ── */}

@@ -12,6 +12,7 @@ interface Props {
   onFavourites: () => void;
   onPlaylists: () => void;
   onProfile: () => void;
+  onStatistics: () => void;
 }
 
 // ── Thin icon wrappers ──────────────────────────────────────────────────────
@@ -178,11 +179,33 @@ function formatNow() {
   });
 }
 
-export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile }: Props) {
+export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile, onStatistics }: Props) {
   const { user, logout, isAdmin, isProofreader } = useAuth();
   const router = useRouter();
   const [now, setNow] = useState("");
+  const [showItinerary, setShowItinerary] = useState(false);
+  const [showLanguage, setShowLanguage] = useState(false);
+  const [selectedLang, setSelectedLang] = useState<"en" | "hi">("en");
+  const [hindiMsg, setHindiMsg] = useState(false);
+
   useEffect(() => { setNow(formatNow()); }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("bdd_app_language") as "en" | "hi" | null;
+      if (saved) setSelectedLang(saved);
+    }
+  }, []);
+
+  function selectLanguage(lang: "en" | "hi") {
+    setSelectedLang(lang);
+    localStorage.setItem("bdd_app_language", lang);
+    if (lang === "hi") {
+      setHindiMsg(true);
+    } else {
+      setShowLanguage(false);
+    }
+  }
 
   return (
     <>
@@ -271,9 +294,9 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           <MenuItem icon={icons.playlists}    label="Playlists"        onClick={onPlaylists} />
           <MenuItem icon={icons.searchHistory} label="Search History" />
           <MenuItem icon={icons.topLectures}  label="Top Lectures" />
-          <MenuItem icon={icons.statistics}   label="Statistics" />
-          <MenuItem icon={icons.itinerary}    label="Itinerary" />
-          <MenuItem icon={icons.gallery}      label="Gallery" badge="NEW" />
+          <MenuItem icon={icons.statistics}   label="Statistics" onClick={() => { onClose(); onStatistics(); }} />
+          <MenuItem icon={icons.itinerary}    label="Itinerary" onClick={() => setShowItinerary(true)} />
+          {isAdmin && <MenuItem icon={icons.gallery} label="Gallery" badge="NEW" />}
 
           {/* BHAKTI VIKĀSA SWAMI section */}
           <SectionLabel label="BHAKTI DHIRA DAMODARA SWAMI" />
@@ -284,11 +307,10 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           {/* SETTINGS section */}
           <SectionLabel label="SETTINGS" />
 
-          <MenuItem icon={icons.language}  label="Language"  sub="English - (English)" />
+          <MenuItem icon={icons.language}  label="Language"  sub={selectedLang === "hi" ? "हिन्दी" : "English"} onClick={() => setShowLanguage(true)} />
           <MenuItem icon={icons.interface} label="Interface"  sub="Default" />
           <MenuItem icon={icons.trash}     label="Clear Cache" />
-          <MenuItem icon={icons.share}     label="Share" />
-          <MenuItem icon={icons.star}      label="Rate Us"   sub="v1.0.0 (1)" />
+          <MenuItem icon={icons.share}     label="Share" badge="Soon" />
           <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={now} />
           <MenuItem icon={icons.clock}     label="Last Lecture Published On:" sub={now} />
 
@@ -377,6 +399,121 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           <div className="h-8" />
         </div>
       </div>
+
+      {/* ── Itinerary Coming Soon overlay ── */}
+      {showItinerary && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowItinerary(false)} />
+          <div className="relative w-full max-w-sm bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-12 shadow-2xl mx-auto">
+            <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+                {icons.itinerary}
+              </div>
+            </div>
+            <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">Itinerary</h2>
+            <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-4">✦ Sacred Journey ✦</p>
+            <p className="text-center text-gray-300 text-sm leading-relaxed mb-2">
+              The sacred travel schedule of Śrīla Gurudeva is being lovingly compiled.
+            </p>
+            <p className="text-center text-gray-400 text-sm leading-relaxed mb-6">
+              Soon, the path of the spiritual master will illuminate your screen, guiding sincere seekers to his lotus feet.{" "}
+              <span className="text-orange-400 italic">Please be patient, dear devotee.</span>
+            </p>
+            <p className="text-center text-gray-600 text-xs italic mb-6">
+              "yasya prasādād bhagavat-prasādaḥ" — by the grace of the guru, the grace of the Lord is attained.
+            </p>
+            <button
+              onClick={() => setShowItinerary(false)}
+              className="w-full py-3 rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-semibold text-sm hover:bg-orange-500/25 transition-colors active:scale-95"
+            >
+              Hare Kṛṣṇa 🙏
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Language Selector overlay ── */}
+      {showLanguage && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowLanguage(false); setHindiMsg(false); }} />
+          <div className="relative w-full max-w-sm bg-gradient-to-b from-[#120c04] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-12 shadow-2xl mx-auto">
+            <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
+            <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">Language</h2>
+            <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-6">Choose Your Language</p>
+
+            {hindiMsg ? (
+              /* Hindi coming soon message */
+              <>
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl">🕉️</div>
+                </div>
+                <p className="text-center text-amber-300 text-base font-semibold leading-relaxed mb-2">
+                  परिवर्तन शीघ्र आ रहा है
+                </p>
+                <p className="text-center text-gray-400 text-sm leading-relaxed mb-2">
+                  प्रिय साधक, हिन्दी भाषा का अनुभव अभी तैयार किया जा रहा है।
+                </p>
+                <p className="text-center text-gray-500 text-sm leading-relaxed mb-6">
+                  जल्द ही भगवद्-वाणी आपकी मातृभाषा में आपके हृदय को स्पर्श करेगी।{" "}
+                  <span className="text-amber-400 italic">कृपया प्रतीक्षा करें।</span>
+                </p>
+                <p className="text-center text-gray-600 text-xs italic mb-6">
+                  "हरे कृष्ण हरे कृष्ण कृष्ण कृष्ण हरे हरे"
+                </p>
+                <button
+                  onClick={() => { setShowLanguage(false); setHindiMsg(false); }}
+                  className="w-full py-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-semibold text-sm hover:bg-amber-500/25 transition-colors active:scale-95"
+                >
+                  हरे कृष्ण 🙏
+                </button>
+              </>
+            ) : (
+              /* Language options */
+              <div className="space-y-3">
+                <button
+                  onClick={() => selectLanguage("en")}
+                  className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
+                    selectedLang === "en"
+                      ? "border-orange-500 bg-orange-500/15 text-orange-300"
+                      : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  <span className="text-xl">🇬🇧</span>
+                  <div className="flex-1 text-left">
+                    <p className="font-semibold text-sm">English</p>
+                    <p className="text-xs text-gray-500 mt-0.5">English</p>
+                  </div>
+                  {selectedLang === "en" && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-400">
+                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => selectLanguage("hi")}
+                  className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
+                    selectedLang === "hi"
+                      ? "border-amber-500 bg-amber-500/15 text-amber-300"
+                      : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  <span className="text-xl">🇮🇳</span>
+                  <div className="flex-1 text-left">
+                    <p className="font-semibold text-sm">हिन्दी</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Hindi</p>
+                  </div>
+                  {selectedLang === "hi" && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-amber-400">
+                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
