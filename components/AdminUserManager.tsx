@@ -420,7 +420,7 @@ export default function AdminUserManager() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 overflow-x-hidden w-full">
       {/* Header */}
       <div>
         <h2 className="text-base font-semibold text-white">User Management</h2>
@@ -555,7 +555,7 @@ export default function AdminUserManager() {
                     </div>
 
                     {/* Row 2: locale badges + action buttons (wraps on mobile) */}
-                    <div className="flex items-center gap-1.5 flex-wrap pl-12">
+                    <div className="flex items-center gap-1.5 flex-wrap w-full pl-12">
                       {user.role === "ROLE_PROOFREADER" && (user.locales ?? []).length > 0 &&
                         (user.locales ?? []).map((l) => <LocaleBadge key={l.id} locale={l} />)
                       }
