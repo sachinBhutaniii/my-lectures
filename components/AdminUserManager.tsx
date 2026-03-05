@@ -537,98 +537,103 @@ export default function AdminUserManager() {
             <div className="space-y-2">
               {users.map((user) => (
                 <div key={user.id} className="rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors">
-                  <div className="flex items-center gap-3 p-3">
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-medium text-gray-400">{user.name.charAt(0).toUpperCase()}</span>
+                  <div className="p-3 space-y-2">
+                    {/* Row 1: avatar + name/email + role badge */}
+                    <div className="flex items-center gap-3">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-medium text-gray-400">{user.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-100 truncate">{user.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      <RoleBadge role={user.role} />
                     </div>
-                    {user.role === "ROLE_PROOFREADER" && (user.locales ?? []).length > 0 && (
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {(user.locales ?? []).map((l) => <LocaleBadge key={l.id} locale={l} />)}
-                      </div>
-                    )}
-                    {user.role === "ROLE_PROOFREADER" && (
-                      <button
-                        onClick={() => openLocaleEdit(user)}
-                        className="px-2 py-1 rounded-lg text-[11px] font-medium border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors flex-shrink-0"
-                      >
-                        Languages
-                      </button>
-                    )}
-                    <RoleBadge role={user.role} />
-                    {user.role !== "ROLE_PARENT_ADMIN" && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {user.role !== "ROLE_ADMIN" && (
-                          <button
-                            onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
-                            disabled={updating !== null}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
-                          >
-                            {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
-                              <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
-                            ) : "Admin"}
-                          </button>
-                        )}
-                        {user.role !== "ROLE_PROOFREADER" && (
-                          <button
-                            onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
-                            disabled={updating !== null}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
-                          >
-                            {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
-                              <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
-                            ) : "Proofreader"}
-                          </button>
-                        )}
-                        {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
-                          <button
-                            onClick={() => handleRoleChange(user, "ROLE_USER")}
-                            disabled={updating !== null}
-                            className="px-2.5 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                          >
-                            {updating?.id === user.id && updating.role === "ROLE_USER" ? (
-                              <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                            ) : "Revoke"}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {/* Assignments expand toggle — proofreaders view only */}
-                    {view === "proofreaders" && user.role === "ROLE_PROOFREADER" && (() => {
-                      const activeCount = transcriptsLoadedRef.current
-                        ? getActiveAssignmentCount(user.id, allTranscripts)
-                        : null;
-                      const isExpanded = expandedProofreaderId === user.id;
-                      return (
+
+                    {/* Row 2: locale badges + action buttons (wraps on mobile) */}
+                    <div className="flex items-center gap-1.5 flex-wrap pl-12">
+                      {user.role === "ROLE_PROOFREADER" && (user.locales ?? []).length > 0 &&
+                        (user.locales ?? []).map((l) => <LocaleBadge key={l.id} locale={l} />)
+                      }
+                      {user.role === "ROLE_PROOFREADER" && (
                         <button
-                          onClick={() => setExpandedProofreaderId(isExpanded ? null : user.id)}
-                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors flex-shrink-0 ${
-                            isExpanded
-                              ? "border-blue-500/50 bg-blue-500/15 text-blue-300"
-                              : "border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300"
-                          }`}
+                          onClick={() => openLocaleEdit(user)}
+                          className="px-2 py-1 rounded-lg text-[11px] font-medium border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-colors"
                         >
-                          {transcriptsLoading ? (
-                            <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
-                          ) : activeCount !== null && activeCount > 0 ? (
-                            <span className="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 text-[10px] flex items-center justify-center font-bold">
-                              {activeCount}
-                            </span>
-                          ) : null}
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
-                            className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}>
-                            <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
-                          </svg>
+                          Languages
                         </button>
-                      );
-                    })()}
+                      )}
+                      {user.role !== "ROLE_PARENT_ADMIN" && (
+                        <>
+                          {user.role !== "ROLE_ADMIN" && (
+                            <button
+                              onClick={() => handleRoleChange(user, "ROLE_ADMIN")}
+                              disabled={updating !== null}
+                              className="px-2.5 py-1 rounded-lg text-xs font-medium border border-orange-500/40 text-orange-400 hover:bg-orange-500/10 transition-colors disabled:opacity-50"
+                            >
+                              {updating?.id === user.id && updating.role === "ROLE_ADMIN" ? (
+                                <div className="w-3.5 h-3.5 border border-orange-400 border-t-transparent rounded-full animate-spin" />
+                              ) : "Admin"}
+                            </button>
+                          )}
+                          {user.role !== "ROLE_PROOFREADER" && (
+                            <button
+                              onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
+                              disabled={updating !== null}
+                              className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                            >
+                              {updating?.id === user.id && updating.role === "ROLE_PROOFREADER" ? (
+                                <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                              ) : "Proofreader"}
+                            </button>
+                          )}
+                          {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
+                            <button
+                              onClick={() => handleRoleChange(user, "ROLE_USER")}
+                              disabled={updating !== null}
+                              className="px-2.5 py-1 rounded-lg text-xs border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                            >
+                              {updating?.id === user.id && updating.role === "ROLE_USER" ? (
+                                <div className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                              ) : "Revoke"}
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {/* Assignments expand toggle — proofreaders view only */}
+                      {view === "proofreaders" && user.role === "ROLE_PROOFREADER" && (() => {
+                        const activeCount = transcriptsLoadedRef.current
+                          ? getActiveAssignmentCount(user.id, allTranscripts)
+                          : null;
+                        const isExpanded = expandedProofreaderId === user.id;
+                        return (
+                          <button
+                            onClick={() => setExpandedProofreaderId(isExpanded ? null : user.id)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                              isExpanded
+                                ? "border-blue-500/50 bg-blue-500/15 text-blue-300"
+                                : "border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300"
+                            }`}
+                          >
+                            {transcriptsLoading ? (
+                              <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                            ) : activeCount !== null && activeCount > 0 ? (
+                              <span className="w-4 h-4 rounded-full bg-blue-500/30 text-blue-300 text-[10px] flex items-center justify-center font-bold">
+                                {activeCount}
+                              </span>
+                            ) : null}
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                              className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}>
+                              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        );
+                      })()}
+                    </div>
                   </div>
                   {localeEditUserId === user.id && (
                     <div className="border-t border-gray-800 px-3 py-3">
