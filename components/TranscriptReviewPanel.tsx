@@ -355,7 +355,7 @@ function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onAppr
 
         {/* Language pills preview (collapsed) */}
         {!expanded && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1 flex-wrap flex-shrink-0 max-w-[100px]">
             {items.map((i) => {
               const pillStatus = getLangPillStatus(i);
               const name = getLangPillName(i);
@@ -448,7 +448,7 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
 
   return (
     <div className="border-t border-gray-800">
-      <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex items-center gap-2 px-3 py-3 flex-wrap">
         {/* Status info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

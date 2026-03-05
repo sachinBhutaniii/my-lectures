@@ -140,7 +140,7 @@ export default function AdminPage() {
   const visibleTabs = TABS.filter((t) => !t.adminOnly || isParentAdmin);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden w-full">
       {/* Sticky header + tab bar — prevents tab bar from wobbling during page scroll */}
       <div className="sticky top-0 z-20 bg-[#0a0a0a]">
       {/* Admin header */}
@@ -206,7 +206,7 @@ export default function AdminPage() {
       </div>{/* end sticky wrapper */}
 
       {/* Tab content */}
-      <div className="mx-auto max-w-6xl p-6">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:p-6 w-full min-w-0">
         {activeTab === "videos"      && <AdminVideoList />}
         {activeTab === "transcripts" && <TranscriptReviewPanel />}
         {activeTab === "users"       && isParentAdmin && <AdminUserManager />}
