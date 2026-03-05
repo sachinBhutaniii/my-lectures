@@ -246,7 +246,7 @@ export default function LecturePage() {
       {lecture && (
         <AddToPlaylistModal
           open={showPlaylistModal}
-          lecture={{ id: lecture.id, title: lecture.title, thumbnailUrl: lecture.thumbnailUrl }}
+          lecture={{ id: lecture.id, title: lecture.title, thumbnailUrl: lecture.thumbnailUrl, addedAt: 0 }}
           playlists={playlists}
           lecturePlaylistIds={lecturePlaylistIds(lecture.id)}
           onClose={() => setShowPlaylistModal(false)}
