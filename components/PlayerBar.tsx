@@ -3,11 +3,14 @@
 import { useState, useCallback } from "react";
 import { LectureVideo } from "@/types/videos";
 import { usePlayer } from "@/context/PlayerContext";
+import { useFavourites } from "@/hooks/useFavourites";
+import { useDownloads } from "@/hooks/useDownloads";
 
 interface Props {
   lecture: LectureVideo;
   onPrev?: () => void;
   onNext?: () => void;
+  onAddToPlaylist?: () => void;
 }
 
 const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -19,9 +22,14 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function PlayerBar({ lecture, onPrev, onNext }: Props) {
+export default function PlayerBar({ lecture, onPrev, onNext, onAddToPlaylist }: Props) {
   const player = usePlayer();
   const [speedIdx, setSpeedIdx] = useState(2);
+  const [showMenu, setShowMenu] = useState(false);
+  const { isFavourite, toggleFavourite } = useFavourites();
+  const { isDownloaded, downloadLecture } = useDownloads();
+  const fav = isFavourite(lecture.id);
+  const downloaded = isDownloaded(lecture.id);
 
   const isThisLecture = player.lecture?.id === lecture.id;
   const isPlaying = isThisLecture && player.isPlaying;
@@ -94,7 +102,41 @@ export default function PlayerBar({ lecture, onPrev, onNext }: Props) {
         )}
 
         {/* 3-dot menu */}
-        <button className="text-gray-400 text-xl leading-none pl-1">&#x22EE;</button>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu((v) => !v)}
+            className="text-gray-400 text-xl leading-none pl-1 hover:text-white transition-colors"
+          >
+            &#x22EE;
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 bottom-10 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl min-w-[180px] overflow-hidden">
+                <button
+                  onClick={() => { downloadLecture(lecture); setShowMenu(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-800 transition-colors text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  {downloaded ? "Downloaded" : "Download"}
+                </button>
+                {onAddToPlaylist && (
+                  <button
+                    onClick={() => { onAddToPlaylist(); setShowMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-800 transition-colors text-left border-t border-gray-800"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-gray-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h10.5m-10.5 5.25h10.5M19.5 12v.75m0 3.75V12m0 0l-2.25 2.25M19.5 12l2.25 2.25" />
+                    </svg>
+                    Add to Playlist
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -127,10 +169,14 @@ export default function PlayerBar({ lecture, onPrev, onNext }: Props) {
 
       {/* Controls */}
       <div className="flex items-center justify-between px-4 py-3">
-        {/* Sleep timer */}
-        <button className="text-gray-400">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+        {/* Favourite */}
+        <button
+          onClick={() => toggleFavourite(lecture)}
+          title={fav ? "Remove from favourites" : "Add to favourites"}
+          className={fav ? "text-red-400" : "text-gray-400 hover:text-red-400 transition-colors"}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={fav ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} className="w-6 h-6">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
           </svg>
         </button>
 
@@ -142,11 +188,11 @@ export default function PlayerBar({ lecture, onPrev, onNext }: Props) {
         </button>
 
         {/* Rewind 10s */}
-        <button onClick={() => skip(-10)} className="text-gray-300 relative">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+        <button onClick={() => skip(-10)} className="flex flex-col items-center gap-0.5 text-gray-300 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-0.5">10</span>
+          <span className="text-[9px] font-bold leading-none">10</span>
         </button>
 
         {/* Play / Pause */}
@@ -170,11 +216,11 @@ export default function PlayerBar({ lecture, onPrev, onNext }: Props) {
         </button>
 
         {/* Forward 10s */}
-        <button onClick={() => skip(10)} className="text-gray-300 relative">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+        <button onClick={() => skip(10)} className="flex flex-col items-center gap-0.5 text-gray-300 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-0.5">10</span>
+          <span className="text-[9px] font-bold leading-none">10</span>
         </button>
 
         {/* Next */}

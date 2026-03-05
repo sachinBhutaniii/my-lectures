@@ -9,9 +9,11 @@ import { LanguageData } from "@/types/videos";
 import TranscriptView from "@/components/TranscriptView";
 import QueueList from "@/components/QueueList";
 import PlayerBar from "@/components/PlayerBar";
+import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import { usePlayer } from "@/context/PlayerContext";
+import { usePlaylists } from "@/hooks/usePlaylists";
 
-type Tab = "queue" | "transcript" | "summary";
+type Tab = "queue" | "transcript";
 
 function fmtTime(sec: number): string {
   if (!isFinite(sec) || sec < 0) return "0:00";
@@ -33,6 +35,8 @@ export default function LecturePage() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const { playlists, createPlaylist, addToPlaylist, removeFromPlaylist, lecturePlaylistIds } = usePlaylists();
   const { currentTime, seekToSeconds, isPlaying, pause, resume, seek, skip, duration, lecture: playingLecture } = usePlayer();
   const isThisLecture = playingLecture?.id === videoId;
   const progress = isThisLecture && duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -87,7 +91,7 @@ export default function LecturePage() {
         {/* Tab switcher pill — hidden in reading mode */}
         <div className={`flex-1 flex justify-center transition-all duration-300 ${readingMode ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
           <div className="bg-gray-800 rounded-full p-1 flex">
-            {(["queue", "transcript", "summary"] as Tab[]).map((tab) => (
+            {(["queue", "transcript"] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -97,7 +101,7 @@ export default function LecturePage() {
                     : "text-gray-400"
                 }`}
               >
-                {tab === "summary" ? "Summary ✦" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -107,16 +111,16 @@ export default function LecturePage() {
       {/* ── Transcript toolbar (search + language) — collapses in reading mode ── */}
       {activeTab === "transcript" && (
         <div className={`flex items-center gap-2 px-4 flex-shrink-0 transition-all duration-300 ${readingMode ? "max-h-0 opacity-0 pb-0 overflow-hidden" : "max-h-20 opacity-100 pb-3 overflow-visible"}`}>
-          <div className="flex-1 flex items-center gap-2 border border-gray-700 rounded-lg px-3 py-2 bg-gray-900/50">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-32 flex items-center gap-2 border border-gray-700 rounded-lg px-2.5 py-2 bg-gray-900/50 min-w-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
               value={transcriptSearch}
               onChange={(e) => setTranscriptSearch(e.target.value)}
-              placeholder="Search transcript…"
-              className="flex-1 bg-transparent text-sm text-gray-300 placeholder-gray-600 outline-none"
+              placeholder="Search…"
+              className="w-full min-w-0 bg-transparent text-sm text-gray-300 placeholder-gray-600 outline-none"
             />
           </div>
 
@@ -148,12 +152,13 @@ export default function LecturePage() {
           <div className="relative">
             <button
               onClick={() => setShowLangPicker((v) => !v)}
-              className="flex items-center gap-1.5 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 bg-gray-900/50 whitespace-nowrap"
+              title={selectedLangName}
+              className="flex items-center gap-1 border border-gray-700 rounded-lg px-2.5 py-2 text-sm text-gray-300 bg-gray-900/50 flex-shrink-0"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />
               </svg>
-              <span>{selectedLangName}</span>
+              <span className="text-xs">{selectedLangName}</span>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
               </svg>
@@ -223,21 +228,36 @@ export default function LecturePage() {
         {!loading && activeTab === "queue" && (
           <QueueList lectures={queueLectures} currentId={videoId} />
         )}
-
-        {!loading && activeTab === "summary" && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-12 h-12 text-gray-700">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-            </svg>
-            <p className="text-gray-600 text-sm">AI Summary coming soon</p>
-          </div>
-        )}
       </div>
 
       {/* ── Full player bar (hidden in reading mode) ── */}
       <div className={`flex-shrink-0 overflow-hidden transition-all duration-300 ${readingMode ? "max-h-0 opacity-0" : "max-h-64 opacity-100"}`}>
-        {lecture && <PlayerBar lecture={lecture} onPrev={goPrev} onNext={goNext} />}
+        {lecture && (
+          <PlayerBar
+            lecture={lecture}
+            onPrev={goPrev}
+            onNext={goNext}
+            onAddToPlaylist={() => setShowPlaylistModal(true)}
+          />
+        )}
       </div>
+
+      {/* ── Add to Playlist modal ── */}
+      {lecture && (
+        <AddToPlaylistModal
+          open={showPlaylistModal}
+          lecture={{ id: lecture.id, title: lecture.title, thumbnailUrl: lecture.thumbnailUrl }}
+          playlists={playlists}
+          lecturePlaylistIds={lecturePlaylistIds(lecture.id)}
+          onClose={() => setShowPlaylistModal(false)}
+          onCreate={createPlaylist}
+          onToggle={(plId) => {
+            const inPlaylist = lecturePlaylistIds(lecture.id).includes(plId);
+            if (inPlaylist) removeFromPlaylist(plId, lecture.id);
+            else addToPlaylist(plId, { id: lecture.id, title: lecture.title, thumbnailUrl: lecture.thumbnailUrl });
+          }}
+        />
+      )}
 
       {/* ── Mini player bar (reading mode only) ── */}
       {readingMode && lecture && (
