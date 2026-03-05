@@ -185,12 +185,12 @@ export default function AdminPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 px-3 pt-4 pb-0 border-b border-gray-800 overflow-x-auto scrollbar-hide">
+      <div className="flex items-end gap-1 px-3 border-b border-gray-800 overflow-x-auto scrollbar-hide touch-pan-x flex-shrink-0">
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap flex-shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
               activeTab === tab.id
                 ? "border-orange-500 text-orange-400"
                 : "border-transparent text-gray-500 hover:text-gray-300"
