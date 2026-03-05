@@ -88,6 +88,77 @@ export const getMenteeEntries = async (userId: number): Promise<SadhanaEntryResp
   return res.data;
 };
 
+// ── Entry Reactions ────────────────────────────────────────────────────────
+
+export interface EntryReaction {
+  id: number;
+  mentorId: number;
+  mentorName: string;
+  reaction?: string;
+  message?: string;
+  createdAt: string;
+}
+
+export const getAbsentMentees = async (date: string): Promise<MentorUser[]> => {
+  const res = await apiClient.get<MentorUser[]>(`/api/sadhana/mentees/absent?date=${date}`);
+  return res.data;
+};
+
+export const postEntryReaction = async (
+  userId: number,
+  entryId: number,
+  data: { reaction?: string; message?: string }
+): Promise<EntryReaction> => {
+  const res = await apiClient.post<EntryReaction>(
+    `/api/sadhana/mentees/${userId}/entries/${entryId}/react`,
+    data
+  );
+  return res.data;
+};
+
+export const deleteEntryReaction = async (userId: number, entryId: number): Promise<void> => {
+  await apiClient.delete(`/api/sadhana/mentees/${userId}/entries/${entryId}/react`);
+};
+
+export const getEntryReactions = async (entryId: number): Promise<EntryReaction[]> => {
+  const res = await apiClient.get<EntryReaction[]>(`/api/sadhana/entries/${entryId}/reactions`);
+  return res.data;
+};
+
+// ── Q&A ────────────────────────────────────────────────────────────────────
+
+export interface SadhanaQA {
+  id: number;
+  menteeId: number;
+  menteeName: string;
+  mentorId: number;
+  mentorName: string;
+  question: string;
+  answer?: string;
+  askedAt: string;
+  answeredAt?: string;
+}
+
+export const askMentorQuestion = async (mentorId: number, question: string): Promise<SadhanaQA> => {
+  const res = await apiClient.post<SadhanaQA>("/api/sadhana/qa", { mentorId, question });
+  return res.data;
+};
+
+export const getMentorQA = async (mentorId: number): Promise<SadhanaQA[]> => {
+  const res = await apiClient.get<SadhanaQA[]>(`/api/sadhana/qa/${mentorId}`);
+  return res.data;
+};
+
+export const getMenteeQA = async (menteeId: number): Promise<SadhanaQA[]> => {
+  const res = await apiClient.get<SadhanaQA[]>(`/api/sadhana/mentees/${menteeId}/qa`);
+  return res.data;
+};
+
+export const answerQuestion = async (qaId: number, answer: string): Promise<SadhanaQA> => {
+  const res = await apiClient.put<SadhanaQA>(`/api/sadhana/qa/${qaId}/answer`, { answer });
+  return res.data;
+};
+
 // ── Admin ──────────────────────────────────────────────────────────────────
 
 export const adminGetQuestions = async (): Promise<SadhanaQuestion[]> => {

@@ -7,20 +7,37 @@ import SadhanaTracker from "@/components/SadhanaTracker";
 import SadhanaHistory from "@/components/SadhanaHistory";
 import SadhanaMentees from "@/components/SadhanaMentees";
 import MentorLinkSheet from "@/components/MentorLinkSheet";
+import { getMyMentees, getMyMentors, MentorUser } from "@/services/sadhana.service";
 
 type SadhanaTab = "today" | "records" | "mentees";
+
+const BASE_TABS: { id: SadhanaTab; label: string }[] = [
+  { id: "today",   label: "Today"      },
+  { id: "records", label: "My Records" },
+];
+const MENTEES_TAB = { id: "mentees" as SadhanaTab, label: "My Mentees" };
 
 export default function SadhanaPage() {
   const router = useRouter();
   const { user, authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<SadhanaTab>("today");
   const [showMentorSheet, setShowMentorSheet] = useState(false);
+  const [isMentor, setIsMentor] = useState(false);
+  const [myMentors, setMyMentors] = useState<MentorUser[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
     }
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([getMyMentees(), getMyMentors()]).then(([mentees, mentors]) => {
+      setIsMentor(mentees.length > 0);
+      setMyMentors(mentors);
+    }).catch(() => {});
+  }, [user]);
 
   if (authLoading || !user) {
     return (
@@ -30,11 +47,7 @@ export default function SadhanaPage() {
     );
   }
 
-  const TABS: { id: SadhanaTab; label: string }[] = [
-    { id: "today",   label: "Today"      },
-    { id: "records", label: "My Records" },
-    { id: "mentees", label: "My Mentees" },
-  ];
+  const TABS = isMentor ? [...BASE_TABS, MENTEES_TAB] : BASE_TABS;
 
   return (
     <div className="h-screen bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden">
@@ -87,11 +100,16 @@ export default function SadhanaPage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
         {activeTab === "today"   && <SadhanaTracker />}
-        {activeTab === "records" && <SadhanaHistory />}
+        {activeTab === "records" && <SadhanaHistory mentors={myMentors} />}
         {activeTab === "mentees" && <SadhanaMentees />}
       </div>
 
-      {showMentorSheet && <MentorLinkSheet onClose={() => setShowMentorSheet(false)} />}
+      {showMentorSheet && (
+        <MentorLinkSheet
+          onClose={() => setShowMentorSheet(false)}
+          onMentorsChanged={(mentors) => setMyMentors(mentors)}
+        />
+      )}
     </div>
   );
 }

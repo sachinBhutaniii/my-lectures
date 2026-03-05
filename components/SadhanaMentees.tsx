@@ -1,13 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 import {
   getMyMentees,
   getMenteeEntries,
+  getMenteeQA,
   getSadhanaQuestions,
+  getAbsentMentees,
+  getEntryReactions,
+  postEntryReaction,
+  deleteEntryReaction,
+  answerQuestion,
   MentorUser,
   SadhanaEntryResponse,
   SadhanaQuestion,
+  EntryReaction,
+  SadhanaQA,
 } from "@/services/sadhana.service";
 
 const SCORE_COLORS = [
@@ -16,6 +25,8 @@ const SCORE_COLORS = [
   { min: 50, label: "Good",       color: "text-amber-400",   dot: "bg-amber-400"   },
   { min: 0,  label: "Keep Going", color: "text-orange-400",  dot: "bg-orange-400"  },
 ];
+
+const REACTION_EMOJIS = ["🙏", "❤️", "👍", "⭐", "🔥"];
 
 function getGrade(score: number, max: number) {
   const pct = max > 0 ? Math.round((score / max) * 100) : 0;
@@ -38,16 +49,312 @@ function AvatarInitial({ name, size = "md" }: { name: string; size?: "sm" | "md"
   );
 }
 
+// ── Absent checker ─────────────────────────────────────────────────────────
+
+function AbsentChecker() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const defaultDate = yesterday.toISOString().split("T")[0];
+
+  const [date, setDate] = useState(defaultDate);
+  const [result, setResult] = useState<MentorUser[] | null>(null);
+  const [allSubmitted, setAllSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleCheck = async () => {
+    setLoading(true);
+    setResult(null);
+    setAllSubmitted(false);
+    try {
+      const absent = await getAbsentMentees(date);
+      if (absent.length === 0) setAllSubmitted(true);
+      else setResult(absent);
+    } catch {
+      setResult([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mx-4 mt-3 mb-1 rounded-xl bg-gray-900/60 border border-gray-800 p-3">
+      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Absent Check</p>
+      <div className="flex gap-2 items-center">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => { setDate(e.target.value); setResult(null); setAllSubmitted(false); }}
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500/60"
+        />
+        <button
+          onClick={handleCheck}
+          disabled={loading}
+          className="px-4 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors flex-shrink-0"
+        >
+          {loading ? (
+            <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin inline-block" />
+          ) : "Check"}
+        </button>
+      </div>
+
+      {allSubmitted && (
+        <p className="mt-2 text-xs text-emerald-400 font-semibold">All submitted ✓</p>
+      )}
+      {result !== null && result.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs text-orange-400 font-semibold mb-1">{result.length} absent:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {result.map((u) => (
+              <span key={u.id} className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-300 text-[11px] border border-orange-500/20">
+                {u.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Entry reactions (mentor side) ─────────────────────────────────────────
+
+function EntryReactionSection({
+  devoteeId,
+  entryId,
+  myUserId,
+}: {
+  devoteeId: number;
+  entryId: number;
+  myUserId: number;
+}) {
+  const [reactions, setReactions] = useState<EntryReaction[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [emoji, setEmoji] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    getEntryReactions(entryId)
+      .then(setReactions)
+      .catch(() => setReactions([]))
+      .finally(() => setLoading(false));
+  }, [entryId]);
+
+  const myReaction = reactions?.find((r) => r.mentorId === myUserId) ?? null;
+
+  const handleSubmit = async () => {
+    if (!emoji && !message.trim()) return;
+    setSubmitting(true);
+    try {
+      const r = await postEntryReaction(devoteeId, entryId, { reaction: emoji || undefined, message: message.trim() || undefined });
+      setReactions((prev) => {
+        if (!prev) return [r];
+        return [...prev.filter((x) => x.mentorId !== myUserId), r];
+      });
+      setShowForm(false);
+      setEmoji("");
+      setMessage("");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setSubmitting(true);
+    try {
+      await deleteEntryReaction(devoteeId, entryId);
+      setReactions((prev) => prev?.filter((r) => r.mentorId !== myUserId) ?? []);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-800/60">
+      {myReaction ? (
+        <div className="flex items-start gap-2">
+          <div className="flex-1 flex items-center gap-1.5 flex-wrap">
+            {myReaction.reaction && (
+              <span className="text-base">{myReaction.reaction}</span>
+            )}
+            {myReaction.message && (
+              <span className="text-[11px] text-gray-300">{myReaction.message}</span>
+            )}
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => { setEmoji(myReaction.reaction ?? ""); setMessage(myReaction.message ?? ""); setShowForm(true); }}
+              className="text-[10px] text-gray-500 hover:text-orange-400 transition-colors"
+            >
+              Edit
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={submitting}
+              className="text-[10px] text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
+            >
+              {submitting ? "…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      ) : !showForm ? (
+        <button
+          onClick={() => setShowForm(true)}
+          className="text-[11px] text-gray-600 hover:text-orange-400 transition-colors"
+        >
+          + Add reaction
+        </button>
+      ) : null}
+
+      {showForm && (
+        <div className="mt-2 space-y-2">
+          <div className="flex gap-2">
+            {REACTION_EMOJIS.map((e) => (
+              <button
+                key={e}
+                onClick={() => setEmoji(emoji === e ? "" : e)}
+                className={`text-lg p-1 rounded-lg transition-colors ${emoji === e ? "bg-orange-500/20 ring-1 ring-orange-500/40" : "hover:bg-gray-800"}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Message (optional)…"
+            rows={2}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60 resize-none"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || (!emoji && !message.trim())}
+              className="px-4 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors"
+            >
+              {submitting ? "…" : "Submit"}
+            </button>
+            <button
+              onClick={() => { setShowForm(false); setEmoji(""); setMessage(""); }}
+              className="px-4 py-1.5 rounded-lg bg-gray-800 text-gray-400 text-xs font-semibold hover:bg-gray-700 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Messages view (Q&A thread, mentor answers) ────────────────────────────
+
+function MessagesView({ devoteeId }: { devoteeId: number }) {
+  const [thread, setThread] = useState<SadhanaQA[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [submitting, setSubmitting] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getMenteeQA(devoteeId)
+      .then(setThread)
+      .catch(() => setThread([]))
+      .finally(() => setLoading(false));
+  }, [devoteeId]);
+
+  const handleAnswer = async (qa: SadhanaQA) => {
+    const ans = drafts[qa.id]?.trim();
+    if (!ans) return;
+    setSubmitting(qa.id);
+    try {
+      const updated = await answerQuestion(qa.id, ans);
+      setThread((prev) => prev?.map((q) => (q.id === qa.id ? updated : q)) ?? []);
+      setDrafts((d) => { const nd = { ...d }; delete nd[qa.id]; return nd; });
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!thread || thread.length === 0) {
+    return <p className="text-[11px] text-gray-600 py-4 text-center">No questions yet.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {thread.map((qa) => (
+        <div key={qa.id} className="space-y-1.5">
+          {/* Question bubble */}
+          <div className="flex justify-end">
+            <div className="max-w-[85%] bg-gray-800 rounded-2xl rounded-tr-sm px-3 py-2">
+              <p className="text-xs text-gray-300">{qa.question}</p>
+              <p className="text-[10px] text-gray-600 mt-0.5">
+                {new Date(qa.askedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+              </p>
+            </div>
+          </div>
+          {/* Answer bubble */}
+          {qa.answer ? (
+            <div className="flex justify-start">
+              <div className="max-w-[85%] bg-orange-500/15 border border-orange-500/20 rounded-2xl rounded-tl-sm px-3 py-2">
+                <p className="text-xs text-orange-100">{qa.answer}</p>
+                {qa.answeredAt && (
+                  <p className="text-[10px] text-orange-400/60 mt-0.5">
+                    {new Date(qa.answeredAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <textarea
+                value={drafts[qa.id] ?? ""}
+                onChange={(e) => setDrafts((d) => ({ ...d, [qa.id]: e.target.value }))}
+                placeholder="Write answer…"
+                rows={2}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60 resize-none"
+              />
+              <button
+                onClick={() => handleAnswer(qa)}
+                disabled={submitting === qa.id || !drafts[qa.id]?.trim()}
+                className="px-4 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors"
+              >
+                {submitting === qa.id ? "…" : "Send"}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Expanded devotee card ──────────────────────────────────────────────────
 
-type ViewMode = "date" | "question";
+type ViewMode = "date" | "question" | "messages";
 
 function DevoteeDetail({
+  devoteeId,
   entries,
   questions,
+  myUserId,
 }: {
+  devoteeId: number;
   entries: SadhanaEntryResponse[];
   questions: SadhanaQuestion[];
+  myUserId: number;
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("date");
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
@@ -63,7 +370,7 @@ function DevoteeDetail({
     <div>
       {/* Toggle */}
       <div className="flex gap-1 mb-3">
-        {(["date", "question"] as ViewMode[]).map((mode) => (
+        {(["date", "question", "messages"] as ViewMode[]).map((mode) => (
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
@@ -73,12 +380,14 @@ function DevoteeDetail({
                 : "bg-gray-800/60 text-gray-500 border border-gray-800"
             }`}
           >
-            {mode === "date" ? "Date View" : "By Question"}
+            {mode === "date" ? "Date View" : mode === "question" ? "By Question" : "Messages"}
           </button>
         ))}
       </div>
 
-      {viewMode === "date" ? (
+      {viewMode === "messages" ? (
+        <MessagesView devoteeId={devoteeId} />
+      ) : viewMode === "date" ? (
         <div className="space-y-1.5">
           {entries.map((entry) => {
             const grade = getGrade(entry.totalScore, entry.maxScore);
@@ -104,9 +413,8 @@ function DevoteeDetail({
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${grade.dot}`} />
                 </button>
 
-                {/* Answer breakdown bottom sheet inline */}
                 {selectedEntryId === entry.id && (
-                  <div className="mt-1 mb-2 rounded-xl bg-black/40 border border-gray-800 overflow-hidden">
+                  <div className="mt-1 mb-2 rounded-xl bg-black/40 border border-gray-800 overflow-hidden px-1 pb-2">
                     {questions.map((q) => {
                       const val = entry.answers[q.slug];
                       const opt = q.options.find((o) => o.value === val);
@@ -121,6 +429,13 @@ function DevoteeDetail({
                         </div>
                       );
                     })}
+                    <div className="px-3">
+                      <EntryReactionSection
+                        devoteeId={devoteeId}
+                        entryId={entry.id}
+                        myUserId={myUserId}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -146,7 +461,6 @@ function DevoteeDetail({
             ))}
           </div>
 
-          {/* Answers for active question */}
           {activeQuestionSlug && (
             <div className="space-y-1.5">
               {entries.map((entry) => {
@@ -174,9 +488,11 @@ function DevoteeDetail({
 function DevoteeCard({
   devotee,
   questions,
+  myUserId,
 }: {
   devotee: MentorUser;
   questions: SadhanaQuestion[];
+  myUserId: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [entries, setEntries] = useState<SadhanaEntryResponse[] | null>(null);
@@ -226,7 +542,12 @@ function DevoteeCard({
             </div>
           ) : entries !== null ? (
             <div className="mt-3">
-              <DevoteeDetail entries={entries} questions={questions} />
+              <DevoteeDetail
+                devoteeId={devotee.id}
+                entries={entries}
+                questions={questions}
+                myUserId={myUserId}
+              />
             </div>
           ) : null}
         </div>
@@ -238,6 +559,7 @@ function DevoteeCard({
 // ── Main component ────────────────────────────────────────────────────────
 
 export default function SadhanaMentees() {
+  const { user } = useAuth();
   const [mentees, setMentees] = useState<MentorUser[] | null>(null);
   const [questions, setQuestions] = useState<SadhanaQuestion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -276,10 +598,18 @@ export default function SadhanaMentees() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-      {mentees.map((devotee) => (
-        <DevoteeCard key={devotee.id} devotee={devotee} questions={questions} />
-      ))}
+    <div className="flex-1 overflow-y-auto">
+      <AbsentChecker />
+      <div className="px-4 py-3 space-y-3">
+        {mentees.map((devotee) => (
+          <DevoteeCard
+            key={devotee.id}
+            devotee={devotee}
+            questions={questions}
+            myUserId={user?.id ?? 0}
+          />
+        ))}
+      </div>
     </div>
   );
 }
