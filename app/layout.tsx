@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#1a1208" />
         <link rel="manifest" href="/manifest.json" />
@@ -40,6 +40,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#1a1208] text-white`}
+        suppressHydrationWarning
       >
         <OfflineProvider>
           <AuthProvider>
