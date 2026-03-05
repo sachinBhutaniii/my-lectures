@@ -141,6 +141,8 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
+      {/* Sticky header + tab bar — prevents tab bar from wobbling during page scroll */}
+      <div className="sticky top-0 z-20 bg-[#0a0a0a]">
       {/* Admin header */}
       <div className="flex items-center gap-2 px-4 pt-12 pb-4 border-b border-gray-800 min-w-0">
         <button onClick={() => router.push("/")} className="text-gray-400 hover:text-white">
@@ -201,6 +203,7 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
+      </div>{/* end sticky wrapper */}
 
       {/* Tab content */}
       <div className="mx-auto max-w-6xl p-6">
