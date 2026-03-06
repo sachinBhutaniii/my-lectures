@@ -10,7 +10,6 @@ import SadhanaQATab from "@/components/SadhanaQATab";
 import MentorLinkSheet from "@/components/MentorLinkSheet";
 import {
   getMyMentees,
-  getMyMentors,
   getNotifications,
   SadhanaNotifications,
 } from "@/services/sadhana.service";
@@ -30,7 +29,6 @@ export default function SadhanaPage() {
   const [activeTab, setActiveTab] = useState<SadhanaTab>("today");
   const [showMentorSheet, setShowMentorSheet] = useState(false);
   const [isMentor, setIsMentor] = useState(false);
-  const [hasMentors, setHasMentors] = useState(false);
   const [notifications, setNotifications] = useState<SadhanaNotifications>({ pendingQuestions: 0, newAnswers: 0 });
 
   const refreshNotifications = () => {
@@ -46,7 +44,6 @@ export default function SadhanaPage() {
   useEffect(() => {
     if (!user) return;
     getMyMentees().then((m) => setIsMentor(m.length > 0)).catch(() => {});
-    getMyMentors().then((m) => setHasMentors(m.length > 0)).catch(() => {});
     refreshNotifications();
   }, [user]);
 
@@ -60,8 +57,8 @@ export default function SadhanaPage() {
 
   const TABS = [
     ...BASE_TABS,
-    ...(hasMentors ? [QA_TAB] : []),
-    ...(isMentor   ? [MENTEES_TAB] : []),
+    QA_TAB,
+    ...(isMentor ? [MENTEES_TAB] : []),
   ];
 
   return (
@@ -136,7 +133,7 @@ export default function SadhanaPage() {
       {showMentorSheet && (
         <MentorLinkSheet
           onClose={() => { setShowMentorSheet(false); refreshNotifications(); }}
-          onMentorsChanged={(mentors) => { setHasMentors(mentors.length > 0); }}
+          onMentorsChanged={() => {}}
         />
       )}
     </div>
