@@ -142,18 +142,25 @@ export interface SadhanaQA {
 }
 
 export const uploadQAAudio = async (blob: Blob): Promise<string> => {
-  // Convert to base64 and send as JSON — avoids all multipart/Content-Type issues
-  const base64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+  // Use the existing /api/upload/audio endpoint (UploadController) which is proven to work.
+  // fetch() is used instead of apiClient so the browser sets multipart boundary automatically.
+  const token = typeof window !== "undefined" ? localStorage.getItem("bdd_auth_token") : null;
+  const form = new FormData();
+  // Force audio/webm so backend's content-type check (startsWith "audio/") always passes.
+  // Chrome MediaRecorder reports "video/webm" which would be rejected otherwise.
+  const audioBlob = new Blob([blob], { type: "audio/webm" });
+  form.append("file", audioBlob, "voice.webm");
+  const res = await fetch("https://bddsm-production.up.railway.app/api/upload/audio", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
   });
-  const res = await apiClient.post<{ url: string }>("/api/sadhana/qa/audio", {
-    audioBase64: base64,
-    contentType: blob.type || "audio/webm",
-  });
-  return res.data.url;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `Upload failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return data.url;
 };
 
 export const askMentorQuestion = async (
