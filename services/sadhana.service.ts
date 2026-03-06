@@ -159,6 +159,18 @@ export const answerQuestion = async (qaId: number, answer: string): Promise<Sadh
   return res.data;
 };
 
+// ── Notifications ───────────────────────────────────────────────────────────
+
+export interface SadhanaNotifications {
+  pendingQuestions: number; // for mentor: unseen incoming questions
+  newAnswers: number;       // for mentee: answers not yet seen
+}
+
+export const getNotifications = async (): Promise<SadhanaNotifications> => {
+  const res = await apiClient.get<SadhanaNotifications>("/api/sadhana/notifications");
+  return res.data;
+};
+
 // ── Admin ──────────────────────────────────────────────────────────────────
 
 export const adminGetQuestions = async (): Promise<SadhanaQuestion[]> => {
