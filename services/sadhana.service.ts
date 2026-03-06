@@ -144,9 +144,8 @@ export interface SadhanaQA {
 export const uploadQAAudio = async (blob: Blob): Promise<string> => {
   const form = new FormData();
   form.append("file", blob, "voice.webm");
-  const res = await apiClient.post<{ url: string }>("/api/sadhana/qa/audio", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  // Let axios set Content-Type automatically — it includes the required boundary parameter
+  const res = await apiClient.post<{ url: string }>("/api/sadhana/qa/audio", form);
   return res.data.url;
 };
 
