@@ -88,6 +88,11 @@ export const getMenteeEntries = async (userId: number): Promise<SadhanaEntryResp
   return res.data;
 };
 
+export const getMenteePendingCounts = async (): Promise<Record<number, number>> => {
+  const res = await apiClient.get<Record<number, number>>("/api/sadhana/mentees/pending-counts");
+  return res.data;
+};
+
 // ── Entry Reactions ────────────────────────────────────────────────────────
 
 export interface EntryReaction {

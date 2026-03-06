@@ -6,6 +6,7 @@ import {
   getMyMentees,
   getMenteeEntries,
   getMenteeQA,
+  getMenteePendingCounts,
   getSadhanaQuestions,
   getAbsentMentees,
   getEntryReactions,
@@ -372,11 +373,13 @@ function DevoteeDetail({
   entries,
   questions,
   myUserId,
+  onMessagesSeen,
 }: {
   devoteeId: number;
   entries: SadhanaEntryResponse[];
   questions: SadhanaQuestion[];
   myUserId: number;
+  onMessagesSeen?: () => void;
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("date");
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
@@ -395,7 +398,7 @@ function DevoteeDetail({
         {(["date", "question", "messages"] as ViewMode[]).map((mode) => (
           <button
             key={mode}
-            onClick={() => setViewMode(mode)}
+            onClick={() => { setViewMode(mode); if (mode === "messages") onMessagesSeen?.(); }}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               viewMode === mode
                 ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
@@ -511,14 +514,17 @@ function DevoteeCard({
   devotee,
   questions,
   myUserId,
+  pendingCount,
 }: {
   devotee: MentorUser;
   questions: SadhanaQuestion[];
   myUserId: number;
+  pendingCount: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [entries, setEntries] = useState<SadhanaEntryResponse[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [localPending, setLocalPending] = useState(pendingCount);
 
   const loadEntries = async () => {
     if (entries !== null) return;
@@ -546,7 +552,14 @@ function DevoteeCard({
       >
         <AvatarInitial name={devotee.name} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{devotee.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-white truncate">{devotee.name}</p>
+            {localPending > 0 && (
+              <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {localPending}
+              </span>
+            )}
+          </div>
           <p className="text-[11px] text-gray-500 truncate">{devotee.email}</p>
         </div>
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -569,6 +582,7 @@ function DevoteeCard({
                 entries={entries}
                 questions={questions}
                 myUserId={myUserId}
+                onMessagesSeen={() => setLocalPending(0)}
               />
             </div>
           ) : null}
@@ -584,13 +598,15 @@ export default function SadhanaMentees() {
   const { user } = useAuth();
   const [mentees, setMentees] = useState<MentorUser[] | null>(null);
   const [questions, setQuestions] = useState<SadhanaQuestion[]>([]);
+  const [pendingCounts, setPendingCounts] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getMyMentees(), getSadhanaQuestions()])
-      .then(([m, q]) => {
+    Promise.all([getMyMentees(), getSadhanaQuestions(), getMenteePendingCounts()])
+      .then(([m, q, counts]) => {
         setMentees(m);
         setQuestions(q.filter((q) => q.active && !q.hidden));
+        setPendingCounts(counts);
       })
       .catch(() => setMentees([]))
       .finally(() => setLoading(false));
@@ -629,6 +645,7 @@ export default function SadhanaMentees() {
             devotee={devotee}
             questions={questions}
             myUserId={user?.id ?? 0}
+            pendingCount={pendingCounts[devotee.id] ?? 0}
           />
         ))}
       </div>
