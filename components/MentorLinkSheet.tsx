@@ -7,9 +7,11 @@ import {
   unlinkMentor,
   getMentorQA,
   askMentorQuestion,
+  uploadQAAudio,
   MentorUser,
   SadhanaQA,
 } from "@/services/sadhana.service";
+import AudioRecorder from "@/components/AudioRecorder";
 import { searchUsersPublic, UserSearchResult } from "@/services/video.service";
 
 function AvatarInitial({ name }: { name: string }) {
@@ -32,6 +34,7 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
   const [thread, setThread] = useState<SadhanaQA[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState("");
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [sending, setSending] = useState(false);
 
   const handleToggle = () => {
@@ -46,12 +49,15 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
   };
 
   const handleSend = async () => {
-    if (!question.trim()) return;
+    if (!question.trim() && !audioBlob) return;
     setSending(true);
     try {
-      const qa = await askMentorQuestion(mentor.id, question.trim());
+      let audioUrl: string | undefined;
+      if (audioBlob) audioUrl = await uploadQAAudio(audioBlob);
+      const qa = await askMentorQuestion(mentor.id, question.trim(), audioUrl);
       setThread((prev) => [qa, ...(prev ?? [])]);
       setQuestion("");
+      setAudioBlob(null);
     } finally {
       setSending(false);
     }
@@ -86,14 +92,24 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
                 <div key={qa.id} className="space-y-1">
                   <div className="flex justify-end">
                     <div className="max-w-[85%] bg-gray-800 rounded-xl rounded-tr-sm px-3 py-1.5">
-                      <p className="text-[11px] text-gray-300">{qa.question}</p>
+                      {qa.question !== "(Voice message)" && (
+                        <p className="text-[11px] text-gray-300">{qa.question}</p>
+                      )}
+                      {qa.questionAudioUrl && (
+                        <audio controls src={qa.questionAudioUrl} className="mt-1 h-7 max-w-full" />
+                      )}
                       <p className="text-[10px] text-gray-600 mt-0.5">{formatShort(qa.askedAt)}</p>
                     </div>
                   </div>
                   {qa.answer ? (
                     <div className="flex justify-start">
                       <div className="max-w-[85%] bg-orange-500/10 border border-orange-500/20 rounded-xl rounded-tl-sm px-3 py-1.5">
-                        <p className="text-[11px] text-orange-100">{qa.answer}</p>
+                        {qa.answer !== "(Voice message)" && (
+                          <p className="text-[11px] text-orange-100">{qa.answer}</p>
+                        )}
+                        {qa.answerAudioUrl && (
+                          <audio controls src={qa.answerAudioUrl} className="mt-1 h-7 max-w-full" />
+                        )}
                         {qa.answeredAt && (
                           <p className="text-[10px] text-orange-400/50 mt-0.5">{formatShort(qa.answeredAt)}</p>
                         )}
@@ -110,22 +126,27 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
           ) : null}
 
           {/* Ask form */}
-          <div className="flex gap-2 pt-1">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="Ask a question…"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60"
-            />
-            <button
-              onClick={handleSend}
-              disabled={sending || !question.trim()}
-              className="px-3 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors flex-shrink-0"
-            >
-              {sending ? "…" : "Send"}
-            </button>
+          <div className="space-y-1.5 pt-1">
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Ask a question…"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60"
+              />
+              <AudioRecorder onAudio={setAudioBlob} />
+              <button
+                onClick={handleSend}
+                disabled={sending || (!question.trim() && !audioBlob)}
+                className="px-3 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors flex-shrink-0"
+              >
+                {sending ? (
+                  <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" />
+                ) : "Send"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -149,6 +170,7 @@ export default function MentorLinkSheet({
   const [searching, setSearching] = useState(false);
   const [linkingId, setLinkingId] = useState<number | null>(null);
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
+  const [confirmUnlinkId, setConfirmUnlinkId] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -251,14 +273,43 @@ export default function MentorLinkSheet({
                         <p className="text-sm font-semibold text-white truncate">{m.name}</p>
                         <p className="text-[11px] text-gray-500 truncate">{m.email}</p>
                       </div>
-                      <button
-                        onClick={() => handleUnlink(m.id)}
-                        disabled={unlinkingId === m.id}
-                        className="flex-shrink-0 text-[11px] font-semibold text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
-                      >
-                        {unlinkingId === m.id ? "…" : "Unlink"}
-                      </button>
+                      {confirmUnlinkId === m.id ? (
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          <button
+                            onClick={() => { setConfirmUnlinkId(null); handleUnlink(m.id); }}
+                            disabled={unlinkingId === m.id}
+                            className="text-[11px] font-semibold text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
+                          >
+                            {unlinkingId === m.id ? "…" : "Confirm"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmUnlinkId(null)}
+                            className="text-[11px] font-semibold text-gray-500 hover:text-gray-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmUnlinkId(m.id)}
+                          className="flex-shrink-0 text-[11px] font-semibold text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          Unlink
+                        </button>
+                      )}
                     </div>
+                    {confirmUnlinkId === m.id && (
+                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                          strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5">
+                          <path strokeLinecap="round" strokeLinejoin="round"
+                            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                        </svg>
+                        <p className="text-[11px] text-red-300 leading-relaxed">
+                          Unlink <span className="font-semibold">{m.name}</span> as your mentor? Your Q&amp;A history will be preserved.
+                        </p>
+                      </div>
+                    )}
                     <MentorQAThread mentor={m} />
                   </div>
                 ))}

@@ -137,10 +137,25 @@ export interface SadhanaQA {
   answer?: string;
   askedAt: string;
   answeredAt?: string;
+  questionAudioUrl?: string;
+  answerAudioUrl?: string;
 }
 
-export const askMentorQuestion = async (mentorId: number, question: string): Promise<SadhanaQA> => {
-  const res = await apiClient.post<SadhanaQA>("/api/sadhana/qa", { mentorId, question });
+export const uploadQAAudio = async (blob: Blob): Promise<string> => {
+  const form = new FormData();
+  form.append("file", blob, "voice.webm");
+  const res = await apiClient.post<{ url: string }>("/api/sadhana/qa/audio", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data.url;
+};
+
+export const askMentorQuestion = async (
+  mentorId: number,
+  question: string,
+  questionAudioUrl?: string,
+): Promise<SadhanaQA> => {
+  const res = await apiClient.post<SadhanaQA>("/api/sadhana/qa", { mentorId, question, questionAudioUrl });
   return res.data;
 };
 
@@ -154,8 +169,12 @@ export const getMenteeQA = async (menteeId: number): Promise<SadhanaQA[]> => {
   return res.data;
 };
 
-export const answerQuestion = async (qaId: number, answer: string): Promise<SadhanaQA> => {
-  const res = await apiClient.put<SadhanaQA>(`/api/sadhana/qa/${qaId}/answer`, { answer });
+export const answerQuestion = async (
+  qaId: number,
+  answer: string,
+  answerAudioUrl?: string,
+): Promise<SadhanaQA> => {
+  const res = await apiClient.put<SadhanaQA>(`/api/sadhana/qa/${qaId}/answer`, { answer, answerAudioUrl });
   return res.data;
 };
 

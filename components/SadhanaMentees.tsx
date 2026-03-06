@@ -12,12 +12,14 @@ import {
   postEntryReaction,
   deleteEntryReaction,
   answerQuestion,
+  uploadQAAudio,
   MentorUser,
   SadhanaEntryResponse,
   SadhanaQuestion,
   EntryReaction,
   SadhanaQA,
 } from "@/services/sadhana.service";
+import AudioRecorder from "@/components/AudioRecorder";
 
 const SCORE_COLORS = [
   { min: 90, label: "Excellent",  color: "text-emerald-400", dot: "bg-emerald-400" },
@@ -257,6 +259,7 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
   const [thread, setThread] = useState<SadhanaQA[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [audioBlobs, setAudioBlobs] = useState<Record<number, Blob | null>>({});
   const [submitting, setSubmitting] = useState<number | null>(null);
 
   useEffect(() => {
@@ -268,13 +271,17 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
   }, [devoteeId]);
 
   const handleAnswer = async (qa: SadhanaQA) => {
-    const ans = drafts[qa.id]?.trim();
-    if (!ans) return;
+    const ans = drafts[qa.id]?.trim() ?? "";
+    const blob = audioBlobs[qa.id] ?? null;
+    if (!ans && !blob) return;
     setSubmitting(qa.id);
     try {
-      const updated = await answerQuestion(qa.id, ans);
+      let audioUrl: string | undefined;
+      if (blob) audioUrl = await uploadQAAudio(blob);
+      const updated = await answerQuestion(qa.id, ans, audioUrl);
       setThread((prev) => prev?.map((q) => (q.id === qa.id ? updated : q)) ?? []);
       setDrafts((d) => { const nd = { ...d }; delete nd[qa.id]; return nd; });
+      setAudioBlobs((d) => { const nd = { ...d }; delete nd[qa.id]; return nd; });
     } finally {
       setSubmitting(null);
     }
@@ -299,17 +306,27 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
           {/* Question bubble */}
           <div className="flex justify-end">
             <div className="max-w-[85%] bg-gray-800 rounded-2xl rounded-tr-sm px-3 py-2">
-              <p className="text-xs text-gray-300">{qa.question}</p>
+              {qa.question !== "(Voice message)" && (
+                <p className="text-xs text-gray-300">{qa.question}</p>
+              )}
+              {qa.questionAudioUrl && (
+                <audio controls src={qa.questionAudioUrl} className="mt-1 h-8 max-w-full" />
+              )}
               <p className="text-[10px] text-gray-600 mt-0.5">
                 {new Date(qa.askedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
               </p>
             </div>
           </div>
-          {/* Answer bubble */}
+          {/* Answer bubble or answer form */}
           {qa.answer ? (
             <div className="flex justify-start">
               <div className="max-w-[85%] bg-orange-500/15 border border-orange-500/20 rounded-2xl rounded-tl-sm px-3 py-2">
-                <p className="text-xs text-orange-100">{qa.answer}</p>
+                {qa.answer !== "(Voice message)" && (
+                  <p className="text-xs text-orange-100">{qa.answer}</p>
+                )}
+                {qa.answerAudioUrl && (
+                  <audio controls src={qa.answerAudioUrl} className="mt-1 h-8 max-w-full" />
+                )}
                 {qa.answeredAt && (
                   <p className="text-[10px] text-orange-400/60 mt-0.5">
                     {new Date(qa.answeredAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
@@ -326,13 +343,18 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
                 rows={2}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60 resize-none"
               />
-              <button
-                onClick={() => handleAnswer(qa)}
-                disabled={submitting === qa.id || !drafts[qa.id]?.trim()}
-                className="px-4 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors"
-              >
-                {submitting === qa.id ? "…" : "Send"}
-              </button>
+              <div className="flex gap-2 items-center">
+                <AudioRecorder onAudio={(blob) => setAudioBlobs((d) => ({ ...d, [qa.id]: blob }))} />
+                <button
+                  onClick={() => handleAnswer(qa)}
+                  disabled={submitting === qa.id || (!drafts[qa.id]?.trim() && !audioBlobs[qa.id])}
+                  className="px-4 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors"
+                >
+                  {submitting === qa.id ? (
+                    <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" />
+                  ) : "Send"}
+                </button>
+              </div>
             </div>
           )}
         </div>

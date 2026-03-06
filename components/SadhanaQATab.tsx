@@ -5,9 +5,11 @@ import {
   getMyMentors,
   getMentorQA,
   askMentorQuestion,
+  uploadQAAudio,
   MentorUser,
   SadhanaQA,
 } from "@/services/sadhana.service";
+import AudioRecorder from "@/components/AudioRecorder";
 
 function formatShort(d: string) {
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
@@ -24,7 +26,12 @@ function QAItem({ qa, mentorName }: { qa: SadhanaQA; mentorName?: string }) {
       {/* Question bubble — right aligned */}
       <div className="flex justify-end">
         <div className="max-w-[88%] bg-gray-800 rounded-2xl rounded-tr-sm px-3.5 py-2.5">
-          <p className="text-[13px] text-gray-200 leading-relaxed">{qa.question}</p>
+          {qa.question !== "(Voice message)" && (
+            <p className="text-[13px] text-gray-200 leading-relaxed">{qa.question}</p>
+          )}
+          {qa.questionAudioUrl && (
+            <audio controls src={qa.questionAudioUrl} className="mt-1 h-8 max-w-full" />
+          )}
           <p className="text-[10px] text-gray-600 mt-0.5 text-right">{formatShort(qa.askedAt)}</p>
         </div>
       </div>
@@ -32,7 +39,12 @@ function QAItem({ qa, mentorName }: { qa: SadhanaQA; mentorName?: string }) {
       {qa.answer ? (
         <div className="flex justify-start">
           <div className="max-w-[88%] bg-orange-500/10 border border-orange-500/20 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-            <p className="text-[13px] text-orange-100 leading-relaxed">{qa.answer}</p>
+            {qa.answer !== "(Voice message)" && (
+              <p className="text-[13px] text-orange-100 leading-relaxed">{qa.answer}</p>
+            )}
+            {qa.answerAudioUrl && (
+              <audio controls src={qa.answerAudioUrl} className="mt-1 h-8 max-w-full" />
+            )}
             {qa.answeredAt && (
               <p className="text-[10px] text-orange-400/50 mt-0.5">{formatShort(qa.answeredAt)}</p>
             )}
@@ -57,16 +69,20 @@ function AskForm({
   onSent: (qa: SadhanaQA) => void;
 }) {
   const [question, setQuestion] = useState("");
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
   const handleSend = async () => {
-    if (!question.trim()) return;
+    if (!question.trim() && !audioBlob) return;
     setSending(true);
     try {
-      const qa = await askMentorQuestion(mentorId, question.trim());
+      let audioUrl: string | undefined;
+      if (audioBlob) audioUrl = await uploadQAAudio(audioBlob);
+      const qa = await askMentorQuestion(mentorId, question.trim(), audioUrl);
       onSent(qa);
       setQuestion("");
+      setAudioBlob(null);
       setSent(true);
       setTimeout(() => setSent(false), 2000);
     } finally {
@@ -75,29 +91,34 @@ function AskForm({
   };
 
   return (
-    <div className="mt-3 flex gap-2 items-end">
-      <div className="flex-1 relative">
-        <textarea
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder={`Ask ${mentorName}…`}
-          rows={2}
-          className="w-full bg-gray-900 border border-gray-700 focus:border-orange-500/60 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 outline-none resize-none transition-colors"
-        />
-        {sent && (
-          <span className="absolute right-3 top-2 text-[11px] text-emerald-400 font-semibold">Sent ✓</span>
-        )}
+    <div className="mt-3 space-y-2">
+      <div className="flex gap-2 items-end">
+        <div className="flex-1 relative">
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder={`Ask ${mentorName}…`}
+            rows={2}
+            className="w-full bg-gray-900 border border-gray-700 focus:border-orange-500/60 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 outline-none resize-none transition-colors"
+          />
+          {sent && (
+            <span className="absolute right-3 top-2 text-[11px] text-emerald-400 font-semibold">Sent ✓</span>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5 mb-0.5">
+          <AudioRecorder onAudio={setAudioBlob} />
+          <button
+            onClick={handleSend}
+            disabled={sending || (!question.trim() && !audioBlob)}
+            className="px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-semibold transition-all active:scale-95"
+          >
+            {sending ? (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+            ) : "Send"}
+          </button>
+        </div>
       </div>
-      <button
-        onClick={handleSend}
-        disabled={sending || !question.trim()}
-        className="flex-shrink-0 mb-0.5 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-semibold transition-all active:scale-95"
-      >
-        {sending ? (
-          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-        ) : "Send"}
-      </button>
     </div>
   );
 }
