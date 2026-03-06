@@ -78,7 +78,7 @@ export default function LecturePage() {
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
 
   return (
-    <div className="h-screen bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden">
+    <div className="h-dvh bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden">
       {/* ── Top header ── */}
       <div className={`flex items-center px-4 gap-3 flex-shrink-0 transition-all duration-300 ${readingMode ? "pt-3 pb-2" : "pt-5 pb-3"}`}>
         {/* Back / minimize */}
@@ -262,7 +262,17 @@ export default function LecturePage() {
 
       {/* ── Mini player bar (reading mode only) ── */}
       {readingMode && lecture && (
-        <div className="flex-shrink-0 bg-black/95 border-t border-gray-800/60 px-4 pt-2 pb-safe-or-3">
+        <div className="flex-shrink-0 bg-black/95 border-t border-gray-800/60 px-4 pt-2" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+          {/* Follow audio button — re-enables autoscroll */}
+          <button
+            onClick={() => setAutoScroll(true)}
+            className="w-full mb-2 flex items-center justify-center gap-1.5 text-xs text-orange-400 border border-orange-500/30 rounded-lg py-1.5 bg-orange-500/5 hover:bg-orange-500/10 transition-colors active:scale-[0.98]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+            </svg>
+            Follow audio
+          </button>
           {/* Seek bar */}
           <input
             type="range" min={0} max={100} step={0.1}

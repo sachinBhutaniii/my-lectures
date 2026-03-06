@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useFetch } from "@/hooks/useFetch";
 import {
   getSadhanaQuestions,
-  getTodayEntry,
+  getMyEntries,
   submitSadhanaEntry,
   SadhanaQuestion,
   SadhanaEntryResponse,
@@ -59,7 +59,7 @@ function AlreadySubmitted({
       {/* Score card */}
       <div className={`rounded-2xl border-2 ${grade.ring} bg-gray-900/60 p-6 text-center`}>
         <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-gray-500 mb-1">
-          Today's Score
+          {entry.entryDate === today() ? "Today's Score" : formatDate(entry.entryDate)}
         </p>
         <div className="flex items-baseline justify-center gap-1.5 mb-1">
           <span className={`text-5xl font-black ${grade.color}`}>{entry.totalScore}</span>
@@ -114,24 +114,36 @@ export default function SadhanaTracker() {
   const fetchQuestions = useCallback(() => getSadhanaQuestions(), []);
   const { data: questions, loading, error: questionsError } = useFetch<SadhanaQuestion[]>(fetchQuestions);
 
+  const [selectedDate, setSelectedDate] = useState(today());
+  const [allEntries, setAllEntries] = useState<SadhanaEntryResponse[]>([]);
+  const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [step, setStep] = useState(0); // 0 = landing, 1..n = questions, n+1 = review
   const [submitted, setSubmitted] = useState(false);
+  const [submittedEntry, setSubmittedEntry] = useState<SadhanaEntryResponse | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [todayEntry, setTodayEntry] = useState<SadhanaEntryResponse | null>(null);
-  const [todayChecked, setTodayChecked] = useState(false);
-  const [showAlreadySubmitted, setShowAlreadySubmitted] = useState(true);
+  const [showAlreadySubmitted, setShowAlreadySubmitted] = useState(false);
 
-  // Check if already submitted today
+  // Fetch all entries on mount
   useEffect(() => {
-    getTodayEntry()
-      .then((e) => {
-        setTodayEntry(e);
-        setTodayChecked(true);
-      })
-      .catch(() => setTodayChecked(true));
+    getMyEntries()
+      .then((entries) => { setAllEntries(entries); setEntriesLoaded(true); })
+      .catch(() => setEntriesLoaded(true));
   }, []);
+
+  // Reset form when date changes
+  useEffect(() => {
+    setStep(0);
+    setSubmitted(false);
+    setSubmittedEntry(null);
+    setShowAlreadySubmitted(false);
+    setAnswers({});
+    setSubmitError("");
+  }, [selectedDate]);
+
+  // Derived: entry for currently selected date
+  const entryForDate = allEntries.find((e) => e.entryDate === selectedDate) ?? null;
 
   const visibleQuestions = (questions ?? []).filter((q) => q.active && !q.hidden);
   const totalSteps = visibleQuestions.length;
@@ -151,18 +163,17 @@ export default function SadhanaTracker() {
     setSubmitting(true);
     setSubmitError("");
     try {
-      const entry = await submitSadhanaEntry(today(), answers);
-      setTodayEntry(entry);
+      const entry = await submitSadhanaEntry(selectedDate, answers);
+      setAllEntries((prev) => [...prev.filter((e) => e.entryDate !== selectedDate), entry]);
+      setSubmittedEntry(entry);
       setSubmitted(true);
     } catch (e: any) {
       const status = e?.response?.status;
       if (status === 409) {
-        // Already submitted — re-fetch and show the existing entry
-        try {
-          const existing = await getTodayEntry();
-          if (existing) { setTodayEntry(existing); setShowAlreadySubmitted(true); return; }
-        } catch {}
-        setSubmitError("Already submitted for today.");
+        // Already submitted — show the existing entry
+        const existing = allEntries.find((e) => e.entryDate === selectedDate);
+        if (existing) { setShowAlreadySubmitted(true); return; }
+        setSubmitError("Already submitted for this date.");
       } else if (status === 401 || status === 403) {
         setSubmitError("Session expired. Please log in again.");
       } else {
@@ -189,7 +200,7 @@ export default function SadhanaTracker() {
   })();
 
   // ── Loading ──────────────────────────────────────────────────────────────
-  if (loading || !todayChecked) {
+  if (loading || !entriesLoaded) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -207,11 +218,11 @@ export default function SadhanaTracker() {
     );
   }
 
-  // ── Already submitted today ─────────────────────────────────────────────
-  if (todayEntry && showAlreadySubmitted && !submitted) {
+  // ── Already submitted for selected date ────────────────────────────────
+  if (entryForDate && showAlreadySubmitted && !submitted) {
     return (
       <AlreadySubmitted
-        entry={todayEntry}
+        entry={entryForDate}
         questions={visibleQuestions}
         onReset={() => setShowAlreadySubmitted(false)}
       />
@@ -219,9 +230,9 @@ export default function SadhanaTracker() {
   }
 
   // ── Success screen ───────────────────────────────────────────────────────
-  if (submitted && todayEntry) {
-    const grade = getScoreGrade(todayEntry.totalScore, todayEntry.maxScore);
-    const pct = todayEntry.maxScore > 0 ? Math.round((todayEntry.totalScore / todayEntry.maxScore) * 100) : 0;
+  if (submitted && submittedEntry) {
+    const grade = getScoreGrade(submittedEntry.totalScore, submittedEntry.maxScore);
+    const pct = submittedEntry.maxScore > 0 ? Math.round((submittedEntry.totalScore / submittedEntry.maxScore) * 100) : 0;
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 text-center gap-6">
         <div className="w-20 h-20 rounded-full bg-orange-500/15 border-2 border-orange-500/50 flex items-center justify-center">
@@ -237,8 +248,8 @@ export default function SadhanaTracker() {
         <div className={`w-full rounded-2xl border-2 ${grade.ring} bg-gray-900/60 p-5`}>
           <p className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1">Total Score</p>
           <div className="flex items-baseline justify-center gap-1.5">
-            <span className={`text-5xl font-black ${grade.color}`}>{todayEntry.totalScore}</span>
-            <span className="text-2xl font-bold text-gray-600">/ {todayEntry.maxScore}</span>
+            <span className={`text-5xl font-black ${grade.color}`}>{submittedEntry.totalScore}</span>
+            <span className="text-2xl font-bold text-gray-600">/ {submittedEntry.maxScore}</span>
           </div>
           <p className={`text-sm font-semibold mt-1 ${grade.color}`}>{grade.label} — {pct}%</p>
           <div className="mt-3 h-1.5 bg-gray-800 rounded-full overflow-hidden">
@@ -262,7 +273,14 @@ export default function SadhanaTracker() {
             </svg>
           </div>
           <h1 className="text-xl font-bold text-white mb-1">Daily Sadhana Card</h1>
-          <p className="text-sm text-gray-500">{formatDate(today())}</p>
+          {/* Date picker */}
+          <input
+            type="date"
+            value={selectedDate}
+            max={today()}
+            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+            className="mt-2 bg-gray-900/60 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-300 text-center outline-none focus:border-orange-500/60 transition-colors"
+          />
         </div>
 
         <div className="rounded-2xl bg-gray-900/60 border border-gray-800 p-4 space-y-2.5">
@@ -282,12 +300,21 @@ export default function SadhanaTracker() {
           ))}
         </div>
 
-        <button
-          onClick={() => setStep(1)}
-          className="mt-auto w-full bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl transition-all shadow-lg shadow-orange-900/30"
-        >
-          Begin Sadhana Card ✦
-        </button>
+        {entryForDate ? (
+          <button
+            onClick={() => setShowAlreadySubmitted(true)}
+            className="mt-auto w-full bg-gray-800 hover:bg-gray-700 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl transition-all border border-gray-700"
+          >
+            View Submission for {selectedDate === today() ? "Today" : formatDate(selectedDate)}
+          </button>
+        ) : (
+          <button
+            onClick={() => setStep(1)}
+            className="mt-auto w-full bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl transition-all shadow-lg shadow-orange-900/30"
+          >
+            Begin Sadhana Card ✦
+          </button>
+        )}
       </div>
     );
   }
