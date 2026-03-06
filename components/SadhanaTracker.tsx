@@ -155,7 +155,19 @@ export default function SadhanaTracker() {
       setTodayEntry(entry);
       setSubmitted(true);
     } catch (e: any) {
-      setSubmitError(e?.response?.data?.message ?? "Submission failed. Please try again.");
+      const status = e?.response?.status;
+      if (status === 409) {
+        // Already submitted — re-fetch and show the existing entry
+        try {
+          const existing = await getTodayEntry();
+          if (existing) { setTodayEntry(existing); setShowAlreadySubmitted(true); return; }
+        } catch {}
+        setSubmitError("Already submitted for today.");
+      } else if (status === 401 || status === 403) {
+        setSubmitError("Session expired. Please log in again.");
+      } else {
+        setSubmitError("Server error. Please wait a moment and try again.");
+      }
     } finally {
       setSubmitting(false);
     }
