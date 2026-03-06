@@ -142,11 +142,22 @@ export interface SadhanaQA {
 }
 
 export const uploadQAAudio = async (blob: Blob): Promise<string> => {
+  // Use fetch directly — apiClient has a default "Content-Type: application/json" header
+  // that overwrites the multipart/form-data boundary axios would set for FormData.
+  const token = typeof window !== "undefined" ? localStorage.getItem("bdd_auth_token") : null;
   const form = new FormData();
   form.append("file", blob, "voice.webm");
-  // Let axios set Content-Type automatically — it includes the required boundary parameter
-  const res = await apiClient.post<{ url: string }>("/api/sadhana/qa/audio", form);
-  return res.data.url;
+  const res = await fetch(
+    "https://bddsm-production.up.railway.app/api/sadhana/qa/audio",
+    {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    },
+  );
+  if (!res.ok) throw new Error(`Audio upload failed: ${res.status}`);
+  const data = await res.json();
+  return data.url;
 };
 
 export const askMentorQuestion = async (
