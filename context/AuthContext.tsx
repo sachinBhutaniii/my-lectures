@@ -64,18 +64,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchMe = useCallback(async (tkn: string) => {
-    try {
-      const res = await apiClient.get("/api/users/me", {
-        headers: { Authorization: `Bearer ${tkn}` },
-      });
-      setUser(res.data);
-      syncProfileFromAuth(res.data);
-    } catch {
-      localStorage.removeItem(TOKEN_KEY);
-      setToken(null);
-      setUser(null);
-    }
+    const res = await apiClient.get("/api/users/me", {
+      headers: { Authorization: `Bearer ${tkn}` },
+    });
+    setUser(res.data);
+    syncProfileFromAuth(res.data);
   }, [syncProfileFromAuth]);
+
+  const handleFetchMe = useCallback(async (tkn: string) => {
+    try {
+      await fetchMe(tkn);
+      setAuthLoading(false);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        // Token invalid/expired — clear session and let pages redirect to login
+        localStorage.removeItem(TOKEN_KEY);
+        setToken(null);
+        setUser(null);
+        setAuthLoading(false);
+      }
+      // On 5xx / network error (server redeploying): keep token, keep authLoading=true
+      // so pages show the spinner. User can refresh once server is back up.
+    }
+  }, [fetchMe]);
 
   useEffect(() => {
     // Handle OAuth2 callback — backend redirects to /?token=<jwt>
@@ -85,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(TOKEN_KEY, urlToken);
       window.history.replaceState({}, "", window.location.pathname);
       setToken(urlToken);
-      fetchMe(urlToken).finally(() => setAuthLoading(false));
+      handleFetchMe(urlToken);
       return;
     }
 
@@ -93,11 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem(TOKEN_KEY);
     if (stored) {
       setToken(stored);
-      fetchMe(stored).finally(() => setAuthLoading(false));
+      handleFetchMe(stored);
     } else {
       setAuthLoading(false);
     }
-  }, [fetchMe]);
+  }, [handleFetchMe]);
 
   const login = useCallback(
     async (email: string, password: string) => {
