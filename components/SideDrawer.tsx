@@ -187,6 +187,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
   const [showLanguage, setShowLanguage] = useState(false);
   const [selectedLang, setSelectedLang] = useState<"en" | "hi">("en");
   const [hindiMsg, setHindiMsg] = useState(false);
+  const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => { setNow(formatNow()); }, []);
 
@@ -206,6 +207,22 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
       setShowLanguage(false);
     }
   }
+
+  const handleClearCache = async () => {
+    setClearingCache(true);
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } finally {
+      window.location.reload();
+    }
+  };
 
   return (
     <>
@@ -309,7 +326,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
 
           <MenuItem icon={icons.language}  label="Language"  sub={selectedLang === "hi" ? "हिन्दी" : "English"} onClick={() => setShowLanguage(true)} />
           <MenuItem icon={icons.interface} label="Interface"  sub="Default" />
-          <MenuItem icon={icons.trash}     label="Clear Cache" />
+          <MenuItem icon={icons.trash}     label="Clear Cache" sub={clearingCache ? "Clearing…" : undefined} onClick={clearingCache ? undefined : handleClearCache} />
           <MenuItem icon={icons.share}     label="Share" badge="Soon" />
           <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={now} />
           <MenuItem icon={icons.clock}     label="Last Lecture Published On:" sub={now} />
