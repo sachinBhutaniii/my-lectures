@@ -169,7 +169,7 @@ export default function CategoryPicker({ selected, onSelect }: Props) {
     <div className="mt-4">
       {/* Section header */}
       <div className="flex items-center justify-between px-4 mb-3">
-        <span className="text-base font-semibold tracking-wide">Browse by Book</span>
+        <span className="text-base font-semibold tracking-wide">Categories</span>
         <button
           onClick={() => setExpanded((v) => !v)}
           className="text-orange-400 text-xs font-medium"
