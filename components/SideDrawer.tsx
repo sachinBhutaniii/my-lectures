@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { useT } from "@/hooks/useT";
 
 interface Props {
   open: boolean;
@@ -181,31 +183,19 @@ function formatNow() {
 
 export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile, onStatistics }: Props) {
   const { user, logout, isAdmin, isProofreader } = useAuth();
+  const { lang, setLang } = useLanguage();
+  const t = useT();
   const router = useRouter();
   const [now, setNow] = useState("");
   const [showItinerary, setShowItinerary] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
-  const [selectedLang, setSelectedLang] = useState<"en" | "hi">("en");
-  const [hindiMsg, setHindiMsg] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => { setNow(formatNow()); }, []);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("bdd_app_language") as "en" | "hi" | null;
-      if (saved) setSelectedLang(saved);
-    }
-  }, []);
-
-  function selectLanguage(lang: "en" | "hi") {
-    setSelectedLang(lang);
-    localStorage.setItem("bdd_app_language", lang);
-    if (lang === "hi") {
-      setHindiMsg(true);
-    } else {
-      setShowLanguage(false);
-    }
+  function selectLanguage(l: "en" | "hi") {
+    setLang(l);
+    setShowLanguage(false);
   }
 
   const handleClearCache = async () => {
@@ -272,7 +262,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
               </svg>
-              Sign Out
+              {t("drawer.signOut")}
             </button>
           </div>
         ) : (
@@ -285,15 +275,15 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-semibold text-base">Guest</p>
-                <p className="text-gray-500 text-xs mt-0.5">Not signed in</p>
+                <p className="text-white font-semibold text-base">{t("drawer.guest")}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{t("drawer.notSignedIn")}</p>
               </div>
             </div>
             <button
               onClick={() => { onClose(); router.push("/login"); }}
               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
             >
-              Sign In / Sign Up
+              {t("drawer.signIn")}
             </button>
           </div>
         )}
@@ -303,16 +293,16 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
         {/* ── Scrollable content ── */}
         <div className="flex-1 overflow-y-auto">
           {/* LECTURE section */}
-          <SectionLabel label="LECTURE" />
+          <SectionLabel label={t("drawer.sectionLecture")} />
 
-          <MenuItem icon={icons.mediaLibrary} label="Media Library"    onClick={onMediaLibrary} />
-          <MenuItem icon={icons.history}      label="Playback History" onClick={onHistory} />
-          <MenuItem icon={icons.heart}        label="Favorites"        onClick={onFavourites} />
-          <MenuItem icon={icons.playlists}    label="Playlists"        onClick={onPlaylists} />
-          <MenuItem icon={icons.searchHistory} label="Search History" />
-          <MenuItem icon={icons.topLectures}  label="Top Lectures" />
-          <MenuItem icon={icons.statistics}   label="Statistics" onClick={() => { onClose(); onStatistics(); }} />
-          <MenuItem icon={icons.itinerary}    label="Itinerary" onClick={() => setShowItinerary(true)} />
+          <MenuItem icon={icons.mediaLibrary} label={t("drawer.mediaLibrary")}    onClick={onMediaLibrary} />
+          <MenuItem icon={icons.history}      label={t("drawer.playbackHistory")} onClick={onHistory} />
+          <MenuItem icon={icons.heart}        label={t("drawer.favorites")}        onClick={onFavourites} />
+          <MenuItem icon={icons.playlists}    label={t("drawer.playlists")}        onClick={onPlaylists} />
+          <MenuItem icon={icons.searchHistory} label={t("drawer.searchHistory")} />
+          <MenuItem icon={icons.topLectures}  label={t("drawer.topLectures")} />
+          <MenuItem icon={icons.statistics}   label={t("drawer.statistics")} onClick={() => { onClose(); onStatistics(); }} />
+          <MenuItem icon={icons.itinerary}    label={t("drawer.itinerary")} onClick={() => setShowItinerary(true)} />
           {isAdmin && <MenuItem icon={icons.gallery} label="Gallery" badge="NEW" />}
 
           {/* BHAKTI VIKĀSA SWAMI section */}
@@ -324,10 +314,10 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           {/* SETTINGS section */}
           <SectionLabel label="SETTINGS" />
 
-          <MenuItem icon={icons.language}  label="Language"  sub={selectedLang === "hi" ? "हिन्दी" : "English"} onClick={() => setShowLanguage(true)} />
-          <MenuItem icon={icons.interface} label="Interface"  sub="Default" />
-          <MenuItem icon={icons.trash}     label="Clear Cache" sub={clearingCache ? "Clearing…" : undefined} onClick={clearingCache ? undefined : handleClearCache} />
-          <MenuItem icon={icons.share}     label="Share" badge="Soon" />
+          <MenuItem icon={icons.language}  label={t("drawer.language")}  sub={lang === "hi" ? "हिन्दी" : "English"} onClick={() => setShowLanguage(true)} />
+          <MenuItem icon={icons.interface} label={t("drawer.interface")}  sub="Default" />
+          <MenuItem icon={icons.trash}     label={t("drawer.clearCache")} sub={clearingCache ? "Clearing…" : undefined} onClick={clearingCache ? undefined : handleClearCache} />
+          <MenuItem icon={icons.share}     label={t("drawer.share")} badge="Soon" />
           <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={now} />
           <MenuItem icon={icons.clock}     label="Last Lecture Published On:" sub={now} />
 
@@ -392,7 +382,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
                   </svg>
                 </span>
-                <span className="text-red-400 text-[15px]">Sign Out</span>
+                <span className="text-red-400 text-[15px]">{t("drawer.signOut")}</span>
               </button>
             </>
           ) : (
@@ -407,7 +397,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l3 3m0 0l-3 3m3-3H3.75" />
                   </svg>
                 </span>
-                <span className="text-orange-400 text-[15px]">Sign In / Sign Up</span>
+                <span className="text-orange-400 text-[15px]">{t("drawer.signIn")}</span>
               </button>
             </>
           )}
@@ -453,81 +443,52 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
       {/* ── Language Selector overlay ── */}
       {showLanguage && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowLanguage(false); setHindiMsg(false); }} />
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLanguage(false)} />
           <div className="relative w-full max-w-sm bg-gradient-to-b from-[#120c04] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-12 shadow-2xl mx-auto">
             <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
-            <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">Language</h2>
-            <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-6">Choose Your Language</p>
+            <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">{t("drawer.langTitle")}</h2>
+            <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-6">{t("drawer.langSubtitle")}</p>
 
-            {hindiMsg ? (
-              /* Hindi coming soon message */
-              <>
-                <div className="flex justify-center mb-4">
-                  <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl">🕉️</div>
+            <div className="space-y-3">
+              <button
+                onClick={() => selectLanguage("en")}
+                className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
+                  lang === "en"
+                    ? "border-orange-500 bg-orange-500/15 text-orange-300"
+                    : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-xl">🇬🇧</span>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-sm">English</p>
+                  <p className="text-xs text-gray-500 mt-0.5">English</p>
                 </div>
-                <p className="text-center text-amber-300 text-base font-semibold leading-relaxed mb-2">
-                  परिवर्तन शीघ्र आ रहा है
-                </p>
-                <p className="text-center text-gray-400 text-sm leading-relaxed mb-2">
-                  प्रिय साधक, हिन्दी भाषा का अनुभव अभी तैयार किया जा रहा है।
-                </p>
-                <p className="text-center text-gray-500 text-sm leading-relaxed mb-6">
-                  जल्द ही भगवद्-वाणी आपकी मातृभाषा में आपके हृदय को स्पर्श करेगी।{" "}
-                  <span className="text-amber-400 italic">कृपया प्रतीक्षा करें।</span>
-                </p>
-                <p className="text-center text-gray-600 text-xs italic mb-6">
-                  "हरे कृष्ण हरे कृष्ण कृष्ण कृष्ण हरे हरे"
-                </p>
-                <button
-                  onClick={() => { setShowLanguage(false); setHindiMsg(false); }}
-                  className="w-full py-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 font-semibold text-sm hover:bg-amber-500/25 transition-colors active:scale-95"
-                >
-                  हरे कृष्ण 🙏
-                </button>
-              </>
-            ) : (
-              /* Language options */
-              <div className="space-y-3">
-                <button
-                  onClick={() => selectLanguage("en")}
-                  className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
-                    selectedLang === "en"
-                      ? "border-orange-500 bg-orange-500/15 text-orange-300"
-                      : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
-                  }`}
-                >
-                  <span className="text-xl">🇬🇧</span>
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-sm">English</p>
-                    <p className="text-xs text-gray-500 mt-0.5">English</p>
-                  </div>
-                  {selectedLang === "en" && (
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-400">
-                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  onClick={() => selectLanguage("hi")}
-                  className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
-                    selectedLang === "hi"
-                      ? "border-amber-500 bg-amber-500/15 text-amber-300"
-                      : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
-                  }`}
-                >
-                  <span className="text-xl">🇮🇳</span>
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-sm">हिन्दी</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Hindi</p>
-                  </div>
-                  {selectedLang === "hi" && (
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-amber-400">
-                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            )}
+                {lang === "en" && (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-400">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={() => selectLanguage("hi")}
+                className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
+                  lang === "hi"
+                    ? "border-amber-500 bg-amber-500/15 text-amber-300"
+                    : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-xl">🇮🇳</span>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-sm">हिन्दी</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Hindi</p>
+                </div>
+                {lang === "hi" && (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-amber-400">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/hooks/useT";
 import {
   getMyMentors,
   linkMentor,
@@ -30,6 +31,7 @@ function formatShort(d: string) {
 // ── Q&A thread per mentor ──────────────────────────────────────────────────
 
 function MentorQAThread({ mentor }: { mentor: MentorUser }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [thread, setThread] = useState<SadhanaQA[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,7 +77,7 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
           className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`}>
           <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
         </svg>
-        {expanded ? "Hide messages" : "Messages"}
+        {expanded ? t("mentor.hideMessages") : t("mentor.showMessages")}
       </button>
 
       {expanded && (
@@ -122,7 +124,7 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
               ))}
             </div>
           ) : thread !== null ? (
-            <p className="text-[11px] text-gray-600">No messages yet.</p>
+            <p className="text-[11px] text-gray-600">{t("mentor.noMessages")}</p>
           ) : null}
 
           {/* Ask form */}
@@ -133,7 +135,7 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder="Ask a question…"
+                placeholder={t("mentor.askPlaceholder")}
                 className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60"
               />
               <AudioRecorder onAudio={setAudioBlob} />
@@ -144,7 +146,7 @@ function MentorQAThread({ mentor }: { mentor: MentorUser }) {
               >
                 {sending ? (
                   <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" />
-                ) : "Send"}
+                ) : t("qa.send")}
               </button>
             </div>
           </div>
@@ -163,6 +165,7 @@ export default function MentorLinkSheet({
   onClose: () => void;
   onMentorsChanged?: (mentors: MentorUser[]) => void;
 }) {
+  const t = useT();
   const [mentors, setMentors] = useState<MentorUser[]>([]);
   const [loadingMentors, setLoadingMentors] = useState(true);
   const [query, setQuery] = useState("");
@@ -244,7 +247,7 @@ export default function MentorLinkSheet({
 
         {/* Title */}
         <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
-          <h2 className="text-base font-bold text-white">My Mentors</h2>
+          <h2 className="text-base font-bold text-white">{t("mentor.title")}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
               strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -259,10 +262,10 @@ export default function MentorLinkSheet({
             {loadingMentors ? (
               <div className="flex items-center gap-2 py-2">
                 <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-gray-500">Loading…</span>
+                <span className="text-xs text-gray-500">{t("common.loading")}</span>
               </div>
             ) : mentors.length === 0 ? (
-              <p className="text-xs text-gray-600 py-1">You haven't linked any mentors yet.</p>
+              <p className="text-xs text-gray-600 py-1">{t("mentor.noMentors")}</p>
             ) : (
               <div className="space-y-3">
                 {mentors.map((m) => (
@@ -280,13 +283,13 @@ export default function MentorLinkSheet({
                             disabled={unlinkingId === m.id}
                             className="text-[11px] font-semibold text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
                           >
-                            {unlinkingId === m.id ? "…" : "Confirm"}
+                            {unlinkingId === m.id ? "…" : t("mentor.confirm")}
                           </button>
                           <button
                             onClick={() => setConfirmUnlinkId(null)}
                             className="text-[11px] font-semibold text-gray-500 hover:text-gray-300 transition-colors"
                           >
-                            Cancel
+                            {t("mentor.cancel")}
                           </button>
                         </div>
                       ) : (
@@ -294,7 +297,7 @@ export default function MentorLinkSheet({
                           onClick={() => setConfirmUnlinkId(m.id)}
                           className="flex-shrink-0 text-[11px] font-semibold text-gray-500 hover:text-red-400 transition-colors"
                         >
-                          Unlink
+                          {t("mentor.unlink")}
                         </button>
                       )}
                     </div>
@@ -306,7 +309,7 @@ export default function MentorLinkSheet({
                             d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                         </svg>
                         <p className="text-[11px] text-red-300 leading-relaxed">
-                          Unlink <span className="font-semibold">{m.name}</span> as your mentor? Your Q&amp;A history will be preserved.
+                          <span className="font-semibold">{m.name}</span> {t("mentor.unlinkWarning")}
                         </p>
                       </div>
                     )}
@@ -321,7 +324,7 @@ export default function MentorLinkSheet({
 
           {/* Search */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Search & Add</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t("mentor.searchAdd")}</p>
             <div className="relative">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                 strokeWidth={2} stroke="currentColor"
@@ -330,7 +333,7 @@ export default function MentorLinkSheet({
               </svg>
               <input
                 type="text"
-                placeholder="Search by name or email…"
+                placeholder={t("mentor.searchPlaceholder")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60"
@@ -352,14 +355,14 @@ export default function MentorLinkSheet({
                         <p className="text-[11px] text-gray-500 truncate">{user.email}</p>
                       </div>
                       {linked ? (
-                        <span className="flex-shrink-0 text-[11px] font-semibold text-emerald-400">Linked ✓</span>
+                        <span className="flex-shrink-0 text-[11px] font-semibold text-emerald-400">{t("mentor.linked")}</span>
                       ) : (
                         <button
                           onClick={() => handleLink(user)}
                           disabled={linkingId === user.id}
                           className="flex-shrink-0 px-3 py-1 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[11px] font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors"
                         >
-                          {linkingId === user.id ? "…" : "+ Link"}
+                          {linkingId === user.id ? "…" : t("mentor.link")}
                         </button>
                       )}
                     </div>
@@ -369,7 +372,7 @@ export default function MentorLinkSheet({
             )}
 
             {query.trim().length >= 2 && !searching && results.length === 0 && (
-              <p className="text-xs text-gray-600 mt-3 text-center">No users found.</p>
+              <p className="text-xs text-gray-600 mt-3 text-center">{t("mentor.noUsers")}</p>
             )}
           </div>
         </div>

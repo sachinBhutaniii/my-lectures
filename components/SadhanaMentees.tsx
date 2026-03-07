@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/hooks/useT";
+import type { TranslationKey } from "@/lib/translations";
+
+const GRADE_LABELS: Record<string, TranslationKey> = {
+  "Excellent":  "grade.excellent",
+  "Very Good":  "grade.veryGood",
+  "Good":       "grade.good",
+  "Keep Going": "grade.keepGoing",
+};
 import {
   getMyMentees,
   getMenteeEntries,
@@ -55,6 +64,7 @@ function AvatarInitial({ name, size = "md" }: { name: string; size?: "sm" | "md"
 // ── Absent checker ─────────────────────────────────────────────────────────
 
 function AbsentChecker() {
+  const t = useT();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const defaultDate = yesterday.toISOString().split("T")[0];
@@ -81,7 +91,7 @@ function AbsentChecker() {
 
   return (
     <div className="mx-4 mt-3 mb-1 rounded-xl bg-gray-900/60 border border-gray-800 p-3">
-      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Absent Check</p>
+      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">{t("mentees.absentCheck")}</p>
       <div className="flex gap-2 items-center">
         <input
           type="date"
@@ -96,16 +106,16 @@ function AbsentChecker() {
         >
           {loading ? (
             <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin inline-block" />
-          ) : "Check"}
+          ) : t("mentees.check")}
         </button>
       </div>
 
       {allSubmitted && (
-        <p className="mt-2 text-xs text-emerald-400 font-semibold">All submitted ✓</p>
+        <p className="mt-2 text-xs text-emerald-400 font-semibold">{t("mentees.allSubmitted")}</p>
       )}
       {result !== null && result.length > 0 && (
         <div className="mt-2">
-          <p className="text-xs text-orange-400 font-semibold mb-1">{result.length} absent:</p>
+          <p className="text-xs text-orange-400 font-semibold mb-1">{result.length} {t("mentees.absent")}:</p>
           <div className="flex flex-wrap gap-1.5">
             {result.map((u) => (
               <span key={u.id} className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-300 text-[11px] border border-orange-500/20">
@@ -130,6 +140,7 @@ function EntryReactionSection({
   entryId: number;
   myUserId: number;
 }) {
+  const t = useT();
   const [reactions, setReactions] = useState<EntryReaction[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -209,7 +220,7 @@ function EntryReactionSection({
           onClick={() => setShowForm(true)}
           className="text-[11px] text-gray-600 hover:text-orange-400 transition-colors"
         >
-          + Add reaction
+          {t("mentees.addReaction")}
         </button>
       ) : null}
 
@@ -229,7 +240,7 @@ function EntryReactionSection({
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Message (optional)…"
+            placeholder={t("mentees.messagePlaceholder")}
             rows={2}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60 resize-none"
           />
@@ -239,13 +250,13 @@ function EntryReactionSection({
               disabled={submitting || (!emoji && !message.trim())}
               className="px-4 py-1.5 rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold hover:bg-orange-500/30 disabled:opacity-50 transition-colors"
             >
-              {submitting ? "…" : "Submit"}
+              {submitting ? "…" : t("common.submit")}
             </button>
             <button
               onClick={() => { setShowForm(false); setEmoji(""); setMessage(""); }}
               className="px-4 py-1.5 rounded-lg bg-gray-800 text-gray-400 text-xs font-semibold hover:bg-gray-700 transition-colors"
             >
-              Cancel
+              {t("mentor.cancel")}
             </button>
           </div>
         </div>
@@ -257,6 +268,7 @@ function EntryReactionSection({
 // ── Messages view (Q&A thread, mentor answers) ────────────────────────────
 
 function MessagesView({ devoteeId }: { devoteeId: number }) {
+  const t = useT();
   const [thread, setThread] = useState<SadhanaQA[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
@@ -297,7 +309,7 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
   }
 
   if (!thread || thread.length === 0) {
-    return <p className="text-[11px] text-gray-600 py-4 text-center">No questions yet.</p>;
+    return <p className="text-[11px] text-gray-600 py-4 text-center">{t("mentees.noQuestionsYet")}</p>;
   }
 
   return (
@@ -340,7 +352,7 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
               <textarea
                 value={drafts[qa.id] ?? ""}
                 onChange={(e) => setDrafts((d) => ({ ...d, [qa.id]: e.target.value }))}
-                placeholder="Write answer…"
+                placeholder={t("qa.writeAnswer")}
                 rows={2}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60 resize-none"
               />
@@ -353,7 +365,7 @@ function MessagesView({ devoteeId }: { devoteeId: number }) {
                 >
                   {submitting === qa.id ? (
                     <span className="w-3.5 h-3.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin inline-block" />
-                  ) : "Send"}
+                  ) : t("qa.send")}
                 </button>
               </div>
             </div>
@@ -381,6 +393,7 @@ function DevoteeDetail({
   myUserId: number;
   onMessagesSeen?: () => void;
 }) {
+  const t = useT();
   const [viewMode, setViewMode] = useState<ViewMode>("date");
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [activeQuestionSlug, setActiveQuestionSlug] = useState<string | null>(
@@ -401,7 +414,7 @@ function DevoteeDetail({
                 : "bg-gray-800/60 text-gray-500 border border-gray-800"
             }`}
           >
-            {mode === "date" ? "Date View" : mode === "question" ? "By Question" : "Messages"}
+            {mode === "date" ? t("mentees.dateView") : mode === "question" ? t("mentees.byQuestion") : t("mentees.messages")}
           </button>
         ))}
       </div>
@@ -409,7 +422,7 @@ function DevoteeDetail({
       {viewMode === "messages" ? (
         <MessagesView devoteeId={devoteeId} />
       ) : entries.length === 0 ? (
-        <p className="text-xs text-gray-600 py-4 text-center">No data available</p>
+        <p className="text-xs text-gray-600 py-4 text-center">{t("mentees.noData")}</p>
       ) : viewMode === "date" ? (
         <div className="space-y-1.5">
           {entries.map((entry) => {
@@ -594,6 +607,7 @@ function DevoteeCard({
 
 export default function SadhanaMentees() {
   const { user } = useAuth();
+  const t = useT();
   const [mentees, setMentees] = useState<MentorUser[] | null>(null);
   const [questions, setQuestions] = useState<SadhanaQuestion[]>([]);
   const [pendingCounts, setPendingCounts] = useState<Record<number, number>>({});
@@ -628,7 +642,7 @@ export default function SadhanaMentees() {
               d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
           </svg>
         </div>
-        <p className="text-sm text-gray-400">No devotees have linked you as their mentor yet.</p>
+        <p className="text-sm text-gray-400">{t("mentees.noDevotees")}</p>
       </div>
     );
   }

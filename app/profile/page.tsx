@@ -4,6 +4,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile, Relationship } from "@/hooks/useProfile";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/hooks/useT";
 import {
   getVolunteerServices,
   submitVolunteerRequest,
@@ -84,13 +85,14 @@ function VerifyBadge({
   verified: boolean;
   onVerify: () => void;
 }) {
+  const t = useT();
   if (verified) {
     return (
       <span className="flex items-center gap-1 text-green-400 text-xs font-medium flex-shrink-0">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
         </svg>
-        Verified
+        {t("profile.verified")}
       </span>
     );
   }
@@ -99,18 +101,12 @@ function VerifyBadge({
       onClick={onVerify}
       className="text-orange-400 text-xs font-semibold border border-orange-500/40 rounded-lg px-2.5 py-1 flex-shrink-0 active:scale-95 transition-transform"
     >
-      Verify
+      {t("profile.verify")}
     </button>
   );
 }
 
-// Relationship options
-const RELATIONSHIPS: { value: Relationship; label: string; sub?: string }[] = [
-  { value: "diksha",   label: "Diksha Disciple" },
-  { value: "shiksha",  label: "Shiksha Disciple", sub: "Initiated by another Guru" },
-  { value: "aspiring", label: "Aspiring Disciple" },
-  { value: "seeker",   label: "Seeker", sub: "Not decided yet" },
-];
+// RELATIONSHIPS is built inside the component to support t()
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,9 +125,17 @@ export default function ProfilePage() {
   const router = useRouter();
   const { profile, updateProfile, loaded } = useProfile();
   const { user } = useAuth();
+  const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [locating, setLocating] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  const RELATIONSHIPS: { value: Relationship; label: string; sub?: string }[] = [
+    { value: "diksha",   label: t("rel.diksha") },
+    { value: "shiksha",  label: t("rel.shiksha"),  sub: t("rel.shikhaSub") },
+    { value: "aspiring", label: t("rel.aspiring") },
+    { value: "seeker",   label: t("rel.seeker"),   sub: t("rel.seekerSub") },
+  ];
 
   // ── Volunteer / contribute state ────────────────────────────────────────
   const [volServices, setVolServices] = useState<VolunteerServiceItem[]>([]);
@@ -269,13 +273,13 @@ export default function ProfilePage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
-        <h1 className="text-white text-lg font-semibold">My Profile</h1>
+        <h1 className="text-white text-lg font-semibold">{t("profile.title")}</h1>
         <span
           className={`text-xs font-medium transition-opacity duration-300 ${
             savedFlash ? "text-green-400 opacity-100" : "opacity-0"
           }`}
         >
-          Saved ✓
+          {t("profile.saved")}
         </span>
       </div>
 
@@ -313,16 +317,16 @@ export default function ProfilePage() {
           className="hidden"
           onChange={handlePicture}
         />
-        <p className="text-gray-500 text-xs mt-2">Tap to change photo</p>
+        <p className="text-gray-500 text-xs mt-2">{t("profile.tapToChange")}</p>
       </div>
 
       <div className="px-4 space-y-1">
 
         {/* ── Personal Info ── */}
-        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-1">PERSONAL INFO</p>
+        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-1">{t("profile.personalInfo")}</p>
         <SectionCard>
           <FieldRow>
-            <FieldLabel>Legal Name</FieldLabel>
+            <FieldLabel>{t("profile.legalName")}</FieldLabel>
             <TextInput
               value={profile.legalName}
               onChange={(v) => save({ legalName: v })}
@@ -331,7 +335,7 @@ export default function ProfilePage() {
           </FieldRow>
 
           <FieldRow>
-            <FieldLabel>Initiated</FieldLabel>
+            <FieldLabel>{t("profile.initiated")}</FieldLabel>
             <div className="flex-1" />
             <Toggle
               on={profile.isInitiated}
@@ -341,7 +345,7 @@ export default function ProfilePage() {
 
           {profile.isInitiated && (
             <FieldRow>
-              <FieldLabel>Initiated Name</FieldLabel>
+              <FieldLabel>{t("profile.initiatedName")}</FieldLabel>
               <TextInput
                 value={profile.initiatedName}
                 onChange={(v) => save({ initiatedName: v })}
@@ -352,7 +356,7 @@ export default function ProfilePage() {
         </SectionCard>
 
         {/* ── Contact ── */}
-        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-3">CONTACT</p>
+        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-3">{t("profile.contact")}</p>
         <SectionCard>
           <FieldRow>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#25D366" className="w-4 h-4 flex-shrink-0">
@@ -361,7 +365,7 @@ export default function ProfilePage() {
             <TextInput
               value={profile.whatsapp}
               onChange={(v) => save({ whatsapp: v, whatsappVerified: false })}
-              placeholder="WhatsApp number"
+              placeholder={t("profile.whatsappPlaceholder")}
               type="tel"
             />
             <VerifyBadge
@@ -381,7 +385,7 @@ export default function ProfilePage() {
             <TextInput
               value={displayEmail}
               onChange={(v) => save({ email: v, emailVerified: false })}
-              placeholder="Email address"
+              placeholder={t("profile.emailPlaceholder")}
               type="email"
             />
             <VerifyBadge
@@ -395,7 +399,7 @@ export default function ProfilePage() {
         </SectionCard>
 
         {/* ── Location ── */}
-        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-3">LOCATION</p>
+        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-3">{t("profile.location")}</p>
         <SectionCard>
           <FieldRow>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#f97316" className="w-4 h-4 flex-shrink-0">
@@ -404,7 +408,7 @@ export default function ProfilePage() {
             <TextInput
               value={profile.city}
               onChange={(v) => save({ city: v })}
-              placeholder="Your city"
+              placeholder={t("profile.cityPlaceholder")}
             />
             <button
               onClick={detectCity}
@@ -418,7 +422,7 @@ export default function ProfilePage() {
                   <path fillRule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.757.433c.114.06.22.111.308.139l.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" clipRule="evenodd" />
                 </svg>
               )}
-              {locating ? "Detecting…" : "Auto"}
+              {locating ? t("profile.detecting") : t("profile.auto")}
             </button>
           </FieldRow>
           <FieldRow>
@@ -429,13 +433,13 @@ export default function ProfilePage() {
             <TextInput
               value={profile.country}
               onChange={(v) => save({ country: v })}
-              placeholder="Your country"
+              placeholder={t("profile.countryPlaceholder")}
             />
           </FieldRow>
         </SectionCard>
 
         {/* ── Relationship ── */}
-        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-3">YOUR CONNECTION</p>
+        <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-3">{t("profile.yourConnection")}</p>
         <p className="text-gray-400 text-xs mb-3 leading-relaxed">
           What is your relationship with{" "}
           <span className="text-white font-medium">
@@ -479,7 +483,7 @@ export default function ProfilePage() {
         {user && (
           <>
             <p className="text-[11px] font-semibold tracking-widest text-gray-500 pb-2 pt-5">
-              CONTRIBUTE TO THE MISSION
+              {t("profile.contribute")}
             </p>
             <p className="text-gray-400 text-xs mb-4 leading-relaxed">
               Wish to grow this service? Use your skills in the{" "}

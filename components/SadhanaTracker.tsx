@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useFetch } from "@/hooks/useFetch";
+import { useT } from "@/hooks/useT";
+import type { TranslationKey } from "@/lib/translations";
 import {
   getSadhanaQuestions,
   getMyEntries,
@@ -9,6 +11,13 @@ import {
   SadhanaQuestion,
   SadhanaEntryResponse,
 } from "@/services/sadhana.service";
+
+const GRADE_LABELS: Record<string, TranslationKey> = {
+  "Excellent":  "grade.excellent",
+  "Very Good":  "grade.veryGood",
+  "Good":       "grade.good",
+  "Keep Going": "grade.keepGoing",
+};
 
 const CATEGORY_COLORS: Record<string, string> = {
   Nidra:      "bg-sky-500/15 text-sky-400 border-sky-500/30",
@@ -51,6 +60,7 @@ function AlreadySubmitted({
   questions: SadhanaQuestion[];
   onReset: () => void;
 }) {
+  const t = useT();
   const grade = getScoreGrade(entry.totalScore, entry.maxScore);
   const pct = entry.maxScore > 0 ? Math.round((entry.totalScore / entry.maxScore) * 100) : 0;
 
@@ -59,13 +69,13 @@ function AlreadySubmitted({
       {/* Score card */}
       <div className={`rounded-2xl border-2 ${grade.ring} bg-gray-900/60 p-6 text-center`}>
         <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-gray-500 mb-1">
-          {entry.entryDate === today() ? "Today's Score" : formatDate(entry.entryDate)}
+          {entry.entryDate === today() ? t("sadhana.todaysScore") : formatDate(entry.entryDate)}
         </p>
         <div className="flex items-baseline justify-center gap-1.5 mb-1">
           <span className={`text-5xl font-black ${grade.color}`}>{entry.totalScore}</span>
           <span className="text-2xl font-bold text-gray-600">/ {entry.maxScore}</span>
         </div>
-        <span className={`text-sm font-semibold ${grade.color}`}>{grade.label}</span>
+        <span className={`text-sm font-semibold ${grade.color}`}>{t(GRADE_LABELS[grade.label] ?? "grade.keepGoing")}</span>
         {/* Progress bar */}
         <div className="mt-4 h-2 bg-gray-800 rounded-full overflow-hidden">
           <div
@@ -79,7 +89,7 @@ function AlreadySubmitted({
       {/* Answer summary */}
       <div className="rounded-2xl bg-gray-900/60 border border-gray-800 overflow-hidden">
         <p className="text-[10px] font-bold tracking-[0.15em] uppercase text-gray-600 px-4 pt-4 pb-2">
-          Summary
+          {t("sadhana.summary")}
         </p>
         {questions.map((q) => {
           const val = entry.answers[q.slug];
@@ -103,7 +113,7 @@ function AlreadySubmitted({
         onClick={onReset}
         className="mt-auto w-full py-3 rounded-xl border border-gray-700 text-gray-400 text-sm hover:text-gray-200 hover:border-gray-500 transition-colors"
       >
-        View questions again
+        {t("sadhana.viewAgain")}
       </button>
     </div>
   );
@@ -111,6 +121,7 @@ function AlreadySubmitted({
 
 // ── Main tracker ───────────────────────────────────────────────────────────
 export default function SadhanaTracker() {
+  const t = useT();
   const fetchQuestions = useCallback(() => getSadhanaQuestions(), []);
   const { data: questions, loading, error: questionsError } = useFetch<SadhanaQuestion[]>(fetchQuestions);
 
@@ -173,11 +184,11 @@ export default function SadhanaTracker() {
         // Already submitted — show the existing entry
         const existing = allEntries.find((e) => e.entryDate === selectedDate);
         if (existing) { setShowAlreadySubmitted(true); return; }
-        setSubmitError("Already submitted for this date.");
+        setSubmitError(t("sadhana.alreadySubmitted"));
       } else if (status === 401 || status === 403) {
-        setSubmitError("Session expired. Please log in again.");
+        setSubmitError(t("sadhana.sessionExpired"));
       } else {
-        setSubmitError("Server error. Please wait a moment and try again.");
+        setSubmitError(t("sadhana.serverError"));
       }
     } finally {
       setSubmitting(false);
@@ -212,8 +223,8 @@ export default function SadhanaTracker() {
   if (questionsError || (!loading && questions === null)) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-red-400 text-sm font-medium">Could not load questions</p>
-        <p className="text-gray-600 text-xs">Please check your connection or try logging in again.</p>
+        <p className="text-red-400 text-sm font-medium">{t("sadhana.couldNotLoad")}</p>
+        <p className="text-gray-600 text-xs">{t("sadhana.checkConnection")}</p>
       </div>
     );
   }
@@ -242,16 +253,16 @@ export default function SadhanaTracker() {
           </svg>
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white mb-1">Offering Accepted!</h2>
-          <p className="text-sm text-gray-500">Your daily sadhana has been recorded.</p>
+          <h2 className="text-xl font-bold text-white mb-1">{t("sadhana.offeringAccepted")}</h2>
+          <p className="text-sm text-gray-500">{t("sadhana.recorded")}</p>
         </div>
         <div className={`w-full rounded-2xl border-2 ${grade.ring} bg-gray-900/60 p-5`}>
-          <p className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1">Total Score</p>
+          <p className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1">{t("sadhana.totalScore")}</p>
           <div className="flex items-baseline justify-center gap-1.5">
             <span className={`text-5xl font-black ${grade.color}`}>{submittedEntry.totalScore}</span>
             <span className="text-2xl font-bold text-gray-600">/ {submittedEntry.maxScore}</span>
           </div>
-          <p className={`text-sm font-semibold mt-1 ${grade.color}`}>{grade.label} — {pct}%</p>
+          <p className={`text-sm font-semibold mt-1 ${grade.color}`}>{t(GRADE_LABELS[grade.label] ?? "grade.keepGoing")} — {pct}%</p>
           <div className="mt-3 h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
               style={{ width: `${pct}%` }} />
@@ -272,7 +283,7 @@ export default function SadhanaTracker() {
                 d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-white mb-1">Daily Sadhana Card</h1>
+          <h1 className="text-xl font-bold text-white mb-1">{t("sadhana.dailyCard")}</h1>
           {/* Date picker */}
           <input
             type="date"
@@ -284,7 +295,7 @@ export default function SadhanaTracker() {
         </div>
 
         <div className="rounded-2xl bg-gray-900/60 border border-gray-800 p-4 space-y-2.5">
-          <p className="text-xs font-bold tracking-widest uppercase text-gray-600">Today's Topics</p>
+          <p className="text-xs font-bold tracking-widest uppercase text-gray-600">{t("sadhana.todaysTopics")}</p>
           {Object.entries(
             visibleQuestions.reduce<Record<string, number>>((acc, q) => {
               acc[q.category ?? "Other"] = (acc[q.category ?? "Other"] ?? 0) + 1;
@@ -305,14 +316,14 @@ export default function SadhanaTracker() {
             onClick={() => setShowAlreadySubmitted(true)}
             className="mt-auto w-full bg-gray-800 hover:bg-gray-700 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl transition-all border border-gray-700"
           >
-            View Submission for {selectedDate === today() ? "Today" : formatDate(selectedDate)}
+            {t("sadhana.viewSubmission")} {selectedDate === today() ? t("sadhana.tabToday") : formatDate(selectedDate)}
           </button>
         ) : (
           <button
             onClick={() => setStep(1)}
             className="mt-auto w-full bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white font-semibold py-4 rounded-2xl transition-all shadow-lg shadow-orange-900/30"
           >
-            Begin Sadhana Card ✦
+            {t("sadhana.beginCard")}
           </button>
         )}
       </div>
@@ -408,13 +419,13 @@ export default function SadhanaTracker() {
             onClick={() => setStep((s) => Math.max(1, s - 1))}
             className="px-5 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm hover:text-white hover:border-gray-500 transition-colors"
           >
-            ← Back
+            {t("sadhana.back")}
           </button>
           <button
             onClick={() => setStep((s) => s + 1)}
             className="flex-1 py-3 rounded-xl bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700 transition-colors"
           >
-            {selected ? "Next →" : "Skip →"}
+            {selected ? t("sadhana.next") : t("sadhana.skip")}
           </button>
         </div>
       </div>
@@ -432,13 +443,13 @@ export default function SadhanaTracker() {
           {/* Score preview */}
           <div className={`rounded-2xl border-2 ${grade.ring} bg-gray-900/60 p-5 text-center`}>
             <p className="text-[10px] font-bold tracking-widest uppercase text-gray-500 mb-1">
-              Your Score
+              {t("sadhana.todaysScore")}
             </p>
             <div className="flex items-baseline justify-center gap-1.5">
               <span className={`text-5xl font-black ${grade.color}`}>{totalScore}</span>
               <span className="text-2xl font-bold text-gray-600">/ {maxScore}</span>
             </div>
-            <p className={`text-sm font-semibold mt-1 ${grade.color}`}>{grade.label} — {pct}%</p>
+            <p className={`text-sm font-semibold mt-1 ${grade.color}`}>{t(GRADE_LABELS[grade.label] ?? "grade.keepGoing")} — {pct}%</p>
             <div className="mt-3 h-1.5 bg-gray-800 rounded-full overflow-hidden">
               <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
                 style={{ width: `${pct}%` }} />
@@ -448,7 +459,7 @@ export default function SadhanaTracker() {
           {/* Answer summary */}
           <div className="rounded-2xl bg-gray-900/60 border border-gray-800 overflow-hidden">
             <p className="text-[10px] font-bold tracking-[0.15em] uppercase text-gray-600 px-4 pt-4 pb-2">
-              Review Answers
+              {t("sadhana.reviewAnswers")}
             </p>
             {visibleQuestions.map((q) => {
               const val = answers[q.slug];
@@ -466,7 +477,7 @@ export default function SadhanaTracker() {
                         <p className="text-[10px] text-gray-600 font-medium">{opt.points} pts</p>
                       </>
                     ) : (
-                      <p className="text-sm text-gray-600 italic">Skipped</p>
+                      <p className="text-sm text-gray-600 italic">{t("common.skipped")}</p>
                     )}
                   </div>
                 </div>
@@ -484,7 +495,7 @@ export default function SadhanaTracker() {
             onClick={() => setStep(totalSteps)}
             className="px-5 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm hover:text-white hover:border-gray-500 transition-colors"
           >
-            ← Back
+            {t("sadhana.back")}
           </button>
           <button
             onClick={handleSubmit}
@@ -494,9 +505,9 @@ export default function SadhanaTracker() {
             {submitting ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Submitting…
+                {t("common.loading")}
               </span>
-            ) : "Submit Offering ✦"}
+            ) : t("sadhana.submitOffering")}
           </button>
         </div>
       </div>

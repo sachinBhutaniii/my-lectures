@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useT } from "@/hooks/useT";
 import { usePlaybackHistory } from "@/hooks/usePlaybackHistory";
 import { useFavourites } from "@/hooks/useFavourites";
 import { usePlaylists } from "@/hooks/usePlaylists";
@@ -28,6 +29,7 @@ import { useDownloads } from "@/hooks/useDownloads";
 
 export default function Home() {
   const router = useRouter();
+  const t = useT();
   const { data, loading } = useFetch<VideoApiResponse>(getVideos);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("media");
@@ -243,7 +245,7 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
           </button>
-          <span className="text-xl font-semibold tracking-wide">Home</span>
+          <span className="text-xl font-semibold tracking-wide">{t("home.title")}</span>
         </div>
         <div className="flex items-center gap-2">
           {/* Streak / Flame button */}
@@ -289,7 +291,7 @@ export default function Home() {
           <span className="text-3xl leading-none flex-shrink-0 select-none">{todayWisdom.emoji}</span>
           <div className="flex-1 min-w-0">
             <p className="text-orange-500 text-[10px] font-bold tracking-widest uppercase mb-0.5">
-              ✦ Wisdom of the Day
+              {t("home.wisdomOfTheDay")}
             </p>
             <p className="text-white text-sm font-semibold leading-snug truncate">{todayWisdom.title}</p>
             <p className="text-gray-500 text-xs mt-0.5 leading-snug line-clamp-1">{todayWisdom.body}</p>
@@ -306,7 +308,7 @@ export default function Home() {
       {/* ── Lectures section ── */}
       <div ref={lecturesSectionRef} className="px-4 mt-5">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-base font-semibold tracking-wide">Lectures</span>
+          <span className="text-base font-semibold tracking-wide">{t("home.lectures")}</span>
           <div className="flex items-center gap-3">
             {/* Sort toggle */}
             <button

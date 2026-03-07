@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "@/hooks/useT";
 import {
   getMyMentors,
   getMentorQA,
@@ -26,6 +27,11 @@ function setSeenCount(mentorId: number, count: number) {
 
 function formatShort(d: string) {
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
+}
+
+function AwaitingResponse() {
+  const t = useT();
+  return <p className="text-[11px] text-gray-600 pl-3 italic">{t("qa.awaitingResponse")}</p>;
 }
 
 // ── Single QA item ─────────────────────────────────────────────────────────
@@ -64,7 +70,7 @@ function QAItem({ qa, mentorName }: { qa: SadhanaQA; mentorName?: string }) {
           </div>
         </div>
       ) : (
-        <p className="text-[11px] text-gray-600 pl-3 italic">Awaiting response…</p>
+        <AwaitingResponse />
       )}
     </div>
   );
@@ -81,6 +87,7 @@ function AskForm({
   mentorName: string;
   onSent: (qa: SadhanaQA) => void;
 }) {
+  const t = useT();
   const [question, setQuestion] = useState("");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [sending, setSending] = useState(false);
@@ -116,7 +123,7 @@ function AskForm({
             className="w-full bg-gray-900 border border-gray-700 focus:border-orange-500/60 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 outline-none resize-none transition-colors"
           />
           {sent && (
-            <span className="absolute right-3 top-2 text-[11px] text-emerald-400 font-semibold">Sent ✓</span>
+            <span className="absolute right-3 top-2 text-[11px] text-emerald-400 font-semibold">{t("qa.sent")}</span>
           )}
         </div>
         <div className="flex flex-col gap-1.5 mb-0.5">
@@ -128,7 +135,7 @@ function AskForm({
           >
             {sending ? (
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-            ) : "Send"}
+            ) : t("qa.send")}
           </button>
         </div>
       </div>
@@ -149,6 +156,7 @@ function MentorCard({
   onSent: (qa: SadhanaQA) => void;
   onOpened: () => void;
 }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
 
   // New-answer badge: answers present that exceed last-seen count
@@ -208,7 +216,7 @@ function MentorCard({
             <>
               <div className="px-4 pt-3 pb-1 space-y-4">
                 {thread.length === 0 ? (
-                  <p className="text-[12px] text-gray-600 text-center py-2">No messages yet. Ask your first question!</p>
+                  <p className="text-[12px] text-gray-600 text-center py-2">{t("qa.noMessagesYet")}</p>
                 ) : (
                   thread.map((qa) => <QAItem key={qa.id} qa={qa} />)
                 )}
@@ -231,6 +239,7 @@ function MentorCard({
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => void }) {
+  const t = useT();
   const [mentors, setMentors] = useState<MentorUser[]>([]);
   const [threads, setThreads] = useState<Record<number, SadhanaQA[]>>({});
   const [loading, setLoading] = useState(true);
@@ -294,8 +303,8 @@ export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => 
               d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
           </svg>
         </div>
-        <p className="text-sm text-gray-400">No mentors linked yet.</p>
-        <p className="text-xs text-gray-600">Tap the people icon in the header to link a mentor.</p>
+        <p className="text-sm text-gray-400">{t("qa.noMentorsLinked")}</p>
+        <p className="text-xs text-gray-600">{t("qa.tapToLink")}</p>
       </div>
     );
   }
@@ -313,7 +322,7 @@ export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => 
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search questions &amp; answers…"
+            placeholder={t("qa.searchPlaceholder")}
             className="flex-1 bg-transparent text-sm text-gray-300 placeholder-gray-600 outline-none"
           />
           {search && (

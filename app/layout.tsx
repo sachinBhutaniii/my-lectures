@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 import { PlayerProvider } from "@/context/PlayerContext";
 import { OfflineProvider } from "@/context/OfflineContext";
 import MiniPlayerBar from "@/components/MiniPlayerBar";
@@ -44,6 +45,7 @@ export default function RootLayout({
       >
         <OfflineProvider>
           <AuthProvider>
+            <LanguageProvider>
             <PlayerProvider>
               <TripleTapFullscreen>
                 <OfflineIndicator />
@@ -53,6 +55,7 @@ export default function RootLayout({
                 <InstallPrompt />
               </TripleTapFullscreen>
             </PlayerProvider>
+            </LanguageProvider>
           </AuthProvider>
         </OfflineProvider>
       </body>

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/hooks/useT";
 import { useEffect, useState } from "react";
 import SadhanaTracker from "@/components/SadhanaTracker";
 import SadhanaHistory from "@/components/SadhanaHistory";
@@ -16,16 +17,10 @@ import {
 
 type SadhanaTab = "today" | "records" | "qa" | "mentees";
 
-const BASE_TABS: { id: SadhanaTab; label: string }[] = [
-  { id: "today",   label: "Today"      },
-  { id: "records", label: "My Records" },
-];
-const QA_TAB      = { id: "qa"      as SadhanaTab, label: "My Q&A"    };
-const MENTEES_TAB = { id: "mentees" as SadhanaTab, label: "My Mentees" };
-
 export default function SadhanaPage() {
   const router = useRouter();
   const { user, authLoading } = useAuth();
+  const t = useT();
   const [activeTab, setActiveTab] = useState<SadhanaTab>("today");
   const [showMentorSheet, setShowMentorSheet] = useState(false);
   const [isMentor, setIsMentor] = useState(false);
@@ -55,6 +50,13 @@ export default function SadhanaPage() {
     );
   }
 
+  const BASE_TABS: { id: SadhanaTab; label: string }[] = [
+    { id: "today",   label: t("sadhana.tabToday")   },
+    { id: "records", label: t("sadhana.tabRecords")  },
+  ];
+  const QA_TAB      = { id: "qa"      as SadhanaTab, label: t("sadhana.tabQA")      };
+  const MENTEES_TAB = { id: "mentees" as SadhanaTab, label: t("sadhana.tabMentees") };
+
   const TABS = [
     ...BASE_TABS,
     QA_TAB,
@@ -75,8 +77,8 @@ export default function SadhanaPage() {
           </svg>
         </button>
         <div className="flex-1">
-          <h1 className="text-base font-bold text-white leading-tight">Sadhana Tracker</h1>
-          <p className="text-[11px] text-gray-600">Daily practice card</p>
+          <h1 className="text-base font-bold text-white leading-tight">{t("sadhana.title")}</h1>
+          <p className="text-[11px] text-gray-600">{t("sadhana.subtitle")}</p>
         </div>
         {/* Mentor link icon */}
         <button
