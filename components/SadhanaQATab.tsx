@@ -11,6 +11,19 @@ import {
 } from "@/services/sadhana.service";
 import AudioRecorder from "@/components/AudioRecorder";
 
+// ── localStorage helpers for per-mentor seen-answer tracking ────────────────
+
+function getSeenCount(mentorId: number): number {
+  if (typeof window === "undefined") return 0;
+  return parseInt(localStorage.getItem(`qa_seen_${mentorId}`) ?? "0", 10);
+}
+
+function setSeenCount(mentorId: number, count: number) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(`qa_seen_${mentorId}`, String(count));
+  }
+}
+
 function formatShort(d: string) {
   return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
 }
@@ -123,6 +136,98 @@ function AskForm({
   );
 }
 
+// ── Mentor card (collapsed/expanded) ───────────────────────────────────────
+
+function MentorCard({
+  mentor,
+  thread,
+  onSent,
+  onOpened,
+}: {
+  mentor: MentorUser;
+  thread: SadhanaQA[] | undefined;
+  onSent: (qa: SadhanaQA) => void;
+  onOpened: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  // New-answer badge: answers present that exceed last-seen count
+  const answeredCount = (thread ?? []).filter((qa) => !!qa.answer).length;
+  const newCount = Math.max(0, answeredCount - getSeenCount(mentor.id));
+
+  const handleToggle = () => {
+    if (!expanded) {
+      // Mark all current answers as seen
+      setSeenCount(mentor.id, answeredCount);
+      onOpened();
+    }
+    setExpanded((v) => !v);
+  };
+
+  return (
+    <div className="rounded-2xl bg-gray-900/60 border border-gray-800 overflow-hidden">
+      {/* Clickable mentor header */}
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+        onClick={handleToggle}
+      >
+        <div className="w-9 h-9 rounded-full bg-orange-500/20 text-orange-400 text-sm font-bold flex items-center justify-center flex-shrink-0">
+          {mentor.name[0]?.toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-white truncate">{mentor.name}</p>
+            {newCount > 0 && (
+              <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {newCount}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-600 truncate">{mentor.email}</p>
+        </div>
+        {thread !== undefined && (
+          <span className="text-[11px] text-gray-600 flex-shrink-0">
+            {thread.length} message{thread.length !== 1 ? "s" : ""}
+          </span>
+        )}
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+          strokeWidth={2} stroke="currentColor"
+          className={`w-4 h-4 text-gray-600 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="border-t border-gray-800/60">
+          {thread === undefined ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="px-4 pt-3 pb-1 space-y-4">
+                {thread.length === 0 ? (
+                  <p className="text-[12px] text-gray-600 text-center py-2">No messages yet. Ask your first question!</p>
+                ) : (
+                  thread.map((qa) => <QAItem key={qa.id} qa={qa} />)
+                )}
+              </div>
+              <div className="px-4 pb-4">
+                <AskForm
+                  mentorId={mentor.id}
+                  mentorName={mentor.name.split(" ")[0]}
+                  onSent={onSent}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => void }) {
@@ -138,7 +243,7 @@ export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => 
       .then(async (fetched) => {
         if (cancelled) return;
         setMentors(fetched);
-        // Load all threads in parallel (also marks answers as seen on backend)
+        // Load all threads in parallel (needed for badge counts)
         const map: Record<number, SadhanaQA[]> = {};
         await Promise.all(
           fetched.map(async (m) => {
@@ -146,10 +251,7 @@ export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => 
             catch { map[m.id] = []; }
           })
         );
-        if (!cancelled) {
-          setThreads(map);
-          onAnswersSeen?.();
-        }
+        if (!cancelled) setThreads(map);
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -227,7 +329,6 @@ export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => 
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 pb-6">
-        {/* Search results */}
         {trimSearch ? (
           searchResults.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -244,44 +345,16 @@ export default function SadhanaQATab({ onAnswersSeen }: { onAnswersSeen?: () => 
             </div>
           )
         ) : (
-          /* Normal view — grouped by mentor */
-          <div className="space-y-5 pt-1">
-            {mentors.map((mentor) => {
-              const thread = threads[mentor.id] ?? [];
-              return (
-                <div key={mentor.id} className="rounded-2xl bg-gray-900/60 border border-gray-800 overflow-hidden">
-                  {/* Mentor header */}
-                  <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800/60">
-                    <div className="w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 text-sm font-bold flex items-center justify-center flex-shrink-0">
-                      {mentor.name[0]?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{mentor.name}</p>
-                      <p className="text-[11px] text-gray-600 truncate">{mentor.email}</p>
-                    </div>
-                    <span className="text-[11px] text-gray-600">{thread.length} message{thread.length !== 1 ? "s" : ""}</span>
-                  </div>
-
-                  {/* Thread */}
-                  <div className="px-4 pt-3 pb-1 space-y-4">
-                    {thread.length === 0 ? (
-                      <p className="text-[12px] text-gray-600 text-center py-2">No messages yet. Ask your first question!</p>
-                    ) : (
-                      thread.map((qa) => <QAItem key={qa.id} qa={qa} />)
-                    )}
-                  </div>
-
-                  {/* Ask form */}
-                  <div className="px-4 pb-4">
-                    <AskForm
-                      mentorId={mentor.id}
-                      mentorName={mentor.name.split(" ")[0]}
-                      onSent={(qa) => addQA(mentor.id, qa)}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-3 pt-1">
+            {mentors.map((mentor) => (
+              <MentorCard
+                key={mentor.id}
+                mentor={mentor}
+                thread={threads[mentor.id]}
+                onSent={(qa) => addQA(mentor.id, qa)}
+                onOpened={onAnswersSeen ?? (() => {})}
+              />
+            ))}
           </div>
         )}
       </div>

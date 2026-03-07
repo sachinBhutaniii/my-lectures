@@ -387,10 +387,6 @@ function DevoteeDetail({
     questions[0]?.slug ?? null
   );
 
-  if (entries.length === 0) {
-    return <p className="text-xs text-gray-600 py-2">No data available</p>;
-  }
-
   return (
     <div>
       {/* Toggle */}
@@ -412,6 +408,8 @@ function DevoteeDetail({
 
       {viewMode === "messages" ? (
         <MessagesView devoteeId={devoteeId} />
+      ) : entries.length === 0 ? (
+        <p className="text-xs text-gray-600 py-4 text-center">No data available</p>
       ) : viewMode === "date" ? (
         <div className="space-y-1.5">
           {entries.map((entry) => {
