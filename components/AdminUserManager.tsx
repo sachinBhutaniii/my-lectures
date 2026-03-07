@@ -295,6 +295,11 @@ export default function AdminUserManager() {
     }
   }, []);
 
+  // Eager-load on mount so the pending badge is visible before the user opens the tab
+  useEffect(() => {
+    if (!volReqLoaded.current) loadVolRequests();
+  }, [loadVolRequests]);
+
   useEffect(() => {
     if (outerTab === "requests" && !volReqLoaded.current) {
       loadVolRequests();
@@ -417,6 +422,8 @@ export default function AdminUserManager() {
     }
   };
 
+  const pendingRequestCount = volRequests.filter((r) => r.status === "PENDING").length;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -433,13 +440,18 @@ export default function AdminUserManager() {
           <button
             key={tab}
             onClick={() => setOuterTab(tab)}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
+            className={`relative px-4 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${
               outerTab === tab
                 ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >
             {tab}
+            {tab === "requests" && pendingRequestCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                {pendingRequestCount > 9 ? "9+" : pendingRequestCount}
+              </span>
+            )}
           </button>
         ))}
       </div>

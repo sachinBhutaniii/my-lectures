@@ -205,10 +205,11 @@ export default function AdminNotificationPanel({ open, notifications, unreadCuto
                         <>
                           <p className={`text-xs leading-snug ${unread ? "text-gray-100" : "text-gray-400"}`}>
                             <span className="font-semibold">{n.userName!.split(" ")[0]}</span>
-                            <span className={unread ? " text-gray-400" : " text-gray-600"}> applied to volunteer</span>
+                            <span className={unread ? " text-gray-400" : " text-gray-600"}> wants to be a </span>
+                            <span className={`font-medium ${unread ? "text-orange-300" : "text-gray-500"}`}>{n.serviceName}</span>
                           </p>
-                          <p className={`text-[11px] mt-1 font-medium truncate ${unread ? "text-gray-300" : "text-gray-600"}`}>
-                            {n.serviceName}
+                          <p className={`text-[11px] mt-0.5 ${unread ? "text-gray-500" : "text-gray-700"}`}>
+                            Awaiting your decision — approve or reject in Users → Requests
                           </p>
                           <div className="flex items-center gap-2 mt-1.5">
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
