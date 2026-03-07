@@ -31,13 +31,19 @@ const AdminVideoList = () => {
     setEditingVideo(null);
   };
 
-  const handleFormSubmit = async (formData: Omit<LectureVideo, "id">) => {
+  const handleFormSubmit = async (formData: Omit<LectureVideo, "id">, pipelineCreatedVideoId?: number) => {
     setIsSaving(true);
     try {
       if (editingVideo) {
         const updated = await updateVideo(editingVideo.id, formData);
         if (data) {
           setData({ ...data, videos: data.videos.map((v) => (v.id === editingVideo.id ? updated : v)) });
+        }
+      } else if (pipelineCreatedVideoId) {
+        // Pipeline already created the video — just update it with any form edits
+        const updated = await updateVideo(pipelineCreatedVideoId, formData);
+        if (data) {
+          setData({ ...data, videos: [...data.videos, updated], totalVideos: data.totalVideos + 1 });
         }
       } else {
         const created = await createVideo(formData);

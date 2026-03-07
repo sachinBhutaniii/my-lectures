@@ -6,7 +6,7 @@ import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio, startP
 type VideoFormProps = {
   initialData?: Partial<LectureVideo>;
   videoId?: number;          // needed to load transcripts for existing lectures
-  onSubmit: (data: Omit<LectureVideo, "id">) => Promise<void>;
+  onSubmit: (data: Omit<LectureVideo, "id">, pipelineCreatedVideoId?: number) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
 };
@@ -130,6 +130,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [transcribing, setTranscribing] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState("");
   const [transcriptionError, setTranscriptionError] = useState("");
+  const [pipelineCreatedVideoId, setPipelineCreatedVideoId] = useState<number | undefined>(undefined);
 
   // Load available languages once
   useEffect(() => {
@@ -353,6 +354,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
             // Load the created video's transcript data
             if (status.resultVideoId) {
+              setPipelineCreatedVideoId(status.resultVideoId);
               try {
                 const video = await getVideoById(status.resultVideoId, "en");
                 setFormData((prev) => ({
@@ -388,7 +390,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit(formData, pipelineCreatedVideoId);
   };
 
   const selectedLangName = languages.find((l) => l.code === transcriptLocale)?.name ?? "English";
