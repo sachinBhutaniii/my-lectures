@@ -2,6 +2,7 @@ export interface ShlokaEntry {
   index: number;
   ref?: string;
   shlokaText: string;
+  romanText?: string;
   wordMeaning: string;
   translation: string;
   purport: string;

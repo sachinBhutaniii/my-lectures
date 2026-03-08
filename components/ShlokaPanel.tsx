@@ -27,10 +27,12 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
   );
 }
 
-function ShlokaCard({ entry }: { entry: ShlokaEntry }) {
+function ShlokaCard({ entry, locale }: { entry: ShlokaEntry; locale: string }) {
   const [wordExpanded, setWordExpanded] = useState(false);
   const [purportExpanded, setPurportExpanded] = useState(false);
 
+  // Hindi uses Devanagari; all other locales use Roman transliteration
+  const verseDisplay = locale === "hi" ? entry.shlokaText : (entry.romanText || entry.shlokaText);
   const preview = entry.shlokaText.split(/\s+/).slice(0, 8).join(" ");
 
   return (
@@ -47,7 +49,7 @@ function ShlokaCard({ entry }: { entry: ShlokaEntry }) {
 
       <div className="px-4 py-3 space-y-3">
         {/* Shloka text — always visible */}
-        <p className="text-orange-300 text-base leading-relaxed font-medium">{entry.shlokaText}</p>
+        <p className="text-orange-300 text-base leading-relaxed font-medium">{verseDisplay}</p>
 
         {/* Translation — always visible */}
         <p className="text-gray-300 text-sm leading-relaxed">{entry.translation}</p>
@@ -158,7 +160,7 @@ export default function ShlokaPanel({ open, onClose, videoId, locale, langName }
           {!loading && shlokas && shlokas.length > 0 && (
             <div className="px-4 py-4 space-y-4">
               {shlokas.map((entry) => (
-                <ShlokaCard key={entry.index} entry={entry} />
+                <ShlokaCard key={entry.index} entry={entry} locale={locale} />
               ))}
             </div>
           )}
