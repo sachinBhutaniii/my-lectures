@@ -20,6 +20,7 @@ export interface AuthUser {
   name: string;
   avatarUrl?: string;
   role: string;
+  isProofreader?: boolean; // backend sets this when user has both admin + proofreader access
 }
 
 interface AuthContextType {
@@ -145,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isParentAdmin = user?.email === PARENT_ADMIN_EMAIL;
   const isAdmin = isParentAdmin || user?.role === "ROLE_ADMIN";
-  const isProofreader = user?.role === "ROLE_PROOFREADER";
+  const isProofreader = user?.role === "ROLE_PROOFREADER" || user?.isProofreader === true;
 
   return (
     <AuthContext.Provider

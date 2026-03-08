@@ -645,6 +645,11 @@ export default function ProfilePage() {
                                   );
                                 })}
                               </div>
+                              {(selectedLangs[svc.id] ?? []).length === 0 && (
+                                <p className="text-[10px] text-amber-500/70 mt-2">
+                                  Please select at least one language to proceed.
+                                </p>
+                              )}
                             </div>
                           )}
 
@@ -652,8 +657,9 @@ export default function ProfilePage() {
                           {showForm && isOptIn && (
                             <button
                               onClick={() => handleSubmitRequest(svc)}
-                              disabled={submitting === svc.id}
-                              className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold border border-orange-500/60 text-orange-300 bg-orange-500/15 active:bg-orange-500/25 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                              disabled={submitting === svc.id || (selectedLangs[svc.id] ?? []).length === 0}
+                              title={(selectedLangs[svc.id] ?? []).length === 0 ? "Please choose at least one language" : undefined}
+                              className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold border border-orange-500/60 text-orange-300 bg-orange-500/15 active:bg-orange-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                               {submitting === svc.id ? (
                                 <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
