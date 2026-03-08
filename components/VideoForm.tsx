@@ -2,6 +2,7 @@
 import { LectureVideo, LanguageData } from "@/types/videos";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio, startPipeline, confirmPipeline, getPipelineStatus } from "@/services/video.service";
+import { generateShlokaData } from "@/services/shloka.service";
 
 type VideoFormProps = {
   initialData?: Partial<LectureVideo>;
@@ -131,6 +132,11 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [transcriptionProgress, setTranscriptionProgress] = useState("");
   const [transcriptionError, setTranscriptionError] = useState("");
   const [pipelineCreatedVideoId, setPipelineCreatedVideoId] = useState<number | undefined>(undefined);
+
+  // Shloka generation state
+  const [shlokaGenerating, setShlokaGenerating] = useState(false);
+  const [shlokaResult, setShlokaResult] = useState<string[] | null>(null);
+  const [shlokaError, setShlokaError] = useState<string | null>(null);
 
   // Load available languages once
   useEffect(() => {
@@ -385,6 +391,22 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
       const msg = err instanceof Error ? err.message : "Unknown error";
       setTranscriptionError(`Transcription failed: ${msg}`);
       setTranscriptionProgress("");
+    }
+  };
+
+  const handlePushShlokaData = async () => {
+    const id = videoId ?? pipelineCreatedVideoId;
+    if (!id) return;
+    setShlokaGenerating(true);
+    setShlokaResult(null);
+    setShlokaError(null);
+    try {
+      const res = await generateShlokaData(id);
+      setShlokaResult(res.generated);
+    } catch {
+      setShlokaError("Failed to generate shloka data. Check that transcripts are published.");
+    } finally {
+      setShlokaGenerating(false);
     }
   };
 
@@ -800,6 +822,36 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
             className={inputCls + " resize-y font-mono text-xs disabled:opacity-40"}
           />
         </div>
+
+        {/* Push Shloka Data — only for existing lectures */}
+        {(videoId || pipelineCreatedVideoId) && (
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              onClick={handlePushShlokaData}
+              disabled={shlokaGenerating}
+              className="w-full py-2.5 rounded-xl border border-amber-500/40 text-sm font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 hover:border-amber-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {shlokaGenerating ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                  Generating Śloka Data…
+                </>
+              ) : (
+                <>✦ Push Śloka Data</>
+              )}
+            </button>
+            {shlokaResult && (
+              <p className="text-xs text-green-400 flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 flex-shrink-0">
+                  <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                </svg>
+                Generated for: {shlokaResult.length > 0 ? shlokaResult.join(", ") : "none (no transcripts found)"}
+              </p>
+            )}
+            {shlokaError && <p className="text-xs text-red-400">{shlokaError}</p>}
+          </div>
+        )}
       </div>
 
       {/* Actions */}

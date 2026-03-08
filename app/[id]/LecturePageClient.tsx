@@ -10,6 +10,7 @@ import TranscriptView from "@/components/TranscriptView";
 import QueueList from "@/components/QueueList";
 import PlayerBar from "@/components/PlayerBar";
 import AddToPlaylistModal from "@/components/AddToPlaylistModal";
+import ShlokaPanel from "@/components/ShlokaPanel";
 import { usePlayer } from "@/context/PlayerContext";
 import { usePlaylists } from "@/hooks/usePlaylists";
 
@@ -36,6 +37,7 @@ export default function LecturePage() {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langSearch, setLangSearch] = useState("");
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [showShlokas, setShowShlokas] = useState(false);
   const { playlists, createPlaylist, addToPlaylist, removeFromPlaylist, lecturePlaylistIds } = usePlaylists();
   const { currentTime, seekToSeconds, isPlaying, pause, resume, seek, skip, duration, lecture: playingLecture } = usePlayer();
   const isThisLecture = playingLecture?.id === videoId;
@@ -149,6 +151,15 @@ export default function LecturePage() {
             )}
           </button>
 
+          {/* Shloka guide button */}
+          <button
+            onClick={() => setShowShlokas(true)}
+            title="Śloka Guide"
+            className="flex-shrink-0 h-full flex items-center px-3 border border-gray-700 rounded-lg bg-gray-900/50 text-gray-400 hover:text-orange-400 transition-colors text-sm font-medium"
+          >
+            ⓘ
+          </button>
+
           {/* Language selector button */}
           <div className="relative flex-shrink-0">
             <button
@@ -259,6 +270,15 @@ export default function LecturePage() {
           }}
         />
       )}
+
+      {/* ── Shloka guide panel ── */}
+      <ShlokaPanel
+        open={showShlokas}
+        onClose={() => setShowShlokas(false)}
+        videoId={videoId}
+        locale={selectedLanguage}
+        langName={selectedLangName}
+      />
 
       {/* ── Mini player bar (reading mode only) ── */}
       {readingMode && lecture && (
