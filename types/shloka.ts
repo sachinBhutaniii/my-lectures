@@ -1,5 +1,6 @@
 export interface ShlokaEntry {
   index: number;
+  ref?: string;
   shlokaText: string;
   wordMeaning: string;
   translation: string;

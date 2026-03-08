@@ -35,12 +35,14 @@ function ShlokaCard({ entry }: { entry: ShlokaEntry }) {
 
   return (
     <div className="border border-gray-800 rounded-xl overflow-hidden">
-      {/* Card header: index chip + shloka preview */}
+      {/* Card header: index chip + ref label */}
       <div className="flex items-center gap-3 px-4 py-3 bg-gray-900/60">
         <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-xs font-bold flex items-center justify-center">
           {entry.index}
         </span>
-        <p className="text-gray-400 text-xs line-clamp-1 font-mono">{preview}…</p>
+        <p className="text-orange-400 text-xs font-semibold font-mono tracking-wide">
+          {entry.ref || preview}
+        </p>
       </div>
 
       <div className="px-4 py-3 space-y-3">
