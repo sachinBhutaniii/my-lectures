@@ -2,6 +2,7 @@
 import React, { useState, useCallback } from "react";
 import { useFetch } from "@/hooks/useFetch";
 import { getVideos, createVideo, updateVideo, deleteVideo } from "@/services/video.service";
+import { generateAllShlokaData } from "@/services/shloka.service";
 import { VideoApiResponse, LectureVideo } from "@/types/videos";
 import AdminVideoItem from "./AdminVideoItem";
 import VideoForm from "./VideoForm";
@@ -15,6 +16,8 @@ const AdminVideoList = () => {
   const [search, setSearch] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<LectureVideo | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shlokaAllRunning, setShlokaAllRunning] = useState(false);
+  const [shlokaAllMsg, setShlokaAllMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const openAdd = () => {
     setEditingVideo(null);
@@ -79,6 +82,22 @@ const AdminVideoList = () => {
     }
   };
 
+  const handleGenerateAllShlokas = async () => {
+    if (!confirm("This will delete ALL existing shloka data and regenerate from vedabase.io for every video. This runs in the background and may take a while. Continue?")) return;
+    setShlokaAllRunning(true);
+    setShlokaAllMsg(null);
+    try {
+      await generateAllShlokaData();
+      setShlokaAllMsg({ ok: true, text: "Started! Generating shlokas for all videos in background." });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string }; status?: number } };
+      const detail = axiosErr?.response?.data?.error || (err instanceof Error ? err.message : "Unknown error");
+      setShlokaAllMsg({ ok: false, text: `Error (${axiosErr?.response?.status ?? "network"}): ${detail}` });
+    } finally {
+      setShlokaAllRunning(false);
+    }
+  };
+
   const filteredVideos = (data?.videos ?? []).filter((v) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -114,6 +133,26 @@ const AdminVideoList = () => {
           </svg>
           Add
         </button>
+      </div>
+
+      {/* Bulk shloka generation */}
+      <div className="mb-5 flex flex-col gap-1.5">
+        <button
+          onClick={handleGenerateAllShlokas}
+          disabled={shlokaAllRunning}
+          className="w-full py-2 rounded-xl border border-amber-500/40 text-sm font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+        >
+          {shlokaAllRunning ? (
+            <><div className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />Starting…</>
+          ) : (
+            <>✦ Regenerate All Śloka Data</>
+          )}
+        </button>
+        {shlokaAllMsg && (
+          <p className={`text-xs ${shlokaAllMsg.ok ? "text-green-400" : "text-red-400"}`}>
+            {shlokaAllMsg.text}
+          </p>
+        )}
       </div>
 
       {/* Stats */}

@@ -16,3 +16,8 @@ export async function generateShlokaData(videoId: number): Promise<{ generated: 
   const res = await apiClient.post<{ generated: string[] }>(`/api/shlokas/generate/${videoId}`);
   return res.data;
 }
+
+export async function generateAllShlokaData(): Promise<{ status: string }> {
+  const res = await apiClient.post<{ status: string }>("/api/shlokas/generate-all");
+  return res.data;
+}
