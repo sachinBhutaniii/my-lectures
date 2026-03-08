@@ -26,6 +26,7 @@ import StreakPanel from "@/components/StreakPanel";
 import WisdomModal, { getWisdomForToday } from "@/components/WisdomModal";
 import DownloadsPanel from "@/components/DownloadsPanel";
 import { useDownloads } from "@/hooks/useDownloads";
+import NewContentPanel from "@/components/NewContentPanel";
 
 export default function Home() {
   const router = useRouter();
@@ -47,6 +48,11 @@ export default function Home() {
   const { downloads, isDownloaded, getDownloadProgress, downloadLecture, deleteDownload, getBlobUrl } = useDownloads();
   const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
 
+  // ── New-content notification ─────────────────────────────────────────────
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [prevMaxId, setPrevMaxId] = useState<number>(0);
+  const [notifSnapshot, setNotifSnapshot] = useState<typeof lectures>([]);
+
   // Client-only: pick wisdom + auto-show once per session
   useEffect(() => {
     const w = getWisdomForToday();
@@ -57,13 +63,36 @@ export default function Home() {
     }
   }, []);
 
+  // Load last-seen video ID from localStorage (0 = first visit, no badge shown)
+  useEffect(() => {
+    const stored = parseInt(localStorage.getItem("bdd_last_seen_video_id") ?? "0", 10);
+    setPrevMaxId(stored);
+  }, []);
+
+  const lectures = data?.videos ?? [];
+
+  // Badge count: videos with ID higher than what was seen on last visit
+  const newCount = prevMaxId === 0 ? 0 : lectures.filter((l) => l.id > prevMaxId).length;
+
+  const handleOpenNotifications = () => {
+    const newItems = lectures
+      .filter((l) => l.id > prevMaxId)
+      .sort((a, b) => b.id - a.id);
+    setNotifSnapshot(newItems);
+    setShowNotifications(true);
+    // Mark all current lectures as seen
+    if (lectures.length > 0) {
+      const maxId = Math.max(...lectures.map((l) => l.id));
+      localStorage.setItem("bdd_last_seen_video_id", String(maxId));
+      setPrevMaxId(maxId);
+    }
+  };
+
   const lecturesSectionRef = useRef<HTMLDivElement>(null);
   const { history, addToHistory, clearHistory } = usePlaybackHistory();
   const { favouriteItems, isFavourite, toggleFavourite } = useFavourites();
   const { playlists, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist, lecturePlaylistIds } = usePlaylists();
   const { streakData } = useStreak();
-
-  const lectures = data?.videos ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -206,6 +235,17 @@ export default function Home() {
         streakData={streakData}
       />
 
+      {/* ── New Content Panel ── */}
+      <NewContentPanel
+        open={showNotifications}
+        items={notifSnapshot}
+        onClose={() => setShowNotifications(false)}
+        onLectureClick={(lecture) => {
+          addToHistory(lecture);
+          router.push(`/${lecture.id}`);
+        }}
+      />
+
       {/* ── Downloads Panel ── */}
       <DownloadsPanel
         open={showDownloads}
@@ -248,6 +288,22 @@ export default function Home() {
           <span className="text-xl font-semibold tracking-wide">{t("home.title")}</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Notification bell */}
+          <button
+            onClick={handleOpenNotifications}
+            title="What's new"
+            className="relative w-10 h-10 rounded-full flex items-center justify-center bg-gray-800/60 border border-gray-700 transition-all active:scale-95"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-gray-300">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+            </svg>
+            {newCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                {newCount > 9 ? "9+" : newCount}
+              </span>
+            )}
+          </button>
+
           {/* Streak / Flame button */}
           <button
             onClick={() => setShowStreak(true)}
