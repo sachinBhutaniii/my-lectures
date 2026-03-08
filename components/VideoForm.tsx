@@ -403,8 +403,12 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     try {
       const res = await generateShlokaData(id);
       setShlokaResult(res.generated);
-    } catch {
-      setShlokaError("Failed to generate shloka data. Check that transcripts are published.");
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string; message?: string }; status?: number } };
+      const detail = axiosErr?.response?.data?.error
+        || axiosErr?.response?.data?.message
+        || (err instanceof Error ? err.message : "Unknown error");
+      setShlokaError(`Error (${axiosErr?.response?.status ?? "network"}): ${detail}`);
     } finally {
       setShlokaGenerating(false);
     }
