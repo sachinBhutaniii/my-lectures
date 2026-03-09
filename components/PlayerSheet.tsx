@@ -22,16 +22,17 @@ export default function PlayerSheet() {
   const touchStartT = useRef(0);
 
   const onLecturePage = lecture ? pathname === `/${lecture.id}` : false;
+  const hidden = !lecture || onLecturePage || pathname === "/login";
 
-  // Reset exit state whenever we're NOT on the lecture page (e.g. after pressing back)
+  // Reset exit state whenever we stop showing the bar (e.g. after pressing back)
   useEffect(() => {
-    if (!onLecturePage) {
+    if (hidden) {
       setExiting(false);
       navigating.current = false;
     }
-  }, [onLecturePage]);
+  }, [hidden]);
 
-  if (!lecture || onLecturePage) return null;
+  if (hidden) return null;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
