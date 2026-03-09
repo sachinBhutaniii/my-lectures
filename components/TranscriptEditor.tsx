@@ -57,6 +57,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   // Select mode
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [autoSelectCount, setAutoSelectCount] = useState(20);
   const [regenerating, setRegenerating] = useState(false);
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
@@ -680,9 +681,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                     if (next.has(cue.id)) {
                       next.delete(cue.id);
                     } else {
-                      // Select this cue + next 19 by default
+                      // Select this cue + next (autoSelectCount - 1) by default
                       const startIdx = cues.findIndex((c) => c.id === cue.id);
-                      cues.slice(startIdx, startIdx + 20).forEach((c) => next.add(c.id));
+                      cues.slice(startIdx, startIdx + autoSelectCount).forEach((c) => next.add(c.id));
                     }
                     return next;
                   });
@@ -699,29 +700,53 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       </div>
 
       {/* ── Regenerate action bar ─────────────────────────────────────────────── */}
-      {selectedIds.size > 0 && (
+      {selectMode && (
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-gray-950 border-t border-orange-500/20">
-          <span className="text-sm text-orange-400 font-medium">
-            {selectedIds.size} cue{selectedIds.size > 1 ? "s" : ""} selected
-          </span>
+          {selectedIds.size > 0 ? (
+            <span className="text-sm text-orange-400 font-medium">
+              {selectedIds.size} cue{selectedIds.size > 1 ? "s" : ""} selected
+            </span>
+          ) : (
+            <span className="text-xs text-gray-600">Tap a checkbox to select</span>
+          )}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="px-3 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
-            >
-              Clear
-            </button>
-            <button
-              onClick={handleRegenerate}
-              disabled={regenerating}
-              className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {regenerating ? (
-                <><Spinner /> Regenerating…</>
-              ) : (
-                "✦ Regenerate Transcript"
-              )}
-            </button>
+            {/* Auto-select count input */}
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] text-gray-500 whitespace-nowrap">Auto-select</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={autoSelectCount}
+                onChange={(e) => {
+                  const v = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+                  setAutoSelectCount(v);
+                }}
+                className="w-12 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-200 text-center outline-none focus:border-orange-500 transition-colors"
+              />
+              <label className="text-[10px] text-gray-500">cues</label>
+            </div>
+            {selectedIds.size > 0 && (
+              <>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {regenerating ? (
+                    <><Spinner /> Regenerating…</>
+                  ) : (
+                    "✦ Regenerate Transcript"
+                  )}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
