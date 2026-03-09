@@ -77,6 +77,22 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 } */
 
+/* ── Lecture page slide-up / slide-down transitions ── */
+@keyframes lecture-enter {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes lecture-exit {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+.lecture-enter {
+  animation: lecture-enter 380ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.lecture-exit {
+  animation: lecture-exit 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
 /* PWA install banner adjustments */
 .pwa-install-banner {
   padding-bottom: calc(12px + env(safe-area-inset-bottom));

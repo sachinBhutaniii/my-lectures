@@ -35,7 +35,7 @@ export default function MiniPlayerBar() {
           {/* Thumbnail — tap to return to lecture */}
           <button
             onClick={() => router.push(`/${lecture.id}`)}
-            className="flex-shrink-0"
+            className="flex-shrink-0 active:scale-95 transition-transform duration-100"
           >
             <img
               src={lecture.thumbnailUrl}
@@ -47,7 +47,7 @@ export default function MiniPlayerBar() {
           {/* Title + time — tap to return to lecture */}
           <button
             onClick={() => router.push(`/${lecture.id}`)}
-            className="flex-1 min-w-0 text-left"
+            className="flex-1 min-w-0 text-left active:opacity-70 transition-opacity duration-100"
           >
             <p className="text-white text-xs font-semibold truncate leading-tight">
               {lecture.title}
