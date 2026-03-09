@@ -12,7 +12,7 @@ function fmt(sec: number): string {
 }
 
 export default function PlayerSheet() {
-  const { lecture, isPlaying, currentTime, duration, pause, resume, stop } = usePlayer();
+  const { lecture, isPlaying, isLoading, currentTime, duration, pause, resume, stop } = usePlayer();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -91,14 +91,19 @@ export default function PlayerSheet() {
             </p>
           </div>
 
-          {/* Play / Pause */}
+          {/* Play / Pause / Loading */}
           <button
             onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); isPlaying ? pause() : resume(); }}
+            onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); if (!isLoading) { isPlaying ? pause() : resume(); } }}
             onClick={(e) => e.stopPropagation()}
             className="text-orange-500 flex-shrink-0 active:scale-90 transition-transform"
           >
-            {isPlaying ? (
+            {isLoading ? (
+              <svg className="w-9 h-9 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : isPlaying ? (
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-9 h-9">
                 <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clipRule="evenodd" />
               </svg>

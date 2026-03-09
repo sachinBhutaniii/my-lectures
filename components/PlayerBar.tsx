@@ -33,6 +33,7 @@ export default function PlayerBar({ lecture, onPrev, onNext, onAddToPlaylist }: 
 
   const isThisLecture = player.lecture?.id === lecture.id;
   const isPlaying = isThisLecture && player.isPlaying;
+  const isLoading = isThisLecture && player.isLoading;
   const currentTime = isThisLecture ? player.currentTime : 0;
   const duration = isThisLecture ? player.duration : 0;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -195,16 +196,22 @@ export default function PlayerBar({ lecture, onPrev, onNext, onAddToPlaylist }: 
           <span className="text-[9px] font-bold leading-none">10</span>
         </button>
 
-        {/* Play / Pause */}
+        {/* Play / Pause / Loading */}
         <button
           onClick={togglePlay}
+          disabled={isLoading}
           className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${
             lecture.audioUrl
               ? "bg-orange-500 shadow-orange-500/30"
               : "bg-gray-700 shadow-none cursor-not-allowed"
           }`}
         >
-          {isPlaying ? (
+          {isLoading ? (
+            <svg className="w-7 h-7 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="3" />
+              <path className="opacity-90" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : isPlaying ? (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-7 h-7">
               <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clipRule="evenodd" />
             </svg>

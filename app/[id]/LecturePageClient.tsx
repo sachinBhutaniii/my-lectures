@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { LectureVideo, VideoApiResponse } from "@/types/videos";
 import { getVideoById, getVideos, getLanguageData } from "@/services/video.service";
@@ -40,7 +40,7 @@ export default function LecturePage() {
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showShlokas, setShowShlokas] = useState(false);
   const { playlists, createPlaylist, addToPlaylist, removeFromPlaylist, lecturePlaylistIds } = usePlaylists();
-  const { currentTime, seekToSeconds, isPlaying, pause, resume, seek, skip, duration, lecture: playingLecture } = usePlayer();
+  const { currentTime, seekToSeconds, isPlaying, isLoading, pause, resume, seek, skip, duration, lecture: playingLecture, play: playerPlay } = usePlayer();
 
   // ── Back gesture closes active overlay ───────────────────────────────────
   useBackClose(showShlokas, () => setShowShlokas(false));
@@ -84,6 +84,14 @@ export default function LecturePage() {
 
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
+
+  // Auto-play (resume from saved position) when lecture data loads
+  useEffect(() => {
+    if (lecture?.audioUrl) {
+      playerPlay(lecture);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lecture?.id]);
 
   const handleBack = useCallback(() => router.back(), [router]);
 

@@ -18,6 +18,7 @@ const posKey = (id: number) => `bdd_pos_${id}`;
 export interface PlayerContextType {
   lecture: LectureVideo | null;
   isPlaying: boolean;
+  isLoading: boolean;
   currentTime: number;
   duration: number;
   speed: number;
@@ -42,6 +43,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const [lecture, setLecture] = useState<LectureVideo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeedState] = useState(1.0);
@@ -89,8 +91,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       if (!newLecture.audioUrl) {
         setIsPlaying(false);
+        setIsLoading(false);
         return;
       }
+
+      setIsLoading(true);
 
       const audio = new Audio(newLecture.audioUrl);
       audio.preload = "metadata";
@@ -98,6 +103,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       audio.addEventListener("loadedmetadata", () => {
         setDuration(audio.duration);
+        setIsLoading(false);
         // Restore saved position
         const saved = localStorage.getItem(posKey(newLecture.id));
         if (saved) {
@@ -108,6 +114,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           }
         }
         audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      });
+
+      audio.addEventListener("error", () => {
+        setIsLoading(false);
+        setIsPlaying(false);
       });
 
       audio.addEventListener("timeupdate", () => {
@@ -147,6 +158,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     lectureRef.current = null;
     setLecture(null);
     setIsPlaying(false);
+    setIsLoading(false);
     setCurrentTime(0);
     setDuration(0);
   }, []);
@@ -181,7 +193,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   return (
     <PlayerContext.Provider
-      value={{ lecture, isPlaying, currentTime, duration, speed, play, pause, resume, stop, seek, seekToSeconds, skip, setSpeed }}
+      value={{ lecture, isPlaying, isLoading, currentTime, duration, speed, play, pause, resume, stop, seek, seekToSeconds, skip, setSpeed }}
     >
       {children}
     </PlayerContext.Provider>
