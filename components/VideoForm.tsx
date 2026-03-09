@@ -2,7 +2,8 @@
 import { LectureVideo, LanguageData } from "@/types/videos";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio, startPipeline, confirmPipeline, getPipelineStatus } from "@/services/video.service";
-import { generateShlokaData } from "@/services/shloka.service";
+import { generateShlokaData, getShlokaData, updateShlokaData } from "@/services/shloka.service";
+import { ShlokaEntry } from "@/types/shloka";
 
 type VideoFormProps = {
   initialData?: Partial<LectureVideo>;
@@ -137,6 +138,16 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [shlokaGenerating, setShlokaGenerating] = useState(false);
   const [shlokaResult, setShlokaResult] = useState<string[] | null>(null);
   const [shlokaError, setShlokaError] = useState<string | null>(null);
+
+  // Shloka editor state
+  const [shlokaEditorLocale, setShlokaEditorLocale] = useState("en");
+  const [shlokaEditorLoading, setShlokaEditorLoading] = useState(false);
+  const [shlokaEditorEntries, setShlokaEditorEntries] = useState<ShlokaEntry[] | null>(null);
+  const [shlokaEditorExpanded, setShlokaEditorExpanded] = useState<Record<number, boolean>>({});
+  const [shlokaSaving, setShlokaSaving] = useState(false);
+  const [shlokaSaveMsg, setShlokaSaveMsg] = useState<string | null>(null);
+  const [shlokaEditorLangSearch, setShlokaEditorLangSearch] = useState("");
+  const [showShlokaEditorLangDropdown, setShowShlokaEditorLangDropdown] = useState(false);
 
   // Load available languages once
   useEffect(() => {
@@ -414,6 +425,51 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     }
   };
 
+  const loadShlokaEditorData = async (locale: string) => {
+    const id = videoId ?? pipelineCreatedVideoId;
+    if (!id) return;
+    setShlokaEditorLoading(true);
+    setShlokaEditorEntries(null);
+    setShlokaSaveMsg(null);
+    try {
+      const data = await getShlokaData(id, locale);
+      setShlokaEditorEntries(data?.shlokas ?? []);
+      setShlokaEditorExpanded({});
+    } catch {
+      setShlokaEditorEntries([]);
+    } finally {
+      setShlokaEditorLoading(false);
+    }
+  };
+
+  const handleShlokaEditorLocaleSelect = (code: string) => {
+    setShlokaEditorLocale(code);
+    setShowShlokaEditorLangDropdown(false);
+    setShlokaEditorLangSearch("");
+    loadShlokaEditorData(code);
+  };
+
+  const updateShlokaEntry = (index: number, field: keyof ShlokaEntry, value: string) => {
+    setShlokaEditorEntries((prev) =>
+      prev ? prev.map((e) => (e.index === index ? { ...e, [field]: value } : e)) : prev
+    );
+  };
+
+  const handleSaveShlokas = async () => {
+    const id = videoId ?? pipelineCreatedVideoId;
+    if (!id || !shlokaEditorEntries) return;
+    setShlokaSaving(true);
+    setShlokaSaveMsg(null);
+    try {
+      await updateShlokaData(id, shlokaEditorLocale, shlokaEditorEntries);
+      setShlokaSaveMsg("Saved successfully");
+    } catch {
+      setShlokaSaveMsg("Save failed. Please try again.");
+    } finally {
+      setShlokaSaving(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData, pipelineCreatedVideoId);
@@ -422,6 +478,10 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const selectedLangName = languages.find((l) => l.code === transcriptLocale)?.name ?? "English";
   const filteredLangs = languages.filter((l) =>
     l.name.toLowerCase().includes(langSearch.toLowerCase())
+  );
+  const shlokaEditorLangName = languages.find((l) => l.code === shlokaEditorLocale)?.name ?? "English";
+  const filteredShlokaEditorLangs = languages.filter((l) =>
+    l.name.toLowerCase().includes(shlokaEditorLangSearch.toLowerCase())
   );
 
   return (
@@ -857,6 +917,175 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
           </div>
         )}
       </div>
+
+      {/* ── Śloka Editor section ── */}
+      {(videoId || pipelineCreatedVideoId) && (
+        <div className="border border-gray-800 rounded-xl p-4 space-y-4 bg-gray-900/30">
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Śloka Data</span>
+            <div className="flex items-center gap-2">
+              {/* Language picker */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowShlokaEditorLangDropdown((v) => !v)}
+                  className="flex items-center gap-1.5 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-300 bg-gray-900 hover:border-gray-600 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 text-gray-500">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />
+                  </svg>
+                  <span>{shlokaEditorLangName}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-2.5 h-2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                {showShlokaEditorLangDropdown && (
+                  <div className="absolute right-0 top-9 z-50 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+                    <div className="p-2 border-b border-gray-800">
+                      <input
+                        type="text"
+                        value={shlokaEditorLangSearch}
+                        onChange={(e) => setShlokaEditorLangSearch(e.target.value)}
+                        placeholder="Search language…"
+                        className="w-full bg-gray-800 text-xs text-gray-300 placeholder-gray-600 rounded-lg px-2.5 py-1.5 outline-none"
+                      />
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      {filteredShlokaEditorLangs.length > 0 ? (
+                        filteredShlokaEditorLangs.map((lang) => (
+                          <button
+                            key={lang.id}
+                            type="button"
+                            onClick={() => handleShlokaEditorLocaleSelect(lang.code)}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                              lang.code === shlokaEditorLocale
+                                ? "text-orange-400 bg-gray-800"
+                                : "text-gray-300 hover:bg-gray-800"
+                            }`}
+                          >
+                            {lang.name}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-gray-600 text-xs px-3 py-2">No results</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Load button */}
+              <button
+                type="button"
+                onClick={() => loadShlokaEditorData(shlokaEditorLocale)}
+                disabled={shlokaEditorLoading}
+                className="flex items-center gap-1 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-gray-400 hover:border-orange-500 hover:text-orange-400 transition-colors disabled:opacity-50"
+              >
+                {shlokaEditorLoading ? (
+                  <div className="w-3 h-3 border border-gray-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                )}
+                Load
+              </button>
+            </div>
+          </div>
+
+          {/* Shloka entries */}
+          {shlokaEditorLoading && (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {!shlokaEditorLoading && shlokaEditorEntries !== null && shlokaEditorEntries.length === 0 && (
+            <p className="text-xs text-gray-600 text-center py-4">No śloka data for this locale. Generate it first using the button above.</p>
+          )}
+
+          {!shlokaEditorLoading && shlokaEditorEntries && shlokaEditorEntries.length > 0 && (
+            <div className="space-y-3">
+              {shlokaEditorEntries.map((entry) => {
+                const isOpen = !!shlokaEditorExpanded[entry.index];
+                return (
+                  <div key={entry.index} className="border border-gray-700 rounded-xl overflow-hidden">
+                    {/* Entry header — collapse/expand */}
+                    <button
+                      type="button"
+                      onClick={() => setShlokaEditorExpanded((prev) => ({ ...prev, [entry.index]: !prev[entry.index] }))}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 bg-gray-900/60 hover:bg-gray-800/60 transition-colors text-left"
+                    >
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-xs font-bold flex items-center justify-center">
+                        {entry.index}
+                      </span>
+                      <span className="text-xs text-orange-400 font-mono font-semibold flex-1 truncate">
+                        {entry.ref || entry.shlokaText.split(" ").slice(0, 5).join(" ")}
+                      </span>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3.5 h-3.5 text-gray-500 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+
+                    {/* Entry fields */}
+                    {isOpen && (
+                      <div className="px-4 py-3 space-y-3 bg-gray-950/40">
+                        {[
+                          { key: "ref", label: "Reference", rows: 1 },
+                          { key: "shlokaText", label: "Sanskrit (Devanagari)", rows: 3 },
+                          { key: "romanText", label: "Roman Transliteration", rows: 3 },
+                          { key: "wordMeaning", label: "Word by Word", rows: 4 },
+                          { key: "translation", label: "Translation", rows: 3 },
+                          { key: "purport", label: "Purport", rows: 6 },
+                        ].map(({ key, label, rows }) => (
+                          <div key={key}>
+                            <label className="block text-[10px] font-medium text-gray-500 mb-1 uppercase tracking-wide">{label}</label>
+                            <textarea
+                              rows={rows}
+                              value={(entry[key as keyof ShlokaEntry] as string) ?? ""}
+                              onChange={(e) => updateShlokaEntry(entry.index, key as keyof ShlokaEntry, e.target.value)}
+                              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-orange-500 transition-colors resize-y"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Save button */}
+              <div className="space-y-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveShlokas}
+                  disabled={shlokaSaving}
+                  className="w-full py-2.5 rounded-xl border border-orange-500/40 text-sm font-medium text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 hover:border-orange-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {shlokaSaving ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    "Save Śloka Data"
+                  )}
+                </button>
+                {shlokaSaveMsg && (
+                  <p className={`text-xs ${shlokaSaveMsg.includes("failed") ? "text-red-400" : "text-green-400"}`}>
+                    {shlokaSaveMsg}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {shlokaEditorEntries === null && (
+            <p className="text-[11px] text-gray-600">Select a language and click Load to view/edit śloka data.</p>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-3 pt-2">

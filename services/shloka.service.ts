@@ -1,5 +1,5 @@
 import apiClient from "@/lib/axios";
-import { ShlokaData } from "@/types/shloka";
+import { ShlokaData, ShlokaEntry } from "@/types/shloka";
 
 export async function getShlokaData(videoId: number, locale: string): Promise<ShlokaData | null> {
   try {
@@ -20,4 +20,8 @@ export async function generateShlokaData(videoId: number): Promise<{ generated: 
 export async function generateAllShlokaData(): Promise<{ status: string }> {
   const res = await apiClient.post<{ status: string }>("/api/shlokas/generate-all");
   return res.data;
+}
+
+export async function updateShlokaData(videoId: number, locale: string, shlokas: ShlokaEntry[]): Promise<void> {
+  await apiClient.put(`/api/shlokas/${videoId}`, { locale, shlokas });
 }
