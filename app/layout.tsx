@@ -5,7 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { PlayerProvider } from "@/context/PlayerContext";
 import { OfflineProvider } from "@/context/OfflineContext";
-import MiniPlayerBar from "@/components/MiniPlayerBar";
+import PlayerSheet from "@/components/PlayerSheet";
 import TripleTapFullscreen from "@/components/TripleTapFullscreen";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -50,7 +50,7 @@ export default function RootLayout({
               <TripleTapFullscreen>
                 <OfflineIndicator />
                 {children}
-                <MiniPlayerBar />
+                <PlayerSheet />
                 <ServiceWorkerRegister />
                 <InstallPrompt />
               </TripleTapFullscreen>

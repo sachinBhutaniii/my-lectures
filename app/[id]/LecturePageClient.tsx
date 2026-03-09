@@ -85,18 +85,14 @@ export default function LecturePage() {
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
 
-  const [exiting, setExiting] = useState(false);
-  const handleBack = useCallback(() => {
-    setExiting(true);
-    setTimeout(() => router.back(), 310);
-  }, [router]);
+  const handleBack = useCallback(() => router.back(), [router]);
 
   return (
-    <div className={`h-dvh bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden ${exiting ? "lecture-exit" : "lecture-enter"}`}>
+    <div className="h-dvh bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden lecture-enter">
       {/* ── Top header ── */}
       <div className={`flex items-center px-4 gap-3 flex-shrink-0 transition-all duration-300 ${readingMode ? "pt-3 pb-2" : "pt-5 pb-3"}`}>
         {/* Back / minimize */}
-        <button onClick={handleBack} className="text-gray-300 flex-shrink-0">
+        <button onClick={() => router.back()} className="text-gray-300 flex-shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
