@@ -86,6 +86,9 @@ export default function PlayerSheet() {
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  // On the home page the BottomNav sits at bottom-0; mini bar must clear it
+  const navOffset = pathname === "/" ? 64 : 0;
+
   const overlayTransform = dragging
     ? `translateY(${dragY}px)`
     : expanded ? "translateY(0)" : "translateY(100%)";
@@ -101,9 +104,10 @@ export default function PlayerSheet() {
 
       {/* ── Full-screen overlay (slides up over mini bar) ── */}
       <div
-        className="fixed inset-x-0 bottom-0 z-[60] bg-[#0d0d0d] rounded-t-3xl flex flex-col"
+        className="fixed inset-x-0 z-[60] bg-[#0d0d0d] rounded-t-3xl flex flex-col"
         style={{
-          height: "100dvh",
+          bottom: navOffset,
+          height: `calc(100dvh - ${navOffset}px)`,
           transform: overlayTransform,
           transition: dragging ? "none" : "transform 460ms cubic-bezier(0.32, 0.72, 0, 1)",
           willChange: "transform",
@@ -189,7 +193,8 @@ export default function PlayerSheet() {
 
       {/* ── Mini bar — always visible, never moves ── */}
       <div
-        className="fixed inset-x-0 bottom-0 z-50 touch-none select-none"
+        className="fixed inset-x-0 z-50 touch-none select-none"
+        style={{ bottom: navOffset }}
         onTouchStart={onMiniTouchStart}
         onTouchMove={onMiniTouchMove}
         onTouchEnd={onMiniTouchEnd}
