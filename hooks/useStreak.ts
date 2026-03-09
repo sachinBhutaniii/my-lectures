@@ -1,10 +1,29 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import apiClient from "@/lib/axios";
 
 const STORAGE_KEY = "bdd_streak_dates";
 const DAILY_TIME_KEY = "bdd_daily_listen_time"; // { [YYYY-MM-DD]: seconds }
+const TOKEN_KEY = "bdd_auth_token";
 export const STREAK_THRESHOLD = 600; // 10 minutes in seconds
+
+// Module-level debounce so multiple hook instances don't fire parallel saves
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token) return;
+      const streakDates: string[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+      const listenTime: Record<string, number> = JSON.parse(localStorage.getItem(DAILY_TIME_KEY) ?? "{}");
+      await apiClient.put("/api/users/streak", { streakDates, listenTime }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch { /* non-critical */ }
+  }, 5000); // 5-second debounce
+}
 
 function toDateStr(date: Date): string {
   return date.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -76,7 +95,7 @@ export function useStreak() {
   // Ref to avoid stale closure in addListeningTime
   const dailyTimesRef = useRef<Record<string, number>>({});
 
-  useEffect(() => {
+  const reloadFromStorage = useCallback(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setListenDates(JSON.parse(raw));
@@ -92,6 +111,13 @@ export function useStreak() {
     } catch { /* ignore */ }
   }, []);
 
+  useEffect(() => {
+    reloadFromStorage();
+    // Re-read from localStorage after backend sync on login
+    window.addEventListener("bdd-streak-synced", reloadFromStorage);
+    return () => window.removeEventListener("bdd-streak-synced", reloadFromStorage);
+  }, [reloadFromStorage]);
+
   // Add seconds listened — automatically marks streak when threshold is crossed
   const addListeningTime = useCallback((seconds: number) => {
     const t = today();
@@ -103,6 +129,7 @@ export function useStreak() {
     try {
       localStorage.setItem(DAILY_TIME_KEY, JSON.stringify(dailyTimesRef.current));
     } catch { /* ignore */ }
+    scheduleSave();
 
     // If we just crossed the 10-minute threshold, mark today as a streak day
     if (current < STREAK_THRESHOLD && newTotal >= STREAK_THRESHOLD) {
@@ -110,6 +137,7 @@ export function useStreak() {
         if (prev.includes(t)) return prev;
         const next = [...prev, t];
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+        scheduleSave();
         return next;
       });
     }

@@ -64,13 +64,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
   }, []);
 
+  const syncStreakFromBackend = useCallback(async (tkn: string) => {
+    try {
+      const res = await apiClient.get("/api/users/streak", {
+        headers: { Authorization: `Bearer ${tkn}` },
+      });
+      const { streakDates, listenTime } = res.data as {
+        streakDates: string[];
+        listenTime: Record<string, number>;
+      };
+
+      // Merge server data into localStorage (union dates, max per-day seconds)
+      const localDatesRaw = localStorage.getItem("bdd_streak_dates");
+      const localTimeRaw = localStorage.getItem("bdd_daily_listen_time");
+      const localDates: string[] = localDatesRaw ? JSON.parse(localDatesRaw) : [];
+      const localTime: Record<string, number> = localTimeRaw ? JSON.parse(localTimeRaw) : {};
+
+      const mergedDates = [...new Set([...localDates, ...(streakDates ?? [])])];
+      const mergedTime: Record<string, number> = { ...localTime };
+      for (const [day, secs] of Object.entries(listenTime ?? {})) {
+        mergedTime[day] = Math.max(mergedTime[day] ?? 0, secs);
+      }
+
+      localStorage.setItem("bdd_streak_dates", JSON.stringify(mergedDates));
+      localStorage.setItem("bdd_daily_listen_time", JSON.stringify(mergedTime));
+      window.dispatchEvent(new Event("bdd-streak-synced"));
+    } catch { /* non-critical — streak still works from localStorage */ }
+  }, []);
+
   const fetchMe = useCallback(async (tkn: string) => {
     const res = await apiClient.get("/api/users/me", {
       headers: { Authorization: `Bearer ${tkn}` },
     });
     setUser(res.data);
     syncProfileFromAuth(res.data);
-  }, [syncProfileFromAuth]);
+    syncStreakFromBackend(tkn);
+  }, [syncProfileFromAuth, syncStreakFromBackend]);
 
   const handleFetchMe = useCallback(async (tkn: string) => {
     try {
