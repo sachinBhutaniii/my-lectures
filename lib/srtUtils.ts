@@ -144,3 +144,13 @@ export function formatTime(seconds: number): string {
   const s = Math.floor(seconds % 60);
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+export function offsetCues(cues: SrtCue[], offsetMs: number): SrtCue[] {
+  return cues.map((c) => ({
+    ...c,
+    startMs: c.startMs + offsetMs,
+    endMs: c.endMs + offsetMs,
+    startTime: msToTime(c.startMs + offsetMs),
+    endTime: msToTime(c.endMs + offsetMs),
+  }));
+}

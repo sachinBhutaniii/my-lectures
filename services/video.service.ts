@@ -289,3 +289,23 @@ export const uploadImage = async (file: File): Promise<string> => {
   });
   return response.data.url;
 };
+
+// ── Regenerate transcript range ───────────────────────────────────────────────
+
+export interface SrtCueDtoItem {
+  startTime: string;
+  endTime: string;
+  text: string;
+}
+
+export const regenerateTranscriptRange = async (
+  videoLocaleId: number,
+  startSeconds: number,
+  endSeconds: number
+): Promise<{ cues: SrtCueDtoItem[] }> => {
+  const res = await apiClient.post<{ cues: SrtCueDtoItem[] }>(
+    `/api/transcripts/${videoLocaleId}/regenerate-range`,
+    { startSeconds, endSeconds }
+  );
+  return res.data;
+};

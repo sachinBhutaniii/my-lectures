@@ -9,6 +9,8 @@ import {
   saveTranscriptDraft,
   submitTranscriptReview,
   publishTranscript,
+  regenerateTranscriptRange,
+  SrtCueDtoItem,
 } from "@/services/video.service";
 import { useStreak } from "@/hooks/useStreak";
 
@@ -51,6 +53,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [speed, setSpeed] = useState(1);
   const [activeCueId, setActiveCueId] = useState<number | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+
+  // Select mode
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [regenerating, setRegenerating] = useState(false);
+  const dragStartId = useRef<number | null>(null);
+  const isDragging = useRef(false);
 
   // Save/submit state
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -349,6 +358,48 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }
   };
 
+  // ── Select mode helpers ──────────────────────────────────────────────────────
+  const selectRange = useCallback((fromId: number, toId: number) => {
+    const fromIdx = cues.findIndex((c) => c.id === fromId);
+    const toIdx = cues.findIndex((c) => c.id === toId);
+    const [lo, hi] = fromIdx <= toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+    setSelectedIds(new Set(cues.slice(lo, hi + 1).map((c) => c.id)));
+  }, [cues]);
+
+  const handleRegenerate = async () => {
+    const selectedCues = cues.filter((c) => selectedIds.has(c.id));
+    if (selectedCues.length === 0) return;
+    const startSec = Math.floor(Math.min(...selectedCues.map((c) => c.startMs)) / 1000);
+    const endSec = Math.ceil(Math.max(...selectedCues.map((c) => c.endMs)) / 1000) + 2;
+    setRegenerating(true);
+    try {
+      const { cues: rawCues } = await regenerateTranscriptRange(data.id, startSec, endSec);
+      const insertionPoint = cues.findIndex((c) => selectedIds.has(c.id));
+      const nonSelected = cues.filter((c) => !selectedIds.has(c.id));
+      const insertInNonSelected = cues.slice(0, insertionPoint).filter((c) => !selectedIds.has(c.id)).length;
+      const newSrtCues = rawCues.map((c: SrtCueDtoItem) => ({
+        id: 0,
+        startTime: c.startTime,
+        endTime: c.endTime,
+        startMs: timeToMs(c.startTime),
+        endMs: timeToMs(c.endTime),
+        text: c.text,
+      }));
+      const merged = [
+        ...nonSelected.slice(0, insertInNonSelected),
+        ...newSrtCues,
+        ...nonSelected.slice(insertInNonSelected),
+      ].map((c, i) => ({ ...c, id: i + 1 }));
+      setCues(merged);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+    } catch {
+      alert("Regeneration failed. Please try again.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const pendingL1Changes = l1Diff.size - acceptedL1Ids.size;
   const allAccepted = l1Diff.size > 0 && pendingL1Changes === 0;
   const hasL2 = data.level2Srt != null;
@@ -428,6 +479,21 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             Publish ↑
           </button>
         )}
+        {/* Select mode toggle */}
+        <button
+          onClick={() => {
+            setSelectMode((v) => !v);
+            if (selectMode) setSelectedIds(new Set());
+          }}
+          className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+            selectMode
+              ? "bg-orange-500/20 border-orange-500/40 text-orange-400"
+              : "bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300"
+          }`}
+          title="Select cues for range regeneration"
+        >
+          Select
+        </button>
         {/* Fullscreen toggle button */}
         <button
           onClick={toggleFullscreen}
@@ -572,7 +638,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       )}
 
       {/* ── Cue list ──────────────────────────────────────────────────────────── */}
-      <div ref={listRef} className="flex-1 overflow-y-auto pb-24">
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto pb-4"
+        onPointerUp={() => { isDragging.current = false; }}
+      >
         {noSrt ? (
           <div className="text-center py-20 text-gray-600">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-12 h-12 mx-auto mb-3">
@@ -600,11 +670,56 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                 onDraftChange={setDraft}
                 onAcceptL1={() => acceptL1Change(cue.id)}
                 onSeekTo={() => { if (audioRef.current) { audioRef.current.currentTime = cue.startMs / 1000; } }}
+                selectMode={selectMode}
+                isSelected={selectedIds.has(cue.id)}
+                onCheckboxPointerDown={() => {
+                  dragStartId.current = cue.id;
+                  isDragging.current = true;
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(cue.id)) next.delete(cue.id);
+                    else next.add(cue.id);
+                    return next;
+                  });
+                }}
+                onCheckboxPointerEnter={() => {
+                  if (isDragging.current && dragStartId.current !== null) {
+                    selectRange(dragStartId.current, cue.id);
+                  }
+                }}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* ── Regenerate action bar ─────────────────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-gray-950 border-t border-orange-500/20">
+          <span className="text-sm text-orange-400 font-medium">
+            {selectedIds.size} cue{selectedIds.size > 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating}
+              className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {regenerating ? (
+                <><Spinner /> Regenerating…</>
+              ) : (
+                "✦ Regenerate Transcript"
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Publish confirmation modal ─────────────────────────────────────────── */}
       {publishConfirm && (
@@ -662,12 +777,17 @@ interface CueRowProps {
   onDraftChange: (d: DraftState) => void;
   onAcceptL1: () => void;
   onSeekTo: () => void;
+  selectMode?: boolean;
+  isSelected?: boolean;
+  onCheckboxPointerDown?: () => void;
+  onCheckboxPointerEnter?: () => void;
 }
 
 function CueRow({
   cue, isActive, isEditing, draft, mode,
   l1Diff, l2Diff, isL1Accepted,
   onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1, onSeekTo,
+  selectMode, isSelected, onCheckboxPointerDown, onCheckboxPointerEnter,
 }: CueRowProps) {
   const inputCls = "w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-blue-500 transition-colors";
 
@@ -675,7 +795,9 @@ function CueRow({
     <div
       data-cue={cue.id}
       className={`px-4 py-3 transition-colors ${
-        isActive
+        isSelected
+          ? "bg-orange-500/10 border-l-2 border-orange-500"
+          : isActive
           ? "bg-blue-500/10 border-l-2 border-blue-500"
           : "border-l-2 border-transparent hover:bg-gray-900/40"
       }`}
@@ -729,6 +851,24 @@ function CueRow({
         /* ── Display mode ── */
         <div>
           <div className="flex items-start gap-3">
+            {/* Checkbox (select mode only) */}
+            {selectMode && (
+              <div
+                className={`flex-shrink-0 mt-0.5 w-4 h-4 rounded border-2 cursor-pointer flex items-center justify-center ${
+                  isSelected
+                    ? "bg-orange-500 border-orange-500"
+                    : "border-gray-600 hover:border-orange-400"
+                }`}
+                onPointerDown={(e) => { e.preventDefault(); onCheckboxPointerDown?.(); }}
+                onPointerEnter={onCheckboxPointerEnter}
+              >
+                {isSelected && (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5 text-white">
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            )}
             {/* Index + time — click to seek */}
             <button
               onClick={onSeekTo}
