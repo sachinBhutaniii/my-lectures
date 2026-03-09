@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlayer } from "@/context/PlayerContext";
 
@@ -15,19 +16,52 @@ export default function PlayerSheet() {
   const pathname = usePathname();
   const router = useRouter();
 
+  const [exiting, setExiting] = useState(false);
+  const navigating = useRef(false);
+  const touchStartY = useRef(0);
+  const touchStartT = useRef(0);
+
   const onLecturePage = lecture ? pathname === `/${lecture.id}` : false;
   if (!lecture || onLecturePage) return null;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  // On the home page the BottomNav sits at bottom-0; mini bar must clear it
   const navOffset = pathname === "/" ? 64 : 0;
+
+  function goToLecture() {
+    if (navigating.current) return;
+    navigating.current = true;
+    setExiting(true);
+    // Wait for exit animation, then navigate — lecture-enter animation plays simultaneously
+    setTimeout(() => router.push(`/${lecture!.id}`), 320);
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartY.current = e.touches[0].clientY;
+    touchStartT.current = Date.now();
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    const dy = touchStartY.current - e.changedTouches[0].clientY; // positive = swipe up
+    const dt = Date.now() - touchStartT.current;
+    const isTap = Math.abs(dy) < 8 && dt < 300;
+    const isSwipeUp = dy > 15;
+    if (isTap || isSwipeUp) {
+      e.preventDefault(); // block the delayed click event
+      goToLecture();
+    }
+  }
 
   return (
     <div
-      className="fixed inset-x-0 z-50 cursor-pointer"
-      style={{ bottom: navOffset }}
-      onClick={() => router.push(`/${lecture.id}`)}
+      className="fixed inset-x-0 z-50"
+      style={{
+        bottom: navOffset,
+        transform: exiting ? "translateY(110%)" : "translateY(0)",
+        transition: exiting ? "transform 360ms cubic-bezier(0.32, 0.72, 0, 1)" : "none",
+      }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onClick={goToLecture}
     >
       <div className="mx-auto w-full max-w-4xl xl:max-w-6xl">
         {/* Progress bar */}
@@ -48,7 +82,9 @@ export default function PlayerSheet() {
 
           {/* Play / Pause */}
           <button
-            onClick={(e) => { e.stopPropagation(); isPlaying ? pause() : resume(); }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); isPlaying ? pause() : resume(); }}
+            onClick={(e) => e.stopPropagation()}
             className="text-orange-500 flex-shrink-0 active:scale-90 transition-transform"
           >
             {isPlaying ? (
@@ -64,7 +100,9 @@ export default function PlayerSheet() {
 
           {/* Stop */}
           <button
-            onClick={(e) => { e.stopPropagation(); stop(); }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); stop(); }}
+            onClick={(e) => e.stopPropagation()}
             className="text-gray-500 active:scale-90 transition-transform flex-shrink-0"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-5 h-5">

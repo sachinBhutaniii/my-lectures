@@ -88,7 +88,7 @@ export default function LecturePage() {
   const handleBack = useCallback(() => router.back(), [router]);
 
   return (
-    <div className="h-dvh bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden lecture-enter">
+    <div className="h-dvh bg-black text-white w-full max-w-4xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden lecture-enter relative z-[55]">
       {/* ── Top header ── */}
       <div className={`flex items-center px-4 gap-3 flex-shrink-0 transition-all duration-300 ${readingMode ? "pt-3 pb-2" : "pt-5 pb-3"}`}>
         {/* Back / minimize */}
