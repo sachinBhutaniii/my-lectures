@@ -49,7 +49,7 @@ function ShlokaCard({ entry, locale }: { entry: ShlokaEntry; locale: string }) {
 
       <div className="px-4 py-3 space-y-3">
         {/* Shloka text — always visible */}
-        <p className="text-orange-300 text-base leading-relaxed font-medium">{verseDisplay}</p>
+        <p className="text-orange-300 text-base leading-relaxed font-medium whitespace-pre-wrap">{verseDisplay}</p>
 
         {/* Translation — always visible */}
         <p className="text-gray-300 text-sm leading-relaxed">{entry.translation}</p>
@@ -80,7 +80,7 @@ function ShlokaCard({ entry, locale }: { entry: ShlokaEntry; locale: string }) {
             Purport
           </button>
           {purportExpanded && (
-            <p className="mt-2 text-sm text-gray-300 leading-relaxed bg-gray-900/60 rounded-lg px-3 py-2">
+            <p className="mt-2 text-sm text-gray-300 leading-relaxed bg-gray-900/60 rounded-lg px-3 py-2 whitespace-pre-wrap">
               {entry.purport}
             </p>
           )}
