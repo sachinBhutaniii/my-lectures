@@ -13,6 +13,7 @@ import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import ShlokaPanel from "@/components/ShlokaPanel";
 import { usePlayer } from "@/context/PlayerContext";
 import { usePlaylists } from "@/hooks/usePlaylists";
+import { useBackClose } from "@/hooks/useBackClose";
 
 type Tab = "queue" | "transcript";
 
@@ -40,6 +41,11 @@ export default function LecturePage() {
   const [showShlokas, setShowShlokas] = useState(false);
   const { playlists, createPlaylist, addToPlaylist, removeFromPlaylist, lecturePlaylistIds } = usePlaylists();
   const { currentTime, seekToSeconds, isPlaying, pause, resume, seek, skip, duration, lecture: playingLecture } = usePlayer();
+
+  // ── Back gesture closes active overlay ───────────────────────────────────
+  useBackClose(showShlokas, () => setShowShlokas(false));
+  useBackClose(showPlaylistModal, () => setShowPlaylistModal(false));
+  useBackClose(showLangPicker, () => setShowLangPicker(false));
   const isThisLecture = playingLecture?.id === videoId;
   const progress = isThisLecture && duration > 0 ? (currentTime / duration) * 100 : 0;
 

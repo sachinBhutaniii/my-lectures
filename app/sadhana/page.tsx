@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/hooks/useT";
+import { useBackClose } from "@/hooks/useBackClose";
 import { useEffect, useState } from "react";
 import SadhanaTracker from "@/components/SadhanaTracker";
 import SadhanaHistory from "@/components/SadhanaHistory";
@@ -23,6 +24,7 @@ export default function SadhanaPage() {
   const t = useT();
   const [activeTab, setActiveTab] = useState<SadhanaTab>("today");
   const [showMentorSheet, setShowMentorSheet] = useState(false);
+  useBackClose(showMentorSheet, () => setShowMentorSheet(false));
   const [isMentor, setIsMentor] = useState(false);
   const [notifications, setNotifications] = useState<SadhanaNotifications>({ pendingQuestions: 0, newAnswers: 0 });
 

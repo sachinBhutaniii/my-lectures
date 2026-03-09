@@ -27,6 +27,7 @@ import WisdomModal, { getWisdomForToday } from "@/components/WisdomModal";
 import DownloadsPanel from "@/components/DownloadsPanel";
 import { useDownloads } from "@/hooks/useDownloads";
 import NewContentPanel from "@/components/NewContentPanel";
+import { useBackClose } from "@/hooks/useBackClose";
 
 export default function Home() {
   const router = useRouter();
@@ -52,6 +53,18 @@ export default function Home() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [prevMaxId, setPrevMaxId] = useState<number>(0);
   const [notifSnapshot, setNotifSnapshot] = useState<typeof lectures>([]);
+
+  // ── Back gesture closes active overlay ───────────────────────────────────
+  useBackClose(menuOpen, () => setMenuOpen(false));
+  useBackClose(showHistory, () => setShowHistory(false));
+  useBackClose(showFavourites, () => setShowFavourites(false));
+  useBackClose(showPlaylists, () => setShowPlaylists(false));
+  useBackClose(showStreak, () => setShowStreak(false));
+  useBackClose(showWisdom, () => setShowWisdom(false));
+  useBackClose(showBhajansModal, () => setShowBhajansModal(false));
+  useBackClose(showDownloads, () => setShowDownloads(false));
+  useBackClose(showNotifications, () => setShowNotifications(false));
+  useBackClose(!!playlistTarget, () => setPlaylistTarget(null));
 
   // Client-only: pick wisdom + auto-show once per session
   useEffect(() => {
