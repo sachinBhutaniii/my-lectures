@@ -4,18 +4,25 @@ import { useEffect, useRef } from "react";
  * When an overlay (panel/modal/drawer) opens, pushes a synthetic browser
  * history entry so that swipe-back / device back closes the overlay instead
  * of navigating away from the page.
- *
- * Call suppressBackOnClose() before programmatic navigation that also closes
- * an overlay — this prevents the hook's cleanup from calling history.back()
- * and cancelling the in-progress navigation.
  */
 
+// Prevents cleanup's history.back() from firing other overlays' popstate handlers
+let _backInProgress = false;
+
+// Call before any onClose()+router.push() pair to skip the history.back() cleanup
+// entirely — avoids cancelling in-progress navigations.
 let _suppress = false;
 
 export function suppressBackOnClose() {
   _suppress = true;
-  // Auto-reset after a short window in case the caller forgets
   setTimeout(() => { _suppress = false; }, 500);
+}
+
+function safeBack() {
+  _backInProgress = true;
+  history.back();
+  // Reset after the browser has dispatched the resulting popstate event
+  setTimeout(() => { _backInProgress = false; }, 50);
 }
 
 export function useBackClose(isOpen: boolean, onClose: () => void) {
@@ -26,7 +33,7 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
       if (pushedRef.current) {
         pushedRef.current = false;
         if (!_suppress) {
-          history.back();
+          safeBack();
         }
       }
       return;
@@ -37,7 +44,8 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
     pushedRef.current = true;
 
     const handler = () => {
-      pushedRef.current = false; // browser already went back
+      if (_backInProgress) return; // ignore popstate from cleanup, not user gesture
+      pushedRef.current = false;
       onClose();
     };
     window.addEventListener("popstate", handler);
@@ -48,7 +56,7 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
       if (pushedRef.current) {
         pushedRef.current = false;
         if (!_suppress) {
-          history.back();
+          safeBack();
         }
       }
     };
