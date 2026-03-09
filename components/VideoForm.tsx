@@ -417,6 +417,10 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
       const res = await generateShlokaData(id);
       setShlokaResult(res.generated);
       setShlokaWarnings(res.warnings ?? []);
+      // Auto-reload the shloka editor so new data is immediately visible
+      if (res.generated.length > 0) {
+        loadShlokaEditorData(shlokaEditorLocale);
+      }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string; message?: string }; status?: number } };
       const detail = axiosErr?.response?.data?.error
