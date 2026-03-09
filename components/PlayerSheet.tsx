@@ -23,7 +23,8 @@ export default function PlayerSheet() {
   const [expanded, setExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
-  const [maxDrag, setMaxDrag] = useState(700);
+  const [maxDrag, setMaxDrag] = useState(10000);
+  const [ready, setReady] = useState(false); // suppress transition on first measurement
 
   const startTouchY = useRef(0);
   const startDragY = useRef(0);
@@ -31,12 +32,20 @@ export default function PlayerSheet() {
   const lastT = useRef(0);
   const moved = useRef(false);
 
-  // Keep maxDrag in sync with window height
+  // Keep maxDrag in sync with visual viewport height (matches 100dvh, not window.innerHeight)
   useEffect(() => {
-    const update = () => setMaxDrag(window.innerHeight - MINI_H);
+    const update = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      setMaxDrag(h - MINI_H);
+    };
     update();
+    setReady(true);
+    window.visualViewport?.addEventListener("resize", update);
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.removeEventListener("resize", update);
+    };
   }, []);
 
   // Collapse when navigating to the lecture page
@@ -123,7 +132,7 @@ export default function PlayerSheet() {
         style={{
           height: "100dvh",
           transform: `translateY(${translateY}px)`,
-          transition: dragging ? "none" : "transform 460ms cubic-bezier(0.32, 0.72, 0, 1)",
+          transition: (!ready || dragging) ? "none" : "transform 460ms cubic-bezier(0.32, 0.72, 0, 1)",
           willChange: "transform",
         }}
       >
