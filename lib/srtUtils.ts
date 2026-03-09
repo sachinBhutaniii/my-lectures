@@ -113,10 +113,13 @@ export function diffCues(
   original: SrtCue[],
   edited: SrtCue[]
 ): Map<number, CueDiff> {
-  const origMap = new Map(original.map((c) => [c.id, c]));
+  const origById = new Map(original.map((c) => [c.id, c]));
   const diffs = new Map<number, CueDiff>();
-  for (const ec of edited) {
-    const oc = origMap.get(ec.id);
+  for (let i = 0; i < edited.length; i++) {
+    const ec = edited[i];
+    // Primary: match by id. Fallback: match by position (handles id mismatches
+    // when original and L1 SRTs have different block numbering or cue counts).
+    const oc = origById.get(ec.id) ?? original[i];
     if (!oc) continue;
     const textChanged = oc.text !== ec.text;
     const timingChanged =
