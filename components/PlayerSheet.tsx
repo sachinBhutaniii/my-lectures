@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlayer } from "@/context/PlayerContext";
 
@@ -22,16 +22,26 @@ export default function PlayerSheet() {
   const touchStartT = useRef(0);
 
   const onLecturePage = lecture ? pathname === `/${lecture.id}` : false;
+
+  // Reset exit state whenever we're NOT on the lecture page (e.g. after pressing back)
+  useEffect(() => {
+    if (!onLecturePage) {
+      setExiting(false);
+      navigating.current = false;
+    }
+  }, [onLecturePage]);
+
   if (!lecture || onLecturePage) return null;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const navOffset = pathname === "/" ? 64 : 0;
+
+  // On the home page the BottomNav sits at bottom-0; use 72px to safely clear it
+  const navOffset = pathname === "/" ? 72 : 0;
 
   function goToLecture() {
     if (navigating.current) return;
     navigating.current = true;
     setExiting(true);
-    // Wait for exit animation, then navigate — lecture-enter animation plays simultaneously
     setTimeout(() => router.push(`/${lecture!.id}`), 320);
   }
 
@@ -41,12 +51,12 @@ export default function PlayerSheet() {
   }
 
   function onTouchEnd(e: React.TouchEvent) {
-    const dy = touchStartY.current - e.changedTouches[0].clientY; // positive = swipe up
+    const dy = touchStartY.current - e.changedTouches[0].clientY;
     const dt = Date.now() - touchStartT.current;
     const isTap = Math.abs(dy) < 8 && dt < 300;
     const isSwipeUp = dy > 15;
     if (isTap || isSwipeUp) {
-      e.preventDefault(); // block the delayed click event
+      e.preventDefault();
       goToLecture();
     }
   }
