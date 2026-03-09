@@ -85,9 +85,11 @@ export default function LecturePage() {
   const selectedLangName =
     languages?.find((l) => l.code === selectedLanguage)?.name ?? "English";
 
-  // Auto-play (resume from saved position) when lecture data loads
+  // Auto-play when lecture data loads — skip if PlayerContext already has this
+  // lecture loaded (e.g. user clicked the card on the home page, which already
+  // called play() within the user-gesture window, authorising audio on iOS).
   useEffect(() => {
-    if (lecture?.audioUrl) {
+    if (lecture?.audioUrl && playingLecture?.id !== lecture.id) {
       playerPlay(lecture);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

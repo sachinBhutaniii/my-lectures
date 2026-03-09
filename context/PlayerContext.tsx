@@ -101,10 +101,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.preload = "metadata";
       audioRef.current = audio;
 
+      // Call play() immediately so mobile browsers authorise it within the
+      // user-gesture window. Seeking to the saved position happens once
+      // loadedmetadata fires (audio keeps playing from new position).
+      audio.play().then(() => setIsPlaying(true)).catch(() => {
+        // Autoplay blocked (e.g. no prior user gesture on first load).
+        // The loadedmetadata handler will not call play() — user must press
+        // the play button manually, but the lecture/mini-bar will still appear.
+        setIsPlaying(false);
+      });
+
       audio.addEventListener("loadedmetadata", () => {
         setDuration(audio.duration);
         setIsLoading(false);
-        // Restore saved position
+        // Restore saved position (seek without restarting play)
         const saved = localStorage.getItem(posKey(newLecture.id));
         if (saved) {
           const pos = parseFloat(saved);
@@ -113,7 +123,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             setCurrentTime(pos);
           }
         }
-        audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       });
 
       audio.addEventListener("error", () => {

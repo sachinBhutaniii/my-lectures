@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/hooks/useT";
+import { usePlayer } from "@/context/PlayerContext";
 import { usePlaybackHistory } from "@/hooks/usePlaybackHistory";
 import { useFavourites } from "@/hooks/useFavourites";
 import { usePlaylists } from "@/hooks/usePlaylists";
@@ -47,6 +48,7 @@ export default function Home() {
   const [showBhajansModal, setShowBhajansModal] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
   const { downloads, isDownloaded, getDownloadProgress, downloadLecture, deleteDownload, getBlobUrl } = useDownloads();
+  const { play: playerPlay } = usePlayer();
   const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
 
   // ── New-content notification ─────────────────────────────────────────────
@@ -255,6 +257,7 @@ export default function Home() {
         onClose={() => setShowNotifications(false)}
         onLectureClick={(lecture) => {
           addToHistory(lecture);
+          playerPlay(lecture);
           router.push(`/${lecture.id}`);
         }}
       />
@@ -348,7 +351,7 @@ export default function Home() {
       {/* ── Festival Carousel ── */}
       <FestivalCarousel
         lectures={lectures.slice(0, 8)}
-        onSelect={(lecture) => router.push(`/${lecture.id}`)}
+        onSelect={(lecture) => { addToHistory(lecture); playerPlay(lecture); router.push(`/${lecture.id}`); }}
       />
 
       {/* ── Wisdom of the Day card ── */}
@@ -434,6 +437,7 @@ export default function Home() {
               downloadProgress={getDownloadProgress(lecture.id)}
               onClick={() => {
                 addToHistory(lecture);
+                playerPlay(lecture);
                 router.push(`/${lecture.id}`);
               }}
               onToggleFavourite={() => toggleFavourite(lecture)}
