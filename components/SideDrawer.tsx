@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useT } from "@/hooks/useT";
+import { suppressBackOnClose } from "@/hooks/useBackClose";
 
 interface Props {
   open: boolean;
@@ -235,7 +236,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           /* Logged-in: show backend user */
           <div className="px-5 pt-12 pb-5">
             <button
-              onClick={() => { onClose(); onProfile(); }}
+              onClick={() => { suppressBackOnClose(); onClose(); onProfile(); }}
               className="flex items-center gap-4 w-full text-left hover:bg-white/5 rounded-xl p-2 -mx-2 transition-colors"
             >
               <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-700 to-amber-500 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-orange-500/50">
@@ -280,7 +281,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
               </div>
             </div>
             <button
-              onClick={() => { onClose(); router.push("/login"); }}
+              onClick={() => { suppressBackOnClose(); onClose(); router.push("/login"); }}
               className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
             >
               {t("drawer.signIn")}
@@ -326,7 +327,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
             <>
               <Divider />
               <button
-                onClick={() => { onClose(); router.push("/admin"); }}
+                onClick={() => { suppressBackOnClose(); onClose(); router.push("/admin"); }}
                 className="w-full flex items-center gap-4 px-5 py-4 hover:bg-orange-500/10 transition-colors text-left"
               >
                 <span className="w-9 h-9 flex items-center justify-center rounded-full border border-orange-500/60 flex-shrink-0 text-orange-400 bg-orange-500/10">
@@ -350,7 +351,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
             <>
               <Divider />
               <button
-                onClick={() => { onClose(); router.push("/proofread"); }}
+                onClick={() => { suppressBackOnClose(); onClose(); router.push("/proofread"); }}
                 className="w-full flex items-center gap-4 px-5 py-4 hover:bg-blue-500/10 transition-colors text-left"
               >
                 <span className="w-9 h-9 flex items-center justify-center rounded-full border border-blue-500/60 flex-shrink-0 text-blue-400 bg-blue-500/10">

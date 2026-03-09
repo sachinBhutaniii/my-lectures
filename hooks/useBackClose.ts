@@ -4,20 +4,28 @@ import { useEffect, useRef } from "react";
  * When an overlay (panel/modal/drawer) opens, pushes a synthetic browser
  * history entry so that swipe-back / device back closes the overlay instead
  * of navigating away from the page.
+ *
+ * Call suppressBackOnClose() before programmatic navigation that also closes
+ * an overlay — this prevents the hook's cleanup from calling history.back()
+ * and cancelling the in-progress navigation.
  */
+
+let _suppress = false;
+
+export function suppressBackOnClose() {
+  _suppress = true;
+  // Auto-reset after a short window in case the caller forgets
+  setTimeout(() => { _suppress = false; }, 500);
+}
+
 export function useBackClose(isOpen: boolean, onClose: () => void) {
   const pushedRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) {
-      // Overlay closed normally — consume the pushed history entry only if
-      // we're still sitting at the synthetic entry. If the user navigated
-      // away (e.g. tapped "Sign In" → router.push), history.state will no
-      // longer be {overlay:true}, so we skip history.back() to avoid
-      // cancelling the in-progress navigation.
       if (pushedRef.current) {
         pushedRef.current = false;
-        if (history.state?.overlay) {
+        if (!_suppress) {
           history.back();
         }
       }
@@ -36,10 +44,10 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
 
     return () => {
       window.removeEventListener("popstate", handler);
-      // Unmounted while open — clean up the pushed entry if still there
+      // Unmounted while open — clean up the pushed entry
       if (pushedRef.current) {
         pushedRef.current = false;
-        if (history.state?.overlay) {
+        if (!_suppress) {
           history.back();
         }
       }
