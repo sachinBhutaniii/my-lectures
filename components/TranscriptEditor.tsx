@@ -677,8 +677,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                   isDragging.current = true;
                   setSelectedIds((prev) => {
                     const next = new Set(prev);
-                    if (next.has(cue.id)) next.delete(cue.id);
-                    else next.add(cue.id);
+                    if (next.has(cue.id)) {
+                      next.delete(cue.id);
+                    } else {
+                      // Select this cue + next 19 by default
+                      const startIdx = cues.findIndex((c) => c.id === cue.id);
+                      cues.slice(startIdx, startIdx + 20).forEach((c) => next.add(c.id));
+                    }
                     return next;
                   });
                 }}
