@@ -10,10 +10,16 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
 
   useEffect(() => {
     if (!isOpen) {
-      // Overlay closed normally — consume the pushed history entry
+      // Overlay closed normally — consume the pushed history entry only if
+      // we're still sitting at the synthetic entry. If the user navigated
+      // away (e.g. tapped "Sign In" → router.push), history.state will no
+      // longer be {overlay:true}, so we skip history.back() to avoid
+      // cancelling the in-progress navigation.
       if (pushedRef.current) {
         pushedRef.current = false;
-        history.back();
+        if (history.state?.overlay) {
+          history.back();
+        }
       }
       return;
     }
@@ -30,10 +36,12 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
 
     return () => {
       window.removeEventListener("popstate", handler);
-      // Unmounted while open — clean up the pushed entry
+      // Unmounted while open — clean up the pushed entry if still there
       if (pushedRef.current) {
         pushedRef.current = false;
-        history.back();
+        if (history.state?.overlay) {
+          history.back();
+        }
       }
     };
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
