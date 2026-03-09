@@ -12,8 +12,8 @@ export async function getShlokaData(videoId: number, locale: string): Promise<Sh
   }
 }
 
-export async function generateShlokaData(videoId: number): Promise<{ generated: string[] }> {
-  const res = await apiClient.post<{ generated: string[] }>(`/api/shlokas/generate/${videoId}`);
+export async function generateShlokaData(videoId: number): Promise<{ generated: string[]; warnings: string[] }> {
+  const res = await apiClient.post<{ generated: string[]; warnings: string[] }>(`/api/shlokas/generate/${videoId}`);
   return res.data;
 }
 

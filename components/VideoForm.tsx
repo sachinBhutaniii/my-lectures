@@ -137,6 +137,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   // Shloka generation state
   const [shlokaGenerating, setShlokaGenerating] = useState(false);
   const [shlokaResult, setShlokaResult] = useState<string[] | null>(null);
+  const [shlokaWarnings, setShlokaWarnings] = useState<string[]>([]);
   const [shlokaError, setShlokaError] = useState<string | null>(null);
 
   // Shloka editor state
@@ -410,10 +411,12 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     if (!id) return;
     setShlokaGenerating(true);
     setShlokaResult(null);
+    setShlokaWarnings([]);
     setShlokaError(null);
     try {
       const res = await generateShlokaData(id);
       setShlokaResult(res.generated);
+      setShlokaWarnings(res.warnings ?? []);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string; message?: string }; status?: number } };
       const detail = axiosErr?.response?.data?.error
@@ -912,6 +915,18 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
                 </svg>
                 Generated for: {shlokaResult.length > 0 ? shlokaResult.join(", ") : "none (no transcripts found)"}
               </p>
+            )}
+            {shlokaWarnings.length > 0 && (
+              <div className="space-y-1">
+                {shlokaWarnings.map((w, i) => (
+                  <p key={i} className="text-xs text-amber-400 flex items-start gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 flex-shrink-0 mt-0.5">
+                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+                    </svg>
+                    {w}
+                  </p>
+                ))}
+              </div>
             )}
             {shlokaError && <p className="text-xs text-red-400">{shlokaError}</p>}
           </div>
