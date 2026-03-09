@@ -411,7 +411,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const noSrt = cues.length === 0;
 
   return (
-    <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden" onTouchEnd={handleTripleTap}>
+    <div className="h-dvh bg-[#0a0a0a] flex flex-col overflow-hidden" onTouchEnd={handleTripleTap}>
       {/* Hidden audio */}
       {data.audioUrl && <audio ref={audioRef} src={data.audioUrl} preload="metadata" />}
 
@@ -701,7 +701,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
 
       {/* ── Regenerate action bar ─────────────────────────────────────────────── */}
       {selectMode && (
-        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-gray-950 border-t border-orange-500/20">
+        <div
+          className="flex-shrink-0 flex items-center justify-between px-4 pt-3 bg-gray-950 border-t border-orange-500/20"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+        >
           {selectedIds.size > 0 ? (
             <span className="text-sm text-orange-400 font-medium">
               {selectedIds.size} cue{selectedIds.size > 1 ? "s" : ""} selected
