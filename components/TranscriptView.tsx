@@ -112,8 +112,12 @@ export default function TranscriptView({
     if (transcriptSrt) {
       return parseSrt(transcriptSrt);
     }
-    // Fallback: plain transcript, no timing
     if (transcript) {
+      // If the plain transcript field actually contains SRT content, parse it properly
+      if (transcript.includes("-->")) {
+        return parseSrt(transcript);
+      }
+      // True plain text — no timing
       return transcript
         .split(/\n+/)
         .map((s) => s.trim())
