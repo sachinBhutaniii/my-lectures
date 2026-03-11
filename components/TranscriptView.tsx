@@ -40,28 +40,48 @@ function parseSrtTime(ts: string): number {
 
 /**
  * Parse full SRT content into structured entries.
+ * Handles both blank-line-separated and compact (no blank lines) SRT formats.
  */
 function parseSrt(srt: string): SrtEntry[] {
   if (!srt) return [];
-  const blocks = srt.trim().split(/\n\s*\n/);
+
+  const lines = srt.trim().split(/\r?\n/);
   const entries: SrtEntry[] = [];
+  let i = 0;
 
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    if (lines.length < 3) continue;
+  while (i < lines.length) {
+    // Skip blank lines
+    if (!lines[i].trim()) { i++; continue; }
 
-    const index = parseInt(lines[0], 10);
-    const timeLine = lines[1];
+    // Expect a cue index (a line that is purely a number)
+    const idxLine = lines[i].trim();
+    if (!/^\d+$/.test(idxLine)) { i++; continue; }
+    const index = parseInt(idxLine, 10);
+    i++;
+
+    if (i >= lines.length) break;
+
+    // Expect a timestamp line
+    const timeLine = lines[i].trim();
     const arrowIdx = timeLine.indexOf("-->");
     if (arrowIdx === -1) continue;
-
     const startMs = parseSrtTime(timeLine.slice(0, arrowIdx));
     const endMs = parseSrtTime(timeLine.slice(arrowIdx + 3));
-    const text = lines.slice(2).join(" ").trim();
+    i++;
 
-    if (text) {
-      entries.push({ index, startMs, endMs, text });
+    // Collect text lines until next blank line or next cue index
+    const textLines: string[] = [];
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line) { i++; break; } // blank line = end of cue
+      // If next line looks like a cue index followed by a timestamp, stop
+      if (/^\d+$/.test(line) && i + 1 < lines.length && lines[i + 1].includes("-->")) break;
+      textLines.push(line);
+      i++;
     }
+
+    const text = textLines.join(" ").trim();
+    if (text) entries.push({ index, startMs, endMs, text });
   }
 
   return entries;
