@@ -346,36 +346,41 @@ export default function Home() {
       </div>
 
       {/* ── Search ── */}
-      <SearchBar value={search} onChange={setSearch} />
+      <SearchBar value={search} onChange={(v) => {
+        setSearch(v);
+        if (v) setTimeout(() => lecturesSectionRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }} />
 
-      {/* ── Festival Carousel ── */}
-      <FestivalCarousel
-        lectures={lectures.slice(0, 8)}
-        onSelect={(lecture) => { addToHistory(lecture); playerPlay(lecture); router.push(`/${lecture.id}`); }}
-      />
+      {/* ── Festival Carousel, Wisdom, Categories — hidden while searching ── */}
+      {!search && (
+        <>
+          <FestivalCarousel
+            lectures={lectures.slice(0, 8)}
+            onSelect={(lecture) => { addToHistory(lecture); playerPlay(lecture); router.push(`/${lecture.id}`); }}
+          />
 
-      {/* ── Wisdom of the Day card ── */}
-      {todayWisdom && (
-        <button
-          onClick={() => setShowWisdom(true)}
-          className="mx-4 mt-4 w-[calc(100%-2rem)] flex items-center gap-4 bg-[#1c1106] border border-orange-500/20 rounded-2xl px-4 py-3.5 text-left hover:border-orange-500/40 active:scale-[0.98] transition-all"
-        >
-          <span className="text-3xl leading-none flex-shrink-0 select-none">{todayWisdom.emoji}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-orange-500 text-[10px] font-bold tracking-widest uppercase mb-0.5">
-              {t("home.wisdomOfTheDay")}
-            </p>
-            <p className="text-white text-sm font-semibold leading-snug truncate">{todayWisdom.title}</p>
-            <p className="text-gray-500 text-xs mt-0.5 leading-snug line-clamp-1">{todayWisdom.body}</p>
-          </div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-orange-500 flex-shrink-0">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-          </svg>
-        </button>
+          {todayWisdom && (
+            <button
+              onClick={() => setShowWisdom(true)}
+              className="mx-4 mt-4 w-[calc(100%-2rem)] flex items-center gap-4 bg-[#1c1106] border border-orange-500/20 rounded-2xl px-4 py-3.5 text-left hover:border-orange-500/40 active:scale-[0.98] transition-all"
+            >
+              <span className="text-3xl leading-none flex-shrink-0 select-none">{todayWisdom.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-orange-500 text-[10px] font-bold tracking-widest uppercase mb-0.5">
+                  {t("home.wisdomOfTheDay")}
+                </p>
+                <p className="text-white text-sm font-semibold leading-snug truncate">{todayWisdom.title}</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-snug line-clamp-1">{todayWisdom.body}</p>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 text-orange-500 flex-shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          )}
+
+          <CategoryPicker selected={selectedCategory} onSelect={setSelectedCategory} />
+        </>
       )}
-
-      {/* ── Browse by Book ── */}
-      <CategoryPicker selected={selectedCategory} onSelect={setSelectedCategory} />
 
       {/* ── Lectures section ── */}
       <div ref={lecturesSectionRef} className="px-4 mt-5">

@@ -148,7 +148,7 @@ export default function StreakPanel({ open, onClose, streakData }: Props) {
           <h2 className="text-white text-lg font-semibold flex-1">Statistics</h2>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-8">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-28">
           {/* Top stats row */}
           <div className="flex items-start justify-between mb-6">
             <div>
