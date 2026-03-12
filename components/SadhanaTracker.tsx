@@ -178,6 +178,15 @@ export default function SadhanaTracker() {
         setReminderLoading(false);
       }
     } else {
+      // iOS Safari requires the site to be added to Home Screen for push
+      const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone = window.matchMedia("(display-mode: standalone)").matches
+        || ("standalone" in navigator && (navigator as any).standalone === true);
+      if (isIos && !isStandalone) {
+        setReminderError("Add this app to your Home Screen (Share → Add to Home Screen) to enable reminders.");
+        return;
+      }
+
       // Turn on — request permission first
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
@@ -188,8 +197,9 @@ export default function SadhanaTracker() {
       try {
         await subscribePush(reminderTime);
         setReminderEnabled(true);
-      } catch {
-        setReminderError("Could not enable reminder. Try again.");
+      } catch (e: any) {
+        const msg: string = e?.message ?? "";
+        setReminderError(msg || "Could not enable reminder. Try again.");
       } finally {
         setReminderLoading(false);
       }
