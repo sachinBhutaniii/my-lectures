@@ -198,7 +198,7 @@ export default function SadhanaTracker() {
         await subscribePush(reminderTime);
         setReminderEnabled(true);
       } catch (e: any) {
-        const msg: string = e?.message ?? "";
+        const msg: string = e?.response?.data?.error || e?.message || "";
         setReminderError(msg || "Could not enable reminder. Try again.");
       } finally {
         setReminderLoading(false);
