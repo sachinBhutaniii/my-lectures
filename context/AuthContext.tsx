@@ -21,6 +21,7 @@ export interface AuthUser {
   avatarUrl?: string;
   role: string;
   isProofreader?: boolean; // backend sets this when user has both admin + proofreader access
+  joinedAt?: string; // YYYY-MM-DD — date of account creation (null for pre-existing users)
 }
 
 interface AuthContextType {
