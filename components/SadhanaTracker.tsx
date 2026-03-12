@@ -198,7 +198,7 @@ export default function SadhanaTracker() {
   // Score calculation for review/result
   const { totalScore, maxScore } = (() => {
     let total = 0, max = 0;
-    (questions ?? []).filter((q) => q.active).forEach((q) => {
+    (questions ?? []).filter((q) => q.active && !q.hidden).forEach((q) => {
       if (!q.options.length) return;
       max += Math.max(...q.options.map((o) => o.points));
       const sel = answers[q.slug];
