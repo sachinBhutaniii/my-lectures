@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/hooks/useT";
 import type { TranslationKey } from "@/lib/translations";
+import SadhanaStreakCalendar from "@/components/SadhanaStreakCalendar";
 
 const GRADE_LABELS: Record<string, TranslationKey> = {
   "Excellent":  "grade.excellent",
@@ -400,8 +401,21 @@ function DevoteeDetail({
     questions[0]?.slug ?? null
   );
 
+  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const joinedAt = useMemo(() => {
+    if (entries.length === 0) return today;
+    return entries.reduce((min, e) => (e.entryDate < min ? e.entryDate : min), entries[0].entryDate);
+  }, [entries, today]);
+
   return (
     <div>
+      {/* Streak calendar */}
+      {entries.length > 0 && (
+        <div className="mb-3 -mx-4 border-b border-gray-800/60 pb-3">
+          <SadhanaStreakCalendar entries={entries} joinedAt={joinedAt} />
+        </div>
+      )}
+
       {/* Toggle */}
       <div className="flex gap-1 mb-3">
         {(["date", "question", "messages"] as ViewMode[]).map((mode) => (
