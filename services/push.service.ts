@@ -57,6 +57,13 @@ export async function getPushStatus(): Promise<PushStatus | null> {
   }
 }
 
+function arrayBufferToBase64url(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 export async function subscribePush(reminderTimeLocal: string): Promise<void> {
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.subscribe({
@@ -64,13 +71,14 @@ export async function subscribePush(reminderTimeLocal: string): Promise<void> {
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
   });
 
-  const subJson = sub.toJSON();
-  const keys = subJson.keys as { p256dh: string; auth: string };
+  // Use getKey() for cross-browser compatibility (toJSON().keys can be null on some browsers)
+  const p256dh = arrayBufferToBase64url(sub.getKey("p256dh")!);
+  const auth   = arrayBufferToBase64url(sub.getKey("auth")!);
 
   await apiClient.post("/api/push/subscribe", {
     endpoint: sub.endpoint,
-    p256dh: keys.p256dh,
-    auth: keys.auth,
+    p256dh,
+    auth,
     reminderTimeUtc: localTimeToUtc(reminderTimeLocal),
   });
 }
