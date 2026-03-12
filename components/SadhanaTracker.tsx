@@ -11,6 +11,14 @@ import {
   SadhanaQuestion,
   SadhanaEntryResponse,
 } from "@/services/sadhana.service";
+import {
+  isPushSupported,
+  getPushStatus,
+  subscribePush,
+  unsubscribePush,
+  updateReminderTime,
+  utcTimeToLocal,
+} from "@/services/push.service";
 
 const GRADE_LABELS: Record<string, TranslationKey> = {
   "Excellent":  "grade.excellent",
@@ -135,6 +143,66 @@ export default function SadhanaTracker() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [showAlreadySubmitted, setShowAlreadySubmitted] = useState(false);
+
+  // ── Reminder state ─────────────────────────────────────────────────────────
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState("21:30"); // local HH:mm
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderError, setReminderError] = useState("");
+  const pushSupported = isPushSupported();
+
+  // Load reminder status from backend on mount
+  useEffect(() => {
+    if (!pushSupported) return;
+    getPushStatus()
+      .then((status) => {
+        if (status?.active) {
+          setReminderEnabled(true);
+          setReminderTime(utcTimeToLocal(status.reminderTimeUtc));
+        }
+      })
+      .catch(() => {});
+  }, [pushSupported]);
+
+  const handleToggleReminder = async () => {
+    setReminderError("");
+    if (reminderEnabled) {
+      // Turn off
+      setReminderLoading(true);
+      try {
+        await unsubscribePush();
+        setReminderEnabled(false);
+      } catch {
+        setReminderError("Could not disable reminder.");
+      } finally {
+        setReminderLoading(false);
+      }
+    } else {
+      // Turn on — request permission first
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setReminderError("Notifications blocked. Please allow them in browser settings.");
+        return;
+      }
+      setReminderLoading(true);
+      try {
+        await subscribePush(reminderTime);
+        setReminderEnabled(true);
+      } catch {
+        setReminderError("Could not enable reminder. Try again.");
+      } finally {
+        setReminderLoading(false);
+      }
+    }
+  };
+
+  const handleReminderTimeChange = async (newTime: string) => {
+    setReminderTime(newTime);
+    if (!reminderEnabled) return;
+    try {
+      await updateReminderTime(newTime);
+    } catch { /* non-critical */ }
+  };
 
   // Fetch all entries on mount
   useEffect(() => {
@@ -310,6 +378,51 @@ export default function SadhanaTracker() {
             </div>
           ))}
         </div>
+
+        {/* Daily Reminder */}
+        {pushSupported && (
+          <div className="rounded-2xl bg-gray-900/60 border border-gray-800 px-4 py-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                  strokeWidth={1.8} stroke="currentColor"
+                  className={`w-4 h-4 ${reminderEnabled ? "text-orange-400" : "text-gray-500"}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                </svg>
+                <p className="text-sm font-semibold text-gray-300">Daily Reminder</p>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={handleToggleReminder}
+                disabled={reminderLoading}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  reminderEnabled ? "bg-orange-500" : "bg-gray-700"
+                } disabled:opacity-50`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  reminderEnabled ? "translate-x-5" : "translate-x-0"
+                }`} />
+              </button>
+            </div>
+
+            {reminderEnabled && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => e.target.value && handleReminderTimeChange(e.target.value)}
+                  className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:border-orange-500/60 transition-colors"
+                />
+                <p className="text-xs text-gray-500">remind me if card not filled</p>
+              </div>
+            )}
+
+            {reminderError && (
+              <p className="text-[11px] text-red-400">{reminderError}</p>
+            )}
+          </div>
+        )}
 
         {entryForDate ? (
           <button

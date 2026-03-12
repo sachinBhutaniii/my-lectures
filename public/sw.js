@@ -138,6 +138,37 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// ── Push notification handlers ────────────────────────────────────────────
+
+self.addEventListener("push", (event) => {
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || "Sadhana Reminder";
+  const options = {
+    body: data.body || "Your daily sadhana card is waiting.",
+    icon: "/icons/icon-192.svg",
+    badge: "/icons/icon-192.svg",
+    data: { url: data.url || "/sadhana" },
+    tag: "sadhana-reminder",  // replaces any existing reminder notification
+    renotify: true,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/sadhana";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes(url) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
+
 // Handle messages from clients
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
