@@ -113,27 +113,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Default: try cache first, then network, then offline fallback
+  // Navigation requests (HTML pages): network-first, NO caching.
+  // Cache-first here would serve stale HTML with old JS hashes after a deploy.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.match(event.request).then((c) => c || caches.match("/offline.html")),
+      ),
+    );
+    return;
+  }
+
+  // Default: cache-first for other same-origin assets (images, fonts, etc.)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request)
         .then((res) => {
-          // Only cache successful responses
           if (res.status !== 200) return res;
-
           return caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, res.clone());
             return res;
           });
         })
-        .catch(() => {
-          console.log(
-            "[SW] Offline - serving offline page for:",
-            requestUrl.pathname,
-          );
-          return caches.match("/offline.html");
-        });
+        .catch(() => caches.match("/offline.html")),
     }),
   );
 });
