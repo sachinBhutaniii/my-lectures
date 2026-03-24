@@ -6,6 +6,7 @@ import { LectureVideo } from "@/types/videos";
 interface Props {
   lecture: LectureVideo;
   isActive: boolean;
+  isRecommended?: boolean;
   isFavourite?: boolean;
   isDownloaded?: boolean;
   downloadProgress?: number | null;
@@ -22,7 +23,7 @@ function formatDate(dateStr?: string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function LectureCard({ lecture, isActive, isFavourite, isDownloaded, downloadProgress, onClick, onToggleFavourite, onAddToPlaylist, onDownload, onDeleteDownload }: Props) {
+export default function LectureCard({ lecture, isActive, isRecommended, isFavourite, isDownloaded, downloadProgress, onClick, onToggleFavourite, onAddToPlaylist, onDownload, onDeleteDownload }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -75,9 +76,16 @@ export default function LectureCard({ lecture, isActive, isFavourite, isDownload
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1">
-            <p className="text-white text-sm font-semibold leading-snug line-clamp-2 flex-1">
-              {lecture.title}
-            </p>
+            <div className="flex-1 min-w-0">
+              {isRecommended && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-400 bg-orange-400/10 border border-orange-400/30 rounded-full px-2 py-0.5 mb-1">
+                  🪔 Recommended
+                </span>
+              )}
+              <p className="text-white text-sm font-semibold leading-snug line-clamp-2">
+                {lecture.title}
+              </p>
+            </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {/* Download state indicator */}
               {downloadProgress != null && (

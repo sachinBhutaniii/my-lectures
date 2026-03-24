@@ -11,7 +11,7 @@ import { PlaylistLecture } from "@/hooks/usePlaylists";
 import { useStreak } from "@/hooks/useStreak";
 import { useFetch } from "@/hooks/useFetch";
 import { getVideos } from "@/services/video.service";
-import { VideoApiResponse } from "@/types/videos";
+import { VideoApiResponse, LectureVideo } from "@/types/videos";
 import SearchBar from "@/components/SearchBar";
 import FestivalCarousel from "@/components/FestivalCarousel";
 import CategoryPicker, { CATEGORIES } from "@/components/CategoryPicker";
@@ -28,8 +28,9 @@ import WisdomModal, { getWisdomForToday } from "@/components/WisdomModal";
 import DownloadsPanel from "@/components/DownloadsPanel";
 import { useDownloads } from "@/hooks/useDownloads";
 import NewContentPanel from "@/components/NewContentPanel";
-import { useBackClose } from "@/hooks/useBackClose";
+import { useBackClose, suppressBackOnClose } from "@/hooks/useBackClose";
 import VaishnavaCalendarPanel from "@/components/VaishnavaCalendarPanel";
+import { getCalendarEvents } from "@/services/calendar.service";
 
 export default function Home() {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function Home() {
   const [showDownloads, setShowDownloads] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const { downloads, isDownloaded, getDownloadProgress, downloadLecture, deleteDownload, getBlobUrl } = useDownloads();
-  const { play: playerPlay } = usePlayer();
+  const { play: playerPlay, currentTime: playerTime, duration: playerDuration, lecture: playerLecture } = usePlayer();
   const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
 
   // ── New-content notification ─────────────────────────────────────────────
@@ -88,6 +89,47 @@ export default function Home() {
   }, []);
 
   const lectures = data?.videos ?? [];
+
+  // ── Calendar-based recommended lecture ───────────────────────────────────
+  const [recommendedLecture, setRecommendedLecture] = useState<LectureVideo | null>(null);
+
+  useEffect(() => {
+    if (lectures.length === 0) return;
+    async function findRecommendation() {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth() + 1;
+      let events = await getCalendarEvents(year, month).catch(() => []);
+      // If past the 25th, also fetch next month to cover events 5 days away
+      if (today.getDate() > 25) {
+        const nm = month === 12 ? 1 : month + 1;
+        const ny = month === 12 ? year + 1 : year;
+        const next = await getCalendarEvents(ny, nm).catch(() => []);
+        events = [...events, ...next];
+      }
+      const todayMs = today.setHours(0, 0, 0, 0);
+      for (const ev of events) {
+        if (!ev.suggestedVideoId) continue;
+        const evMs = new Date(ev.eventDate + "T00:00:00").getTime();
+        if (todayMs < evMs - 5 * 86400000) continue; // more than 5 days before
+        if (todayMs > evMs + 1 * 86400000) continue; // more than 1 day after
+        if (localStorage.getItem(`bdd_p70_${ev.suggestedVideoId}`)) continue;
+        const lec = lectures.find((l) => l.id === ev.suggestedVideoId);
+        if (lec) { setRecommendedLecture(lec); return; }
+      }
+      setRecommendedLecture(null);
+    }
+    findRecommendation();
+  }, [lectures]);
+
+  // Dismiss recommendation when user reaches 70% during this session
+  useEffect(() => {
+    if (!recommendedLecture) return;
+    if (playerLecture?.id !== recommendedLecture.id) return;
+    if (playerDuration > 0 && playerTime / playerDuration >= 0.7) {
+      setRecommendedLecture(null);
+    }
+  }, [playerTime, playerDuration, playerLecture, recommendedLecture]);
 
   // Badge count: videos with ID higher than what was seen on last visit
   const newCount = prevMaxId === 0 ? 0 : lectures.filter((l) => l.id > prevMaxId).length;
@@ -270,6 +312,7 @@ export default function Home() {
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
         onLectureClick={(videoId) => {
+          suppressBackOnClose();
           setShowCalendar(false);
           router.push(`/${videoId}`);
         }}
@@ -451,6 +494,43 @@ export default function Home() {
                 Clear filter
               </button>
             )}
+          </div>
+        )}
+
+        {/* Recommended lecture (calendar-linked) */}
+        {recommendedLecture && !search && !selectedCategory && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex-1 h-px bg-orange-400/20" />
+              <span className="text-[10px] font-bold text-orange-400/70 uppercase tracking-widest">For upcoming event</span>
+              <div className="flex-1 h-px bg-orange-400/20" />
+            </div>
+            <LectureCard
+              lecture={recommendedLecture}
+              isActive={false}
+              isRecommended
+              isFavourite={isFavourite(recommendedLecture.id)}
+              isDownloaded={isDownloaded(recommendedLecture.id)}
+              downloadProgress={getDownloadProgress(recommendedLecture.id)}
+              onClick={() => {
+                addToHistory(recommendedLecture);
+                playerPlay(recommendedLecture);
+                router.push(`/${recommendedLecture.id}`);
+              }}
+              onToggleFavourite={() => toggleFavourite(recommendedLecture)}
+              onAddToPlaylist={() => setPlaylistTarget({
+                id: recommendedLecture.id,
+                title: recommendedLecture.title,
+                thumbnailUrl: recommendedLecture.thumbnailUrl,
+                category: recommendedLecture.category,
+                date: recommendedLecture.date,
+                place: recommendedLecture.place,
+                speaker: recommendedLecture.speaker,
+                addedAt: Date.now(),
+              })}
+              onDownload={() => downloadLecture(recommendedLecture)}
+              onDeleteDownload={() => deleteDownload(recommendedLecture.id)}
+            />
           </div>
         )}
 

@@ -111,7 +111,7 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
           </button>
         </div>
 
-        <div className="overflow-y-auto overscroll-y-contain flex-1 px-4 pb-8">
+        <div className="overflow-y-auto overscroll-y-contain flex-1 px-4 pb-24">
           {/* Month navigation */}
           <div className="flex items-center justify-between py-3">
             <button onClick={goPrev} className="p-2 rounded-xl text-gray-400 hover:text-white transition-colors">

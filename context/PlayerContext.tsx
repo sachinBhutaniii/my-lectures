@@ -130,8 +130,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setIsPlaying(false);
       });
 
+      let marked70 = false;
       audio.addEventListener("timeupdate", () => {
         setCurrentTime(audio.currentTime);
+        if (!marked70 && audio.duration > 0 && audio.currentTime / audio.duration >= 0.7) {
+          marked70 = true;
+          localStorage.setItem(`bdd_p70_${newLecture.id}`, "1");
+        }
       });
 
       audio.addEventListener("ended", () => {
