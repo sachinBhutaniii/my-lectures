@@ -162,7 +162,7 @@ export default function SadhanaStreakCalendar({ entries, joinedAt }: Props) {
       {/* ── Horizontal date strip ── */}
       <div
         ref={stripRef}
-        className="flex gap-2 overflow-x-auto scrollbar-none px-4 pb-1"
+        className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-1"
         style={{ scrollSnapType: "x mandatory" }}
       >
         {allDates.map((date) => {
