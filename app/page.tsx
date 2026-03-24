@@ -92,6 +92,7 @@ export default function Home() {
 
   // ── Calendar-based recommended lecture ───────────────────────────────────
   const [recommendedLecture, setRecommendedLecture] = useState<LectureVideo | null>(null);
+  const [recommendedEvent, setRecommendedEvent] = useState<{ name: string; date: string } | null>(null);
 
   useEffect(() => {
     if (lectures.length === 0) return;
@@ -100,7 +101,6 @@ export default function Home() {
       const year = today.getFullYear();
       const month = today.getMonth() + 1;
       let events = await getCalendarEvents(year, month).catch(() => []);
-      // If past the 25th, also fetch next month to cover events 5 days away
       if (today.getDate() > 25) {
         const nm = month === 12 ? 1 : month + 1;
         const ny = month === 12 ? year + 1 : year;
@@ -111,13 +111,18 @@ export default function Home() {
       for (const ev of events) {
         if (!ev.suggestedVideoId) continue;
         const evMs = new Date(ev.eventDate + "T00:00:00").getTime();
-        if (todayMs < evMs - 5 * 86400000) continue; // more than 5 days before
-        if (todayMs > evMs + 1 * 86400000) continue; // more than 1 day after
+        if (todayMs < evMs - 5 * 86400000) continue;
+        if (todayMs > evMs + 1 * 86400000) continue;
         if (localStorage.getItem(`bdd_p70_${ev.suggestedVideoId}`)) continue;
         const lec = lectures.find((l) => l.id === ev.suggestedVideoId);
-        if (lec) { setRecommendedLecture(lec); return; }
+        if (lec) {
+          setRecommendedLecture(lec);
+          setRecommendedEvent({ name: ev.eventName, date: ev.eventDate });
+          return;
+        }
       }
       setRecommendedLecture(null);
+      setRecommendedEvent(null);
     }
     findRecommendation();
   }, [lectures]);
@@ -128,6 +133,7 @@ export default function Home() {
     if (playerLecture?.id !== recommendedLecture.id) return;
     if (playerDuration > 0 && playerTime / playerDuration >= 0.7) {
       setRecommendedLecture(null);
+      setRecommendedEvent(null);
     }
   }, [playerTime, playerDuration, playerLecture, recommendedLecture]);
 
@@ -499,15 +505,21 @@ export default function Home() {
 
         {/* Recommended lecture (calendar-linked) */}
         {recommendedLecture && !search && !selectedCategory && (
-          <div className="mb-5 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-3">
-            <div className="flex items-center gap-1.5 mb-3">
-              <span className="text-orange-400 text-sm">🪔</span>
-              <span className="text-[11px] font-bold text-orange-400 uppercase tracking-widest">For Upcoming Event</span>
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-orange-400 text-xs">🪔</span>
+              <span className="text-[11px] font-semibold text-orange-400 truncate">
+                {recommendedEvent?.name}
+              </span>
+              {recommendedEvent?.date && (
+                <span className="text-[10px] text-orange-400/60 flex-shrink-0">
+                  · {new Date(recommendedEvent.date + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                </span>
+              )}
             </div>
             <LectureCard
               lecture={recommendedLecture}
               isActive={false}
-              isRecommended
               isFavourite={isFavourite(recommendedLecture.id)}
               isDownloaded={isDownloaded(recommendedLecture.id)}
               downloadProgress={getDownloadProgress(recommendedLecture.id)}
