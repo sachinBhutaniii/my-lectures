@@ -11,18 +11,18 @@ interface Props {
 
 /**
  * Renders text in a single line. If the text overflows the container,
- * it auto-scrolls horizontally in a seamless marquee loop.
+ * it scrolls horizontally only while the user is touching / hovering it.
  */
 export default function MarqueeText({ text, className = "", speed = 14 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const spanRef = useRef<HTMLSpanElement>(null);
   const [scrolls, setScrolls] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
     const span = spanRef.current;
     if (!container || !span) return;
-    // Small timeout so layout is complete before measuring
     const id = setTimeout(() => {
       setScrolls(span.scrollWidth > container.offsetWidth + 2);
     }, 80);
@@ -30,9 +30,20 @@ export default function MarqueeText({ text, className = "", speed = 14 }: Props)
   }, [text]);
 
   return (
-    <div ref={containerRef} className={`overflow-hidden ${className}`}>
+    <div
+      ref={containerRef}
+      className={`overflow-hidden ${className}`}
+      onPointerEnter={() => setPlaying(true)}
+      onPointerLeave={() => { setPlaying(false); }}
+    >
       {scrolls ? (
-        <div className="marquee-track" style={{ animationDuration: `${speed}s` }}>
+        <div
+          className="marquee-track"
+          style={{
+            animationDuration: `${speed}s`,
+            animationPlayState: playing ? "running" : "paused",
+          }}
+        >
           <span className="whitespace-nowrap pr-10">{text}</span>
           <span className="whitespace-nowrap pr-10" aria-hidden>{text}</span>
         </div>

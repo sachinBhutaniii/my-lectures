@@ -125,8 +125,8 @@
   display: flex;
   width: max-content;
   animation: marquee 12s linear infinite;
+  animation-play-state: paused;
 }
-.marquee-track:hover { animation-play-state: paused; }
 
 /* Hide scrollbar on horizontal scroll rows */
 .scrollbar-hide::-webkit-scrollbar {
