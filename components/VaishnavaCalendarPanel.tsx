@@ -15,6 +15,16 @@ interface Props {
 }
 
 export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }: Props) {
+  // Lock body scroll while panel is open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
   const now = new Date();
   const [viewYear,  setViewYear]  = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -83,7 +93,8 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
 
       {/* Panel */}
       <div className="relative mt-auto w-full max-w-md mx-auto bg-[#0f0f0f] rounded-t-3xl overflow-hidden flex flex-col"
-           style={{ maxHeight: "92vh" }}>
+           style={{ maxHeight: "92vh" }}
+           onTouchMove={e => e.stopPropagation()}>
         {/* Handle */}
         <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mt-3 mb-1 flex-shrink-0" />
 
@@ -100,7 +111,7 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-4 pb-8">
+        <div className="overflow-y-auto overscroll-y-contain flex-1 px-4 pb-8">
           {/* Month navigation */}
           <div className="flex items-center justify-between py-3">
             <button onClick={goPrev} className="p-2 rounded-xl text-gray-400 hover:text-white transition-colors">
