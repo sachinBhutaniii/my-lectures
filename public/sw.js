@@ -136,7 +136,7 @@ self.addEventListener("fetch", (event) => {
             return res;
           });
         })
-        .catch(() => caches.match("/offline.html")),
+        .catch(() => caches.match("/offline.html"));
     }),
   );
 });
