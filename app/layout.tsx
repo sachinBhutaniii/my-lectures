@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { PlayerProvider } from "@/context/PlayerContext";
 import { OfflineProvider } from "@/context/OfflineContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import PlayerSheet from "@/components/PlayerSheet";
 import TripleTapFullscreen from "@/components/TripleTapFullscreen";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
@@ -38,26 +39,30 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/bdds.jpg" />
         <link rel="apple-touch-icon" href="/bdds.jpg" />
+        {/* Prevent flash of wrong theme on load */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('bdd_app_theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');if(t==='light'){var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#fef7ed');}}catch(e){}` }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#1a1208] text-white`}
         suppressHydrationWarning
       >
-        <OfflineProvider>
-          <AuthProvider>
-            <LanguageProvider>
-            <PlayerProvider>
-              <TripleTapFullscreen>
-                <OfflineIndicator />
-                {children}
-                <PlayerSheet />
-                <ServiceWorkerRegister />
-                <InstallPrompt />
-              </TripleTapFullscreen>
-            </PlayerProvider>
-            </LanguageProvider>
-          </AuthProvider>
-        </OfflineProvider>
+        <ThemeProvider>
+          <OfflineProvider>
+            <AuthProvider>
+              <LanguageProvider>
+                <PlayerProvider>
+                  <TripleTapFullscreen>
+                    <OfflineIndicator />
+                    {children}
+                    <PlayerSheet />
+                    <ServiceWorkerRegister />
+                    <InstallPrompt />
+                  </TripleTapFullscreen>
+                </PlayerProvider>
+              </LanguageProvider>
+            </AuthProvider>
+          </OfflineProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

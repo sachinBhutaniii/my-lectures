@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useT } from "@/hooks/useT";
 import { suppressBackOnClose } from "@/hooks/useBackClose";
+import { useTheme } from "@/context/ThemeContext";
 
 interface Props {
   open: boolean;
@@ -191,11 +192,13 @@ function formatNow() {
 export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, onFavourites, onPlaylists, onProfile, onStatistics, onFeedback }: Props) {
   const { user, logout, isAdmin, isProofreader } = useAuth();
   const { lang, setLang } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const t = useT();
   const router = useRouter();
   const [now, setNow] = useState("");
   const [showItinerary, setShowItinerary] = useState(false);
   const [showLanguage, setShowLanguage] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
   const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => { setNow(formatNow()); }, []);
@@ -233,7 +236,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
 
       {/* Drawer panel */}
       <div
-        className={`fixed top-0 left-0 h-full z-50 w-[78%] max-w-[320px] bg-black flex flex-col
+        className={`fixed top-0 left-0 h-full z-50 w-[78%] max-w-[320px] bg-[var(--bg-drawer)] flex flex-col
           transition-transform duration-300 ease-in-out
           ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
@@ -335,7 +338,7 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
           <SectionLabel label="SETTINGS" />
 
           <MenuItem icon={icons.language}  label={t("drawer.language")}  sub={lang === "hi" ? "हिन्दी" : "English"} onClick={() => setShowLanguage(true)} />
-          <MenuItem icon={icons.interface} label={t("drawer.interface")}  sub="Default" />
+          <MenuItem icon={icons.interface} label="Theme" sub={theme === "light" ? "Light" : "Dark"} onClick={() => setShowTheme(true)} />
           <MenuItem icon={icons.trash}     label={t("drawer.clearCache")} sub={clearingCache ? "Clearing…" : undefined} onClick={clearingCache ? undefined : handleClearCache} />
           <MenuItem icon={icons.share}     label={t("drawer.share")} badge="Soon" />
           <MenuItem icon={icons.sync}      label="Last Updated On:"          sub={now} />
@@ -423,6 +426,59 @@ export default function SideDrawer({ open, onClose, onMediaLibrary, onHistory, o
             >
               Hare Kṛṣṇa 🙏
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Theme Selector overlay ── */}
+      {showTheme && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowTheme(false)} />
+          <div className="relative w-full max-w-sm bg-gradient-to-b from-[#120c04] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-12 shadow-2xl mx-auto">
+            <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
+            <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">Appearance</h2>
+            <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-6">Choose Theme</p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => { setTheme("dark"); setShowTheme(false); }}
+                className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
+                  theme === "dark"
+                    ? "border-orange-500 bg-orange-500/15 text-orange-300"
+                    : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-xl">🌙</span>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-sm">Dark</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Night mode</p>
+                </div>
+                {theme === "dark" && (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-400">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={() => { setTheme("light"); setShowTheme(false); }}
+                className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border transition-colors ${
+                  theme === "light"
+                    ? "border-orange-500 bg-orange-500/15 text-orange-300"
+                    : "border-gray-700 bg-white/5 text-gray-300 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-xl">☀️</span>
+                <div className="flex-1 text-left">
+                  <p className="font-semibold text-sm">Light</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Day mode</p>
+                </div>
+                {theme === "light" && (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-400">
+                    <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

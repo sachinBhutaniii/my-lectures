@@ -65,7 +65,21 @@ function arrayBufferToBase64url(buf: ArrayBuffer): string {
 }
 
 export async function subscribePush(reminderTimeLocal: string): Promise<void> {
-  const reg = await navigator.serviceWorker.ready;
+  // Kick any waiting SW into active state so navigator.serviceWorker.ready resolves
+  const existingReg = await navigator.serviceWorker.getRegistration();
+  if (existingReg?.waiting) {
+    existingReg.waiting.postMessage({ type: "SKIP_WAITING" });
+  }
+
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Service worker not ready. Try refreshing the page.")),
+        10000,
+      )
+    ),
+  ]);
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
