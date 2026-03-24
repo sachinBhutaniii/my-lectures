@@ -178,9 +178,9 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
         </div>
 
         {/* ── Sticky calendar section ── */}
-        <div className="flex-shrink-0 px-4 pt-3 pb-2 border-b border-gray-800/60">
-          {/* Month nav */}
-          <div className="flex items-center justify-between mb-2">
+        <div className="flex-shrink-0 border-b border-gray-800/60">
+          {/* Month nav - always visible */}
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
             <button onClick={goPrev} className="p-1.5 rounded-lg text-gray-400 hover:text-white transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
@@ -194,49 +194,43 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
             </button>
           </div>
 
-          {/* Horizontal day strip */}
-          <div ref={stripRef} className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
-            {stripDays.map(dateStr => {
-              const d        = new Date(dateStr + "T12:00:00");
-              const hasEvent = !!eventsByDate[dateStr]?.length;
-              const isToday  = dateStr === todayStr;
-              const isSel    = dateStr === selected;
-              const isUpcoming = hasEvent && dateStr >= todayStr && dateStr <= threeDaysLaterStr;
-              return (
-                <button
-                  key={dateStr}
-                  ref={isToday ? todayCellRef : undefined}
-                  onClick={() => selectDay(dateStr)}
-                  className={`flex-shrink-0 flex flex-col items-center gap-0.5 rounded-xl px-1.5 py-1.5 transition-all w-11 ${
-                    isSel      ? "bg-orange-500" :
-                    isUpcoming ? "bg-amber-400/20 border border-amber-400/50" :
-                    isToday    ? "bg-orange-500/20 border border-orange-500/40" :
-                                 "bg-gray-800/50"
-                  }`}
-                >
-                  <span className={`text-[9px] font-medium ${isSel ? "text-white/80" : "text-gray-500"}`}>
-                    {DAY_ABBR[d.getDay()]}
-                  </span>
-                  <span className={`text-[12px] font-bold ${isSel ? "text-white" : isUpcoming ? "text-amber-300" : isToday ? "text-orange-300" : "text-gray-300"}`}>
-                    {d.getDate()}
-                  </span>
-                  <span className={`w-1 h-1 rounded-full ${hasEvent ? (isSel ? "bg-white/80" : isUpcoming ? "bg-amber-400" : "bg-orange-400") : "bg-transparent"}`} />
-                </button>
-              );
-            })}
-          </div>
-
-          {/* See more / See less */}
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="w-full text-center text-[11px] font-semibold text-orange-400/80 hover:text-orange-400 pt-2 transition-colors"
+          {/* Animated body: strip ↔ full grid */}
+          <div
+            className="overflow-hidden transition-[max-height] duration-300 ease-in-out px-4"
+            style={{ maxHeight: expanded ? '320px' : '80px' }}
           >
-            {expanded ? "See less ▲" : "See more ▼"}
-          </button>
+            {/* Strip — visible when compact */}
+            <div className={`transition-all duration-200 ${expanded ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : 'opacity-100'}`}>
+              <div ref={stripRef} className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+                {stripDays.map(dateStr => {
+                  const d          = new Date(dateStr + "T12:00:00");
+                  const hasEvent   = !!eventsByDate[dateStr]?.length;
+                  const isToday    = dateStr === todayStr;
+                  const isSel      = dateStr === selected;
+                  const isUpcoming = hasEvent && dateStr >= todayStr && dateStr <= threeDaysLaterStr;
+                  return (
+                    <button
+                      key={dateStr}
+                      ref={isToday ? todayCellRef : undefined}
+                      onClick={() => selectDay(dateStr)}
+                      className={`flex-shrink-0 flex flex-col items-center gap-0.5 rounded-xl px-1.5 py-1.5 transition-all w-11 ${
+                        isSel      ? "bg-orange-500" :
+                        isUpcoming ? "bg-amber-400/20 border border-amber-400/50" :
+                        isToday    ? "bg-orange-500/20 border border-orange-500/40" :
+                                     "bg-gray-800/50"
+                      }`}
+                    >
+                      <span className={`text-[9px] font-medium ${isSel ? "text-white/80" : "text-gray-500"}`}>{DAY_ABBR[d.getDay()]}</span>
+                      <span className={`text-[12px] font-bold ${isSel ? "text-white" : isUpcoming ? "text-amber-300" : isToday ? "text-orange-300" : "text-gray-300"}`}>{d.getDate()}</span>
+                      <span className={`w-1 h-1 rounded-full ${hasEvent ? (isSel ? "bg-white/80" : isUpcoming ? "bg-amber-400" : "bg-orange-400") : "bg-transparent"}`} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          {/* Full grid (expanded) */}
-          {expanded && (
-            <div className="mt-2">
+            {/* Full grid — visible when expanded */}
+            <div className={`transition-all duration-200 ${!expanded ? 'opacity-0 pointer-events-none h-0 overflow-hidden' : 'opacity-100'}`}>
               <div className="grid grid-cols-7 mb-1">
                 {WEEKDAYS.map((w, i) => (
                   <div key={i} className="text-center text-[10px] font-bold text-gray-600 py-1">{w}</div>
@@ -259,11 +253,11 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
                         disabled={!inMonth}
                         onClick={() => selectDay(dateStr)}
                         className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-all ${
-                          !inMonth    ? "opacity-0 pointer-events-none" :
-                          isSel       ? "bg-orange-500 text-white" :
-                          isUpcoming  ? "bg-amber-400/20 border border-amber-400/60 text-amber-300" :
-                          isToday     ? "bg-orange-500/20 border border-orange-500/50 text-orange-300" :
-                                        "bg-gray-800/50 text-gray-300 hover:bg-gray-700/50"
+                          !inMonth   ? "opacity-0 pointer-events-none" :
+                          isSel      ? "bg-orange-500 text-white" :
+                          isUpcoming ? "bg-amber-400/20 border border-amber-400/60 text-amber-300" :
+                          isToday    ? "bg-orange-500/20 border border-orange-500/50 text-orange-300" :
+                                       "bg-gray-800/50 text-gray-300 hover:bg-gray-700/50"
                         }`}
                       >
                         <span className="text-[11px] font-semibold">{day}</span>
@@ -276,11 +270,26 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
                 </div>
               )}
             </div>
-          )}
+          </div>
+
+          {/* See more / See less toggle */}
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-orange-400/70 hover:text-orange-400 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}
+              className={`w-3.5 h-3.5 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+            <span>{expanded ? "See less" : "See more"}</span>
+          </button>
         </div>
 
         {/* ── Scrollable event list ── */}
-        <div className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-24 pt-3">
+        <div
+          className="flex-1 overflow-y-auto overscroll-y-contain px-4 pb-24 pt-3"
+          onScroll={e => { if (expanded && e.currentTarget.scrollTop > 30) setExpanded(false); }}
+        >
           {loading && events.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
