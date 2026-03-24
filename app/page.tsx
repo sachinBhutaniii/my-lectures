@@ -499,11 +499,10 @@ export default function Home() {
 
         {/* Recommended lecture (calendar-linked) */}
         {recommendedLecture && !search && !selectedCategory && (
-          <div className="mb-3">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="flex-1 h-px bg-orange-400/20" />
-              <span className="text-[10px] font-bold text-orange-400/70 uppercase tracking-widest">For upcoming event</span>
-              <div className="flex-1 h-px bg-orange-400/20" />
+          <div className="mb-5 rounded-2xl border border-orange-500/30 bg-orange-500/5 p-3">
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-orange-400 text-sm">🪔</span>
+              <span className="text-[11px] font-bold text-orange-400 uppercase tracking-widest">For Upcoming Event</span>
             </div>
             <LectureCard
               lecture={recommendedLecture}
@@ -536,7 +535,7 @@ export default function Home() {
 
         {/* Lecture cards */}
         <div className="pb-36">
-          {sorted.map((lecture) => (
+          {sorted.filter((l) => l.id !== recommendedLecture?.id).map((lecture) => (
             <LectureCard
               key={lecture.id}
               lecture={lecture}
