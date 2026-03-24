@@ -36,6 +36,7 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
 
   const initializedRef = useRef(false);
   const stripRef       = useRef<HTMLDivElement>(null);
+  const todayCellRef   = useRef<HTMLButtonElement>(null);
   const eventRefs      = useRef<Record<string, HTMLDivElement | null>>({});
 
   const todayStr = useMemo(() => isoDate(new Date()), []);
@@ -133,16 +134,21 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
     }, 50);
   }
 
-  // Scroll strip to today on first render
+  // Scroll strip so today's cell is centred
   useEffect(() => {
-    if (open && stripRef.current) {
-      const todayIndex = stripDays.indexOf(todayStr);
-      if (todayIndex >= 0) {
-        const itemW = 52; // approx width of each strip cell
-        stripRef.current.scrollLeft = Math.max(0, todayIndex * itemW - 80);
+    if (!open) return;
+    const timer = setTimeout(() => {
+      const cell = todayCellRef.current;
+      const strip = stripRef.current;
+      if (cell && strip) {
+        const cellLeft   = cell.offsetLeft;
+        const cellWidth  = cell.offsetWidth;
+        const stripWidth = strip.offsetWidth;
+        strip.scrollLeft = cellLeft - stripWidth / 2 + cellWidth / 2;
       }
-    }
-  }, [open, stripDays, todayStr]);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [open, stripDays]);
 
   if (!open) return null;
 
@@ -199,6 +205,7 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
               return (
                 <button
                   key={dateStr}
+                  ref={isToday ? todayCellRef : undefined}
                   onClick={() => selectDay(dateStr)}
                   className={`flex-shrink-0 flex flex-col items-center gap-0.5 rounded-xl px-1.5 py-1.5 transition-all w-11 ${
                     isSel      ? "bg-orange-500" :
