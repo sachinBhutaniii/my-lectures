@@ -116,6 +116,18 @@
   transform-origin: center bottom;
 }
 
+/* Marquee scroll for long event names */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 12s linear infinite;
+}
+.marquee-track:hover { animation-play-state: paused; }
+
 /* Hide scrollbar on horizontal scroll rows */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

@@ -506,16 +506,25 @@ export default function Home() {
         {/* Recommended lecture (calendar-linked) */}
         {recommendedLecture && !search && !selectedCategory && (
           <div className="mb-2">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-orange-400 text-xs">🪔</span>
-              <span className="text-[11px] font-semibold text-orange-400 truncate">
-                {recommendedEvent?.name}
-              </span>
-              {recommendedEvent?.date && (
-                <span className="text-[10px] text-orange-400/60 flex-shrink-0">
-                  · {new Date(recommendedEvent.date + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                </span>
-              )}
+            <div className="flex items-center gap-2 mb-1.5 overflow-hidden">
+              <span className="text-orange-400 text-sm flex-shrink-0">🪔</span>
+              <div className="overflow-hidden flex-1">
+                {recommendedEvent && (
+                  <div className="marquee-track">
+                    <span className="text-[13px] font-semibold text-orange-400 pr-8 whitespace-nowrap">
+                      {recommendedEvent.name}
+                      {" · "}
+                      {new Date(recommendedEvent.date + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    </span>
+                    {/* duplicate for seamless loop */}
+                    <span className="text-[13px] font-semibold text-orange-400 pr-8 whitespace-nowrap" aria-hidden>
+                      {recommendedEvent.name}
+                      {" · "}
+                      {new Date(recommendedEvent.date + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="border-l-2 border-orange-500 pl-2 rounded-r-xl bg-orange-500/5">
               <LectureCard
