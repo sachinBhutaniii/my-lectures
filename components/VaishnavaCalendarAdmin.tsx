@@ -41,6 +41,7 @@ export default function VaishnavaCalendarAdmin() {
   const [editId,    setEditId]    = useState<number | null>(null);
   const [showForm,  setShowForm]  = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef      = useRef<HTMLDivElement>(null);
 
   // Lecture search
   const [allVideos,     setAllVideos]     = useState<LectureVideo[]>([]);
@@ -82,6 +83,10 @@ export default function VaishnavaCalendarAdmin() {
     else setViewMonth(m => m+1);
   }
 
+  function scrollToForm() {
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
   function openNew() {
     setForm({ ...EMPTY_FORM });
     setLectureSearch("");
@@ -89,16 +94,17 @@ export default function VaishnavaCalendarAdmin() {
     setShowForm(true);
     setError(null);
     setSuccess(null);
+    scrollToForm();
   }
 
   function openEdit(ev: VaishnavaEvent) {
     setForm({
-      eventDate:          ev.eventDate,
-      eventName:          ev.eventName,
-      description:        ev.description ?? "",
-      tithi:              ev.tithi ?? "",
-      fastingUpto:        ev.fastingUpto,
-      suggestedVideoId:   ev.suggestedVideoId,
+      eventDate:           ev.eventDate,
+      eventName:           ev.eventName,
+      description:         ev.description ?? "",
+      tithi:               ev.tithi ?? "",
+      fastingUpto:         ev.fastingUpto,
+      suggestedVideoId:    ev.suggestedVideoId,
       suggestedVideoTitle: ev.suggestedVideoTitle,
     });
     setLectureSearch(ev.suggestedVideoTitle ?? "");
@@ -106,6 +112,7 @@ export default function VaishnavaCalendarAdmin() {
     setShowForm(true);
     setError(null);
     setSuccess(null);
+    scrollToForm();
   }
 
   async function handleSave() {
@@ -224,7 +231,7 @@ export default function VaishnavaCalendarAdmin() {
 
       {/* Event form (inline sheet) */}
       {showForm && (
-        <div className="mb-6 bg-gray-900/80 border border-gray-700 rounded-2xl px-5 py-5">
+        <div ref={formRef} className="mb-6 bg-gray-900/80 border border-gray-700 rounded-2xl px-5 py-5">
           <h3 className="text-white font-semibold text-sm mb-4">{editId !== null ? "Edit Event" : "New Event"}</h3>
 
           <div className="space-y-3">
