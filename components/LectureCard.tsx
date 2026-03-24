@@ -13,6 +13,8 @@ interface Props {
   onClick: () => void;
   onToggleFavourite?: (e: React.MouseEvent) => void;
   onAddToPlaylist?: () => void;
+  onAddToQueue?: () => void;
+  isInQueue?: boolean;
   onDownload?: () => void;
   onDeleteDownload?: () => void;
 }
@@ -23,7 +25,7 @@ function formatDate(dateStr?: string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function LectureCard({ lecture, isActive, isRecommended, isFavourite, isDownloaded, downloadProgress, onClick, onToggleFavourite, onAddToPlaylist, onDownload, onDeleteDownload }: Props) {
+export default function LectureCard({ lecture, isActive, isRecommended, isFavourite, isDownloaded, downloadProgress, onClick, onToggleFavourite, onAddToPlaylist, onAddToQueue, isInQueue, onDownload, onDeleteDownload }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -139,6 +141,20 @@ export default function LectureCard({ lecture, isActive, isRecommended, isFavour
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                       </svg>
                       Add to Playlist
+                    </button>
+                    {/* Add to Queue */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpen(false);
+                        onAddToQueue?.();
+                      }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-200 hover:bg-white/10 transition-colors text-left"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 text-orange-400">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+                      </svg>
+                      {isInQueue ? "In Queue ✓" : "Add to Queue"}
                     </button>
                     {/* Download / downloading / remove download */}
                     {downloadProgress != null ? (

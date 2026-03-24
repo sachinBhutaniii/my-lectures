@@ -27,6 +27,7 @@ import StreakPanel from "@/components/StreakPanel";
 import WisdomModal, { getWisdomForToday } from "@/components/WisdomModal";
 import DownloadsPanel from "@/components/DownloadsPanel";
 import { useDownloads } from "@/hooks/useDownloads";
+import { useQueue } from "@/hooks/useQueue";
 import NewContentPanel from "@/components/NewContentPanel";
 import { useBackClose, suppressBackOnClose } from "@/hooks/useBackClose";
 import VaishnavaCalendarPanel from "@/components/VaishnavaCalendarPanel";
@@ -51,6 +52,7 @@ export default function Home() {
   const [showDownloads, setShowDownloads] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const { downloads, isDownloaded, getDownloadProgress, downloadLecture, deleteDownload, getBlobUrl } = useDownloads();
+  const { addToQueue, isInQueue } = useQueue();
   const { play: playerPlay, currentTime: playerTime, duration: playerDuration, lecture: playerLecture } = usePlayer();
   const [todayWisdom, setTodayWisdom] = useState<ReturnType<typeof getWisdomForToday> | null>(null);
 
@@ -559,6 +561,8 @@ export default function Home() {
                   speaker: recommendedLecture.speaker,
                   addedAt: Date.now(),
                 })}
+                onAddToQueue={() => addToQueue({ id: recommendedLecture.id, title: recommendedLecture.title, thumbnailUrl: recommendedLecture.thumbnailUrl, category: recommendedLecture.category, date: recommendedLecture.date, speaker: recommendedLecture.speaker })}
+                isInQueue={isInQueue(recommendedLecture.id)}
                 onDownload={() => downloadLecture(recommendedLecture)}
                 onDeleteDownload={() => deleteDownload(recommendedLecture.id)}
               />
@@ -597,6 +601,8 @@ export default function Home() {
                 speaker: lecture.speaker,
                 addedAt: Date.now(),
               })}
+              onAddToQueue={() => addToQueue({ id: lecture.id, title: lecture.title, thumbnailUrl: lecture.thumbnailUrl, category: lecture.category, date: lecture.date, speaker: lecture.speaker })}
+              isInQueue={isInQueue(lecture.id)}
               onDownload={() => downloadLecture(lecture)}
               onDeleteDownload={() => deleteDownload(lecture.id)}
             />

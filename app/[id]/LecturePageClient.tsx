@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { LectureVideo, VideoApiResponse } from "@/types/videos";
-import { getVideoById, getVideos, getLanguageData } from "@/services/video.service";
+import { LectureVideo } from "@/types/videos";
+import { getVideoById, getLanguageData } from "@/services/video.service";
 import { useFetch } from "@/hooks/useFetch";
 import { LanguageData } from "@/types/videos";
 import TranscriptView from "@/components/TranscriptView";
@@ -13,6 +13,7 @@ import AddToPlaylistModal from "@/components/AddToPlaylistModal";
 import ShlokaPanel from "@/components/ShlokaPanel";
 import { usePlayer } from "@/context/PlayerContext";
 import { usePlaylists } from "@/hooks/usePlaylists";
+import { useQueue } from "@/hooks/useQueue";
 import { useBackClose } from "@/hooks/useBackClose";
 
 type Tab = "queue" | "transcript";
@@ -56,9 +57,8 @@ export default function LecturePage() {
   );
   const { data: lecture, loading } = useFetch<LectureVideo>(fetchVideo);
 
-  // Fetch all lectures for queue
-  const { data: allVideos } = useFetch<VideoApiResponse>(getVideos);
-  const queueLectures = allVideos?.videos ?? [];
+  // User-managed queue
+  const { queue: queueLectures, removeFromQueue } = useQueue();
 
   // Fetch available languages
   const fetchLangs = useCallback(() => getLanguageData(), []);
@@ -256,7 +256,7 @@ export default function LecturePage() {
         )}
 
         {!loading && activeTab === "queue" && (
-          <QueueList lectures={queueLectures} currentId={videoId} />
+          <QueueList queue={queueLectures} currentId={videoId} onRemove={removeFromQueue} />
         )}
       </div>
 
