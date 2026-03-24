@@ -9,72 +9,83 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   LIGHT THEME — override every hardcoded dark hex class.
-   Rules outside Tailwind's @layer automatically win the cascade,
-   so !important is not needed.
+   LIGHT THEME — override every hardcoded dark color.
+
+   IMPORTANT: CSS class selectors require # to be escaped as \#.
+   e.g. class "bg-[#1a1208]" → selector ".bg-\[\#1a1208\]"
+   Without \# the browser splits the selector at # and ignores it.
+
+   We also override at the body level as a strong baseline so all
+   inherited colors are correct even for classes not listed below.
    ══════════════════════════════════════════════════════════════════ */
 
-/* ── Solid backgrounds ── */
-[data-theme="light"] .bg-\[#1a1208\]       { background-color: #fef7ed; }
-[data-theme="light"] .bg-\[#130d04\]       { background-color: #fdefd5; }
-[data-theme="light"] .bg-\[#0d0d0d\]       { background-color: #f5f0ea; }
-[data-theme="light"] .bg-\[#0a0a0a\]       { background-color: #f5f0ea; }
-[data-theme="light"] .bg-\[#111\]          { background-color: #ffffff; }
-[data-theme="light"] .bg-\[#0e0e0e\]       { background-color: #f8f4ef; }
-[data-theme="light"] .bg-\[#0f0f0f\]       { background-color: #f5f0ea; }
-[data-theme="light"] .bg-\[#1a1a1a\]       { background-color: #ece8e2; }
-[data-theme="light"] .bg-\[#1e1e1e\]       { background-color: #ece8e2; }
-[data-theme="light"] .bg-\[#241a0e\]       { background-color: #fde8cc; }
-[data-theme="light"] .bg-\[#2a1f10\]       { background-color: #fdd9a8; }
-[data-theme="light"] .bg-\[#1c1106\]       { background-color: #fdf0de; }
-[data-theme="light"] .bg-\[#1e1409\]       { background-color: #fdefd5; }
-[data-theme="light"] .bg-\[#0d0800\]       { background-color: #fef3e2; }
-[data-theme="light"] .bg-\[#241a00\]       { background-color: #fde8cc; }
-[data-theme="light"] .bg-\[#1c1300\]       { background-color: #fdf0de; }
-[data-theme="light"] .bg-black             { background-color: var(--bg-drawer); }
+/* ── Baseline: body background + text ── */
+[data-theme="light"] body {
+  background-color: #ffffff;
+  color: #111111;
+}
+
+/* ── Solid backgrounds — main app colors ── */
+[data-theme="light"] .bg-\[\#1a1208\]   { background-color: #ffffff; }
+[data-theme="light"] .bg-\[\#130d04\]   { background-color: #f7f7f7; }
+[data-theme="light"] .bg-\[\#0d0d0d\]   { background-color: #ffffff; }
+[data-theme="light"] .bg-\[\#0a0a0a\]   { background-color: #f7f7f7; }
+[data-theme="light"] .bg-\[\#111\]      { background-color: #ffffff; }
+[data-theme="light"] .bg-\[\#0e0e0e\]   { background-color: #f5f5f5; }
+[data-theme="light"] .bg-\[\#0f0f0f\]   { background-color: #f5f5f5; }
+[data-theme="light"] .bg-\[\#1a1a1a\]   { background-color: #f0f0f0; }
+[data-theme="light"] .bg-\[\#1e1e1e\]   { background-color: #eeeeee; }
+[data-theme="light"] .bg-\[\#241a0e\]   { background-color: #f5f5f5; }
+[data-theme="light"] .bg-\[\#2a1f10\]   { background-color: #fef3e8; }
+[data-theme="light"] .bg-\[\#1c1106\]   { background-color: #fdf5ec; }
+[data-theme="light"] .bg-\[\#1e1409\]   { background-color: #f7f7f7; }
+[data-theme="light"] .bg-\[\#0d0800\]   { background-color: #fafafa; }
+[data-theme="light"] .bg-\[\#241a00\]   { background-color: #fef3e8; }
+[data-theme="light"] .bg-\[\#1c1300\]   { background-color: #fdf5ec; }
+[data-theme="light"] .bg-black          { background-color: var(--bg-drawer); }
 
 /* ── Backgrounds with opacity modifier ── */
-[data-theme="light"] .bg-\[#1c1300\]\/60   { background-color: rgba(253,240,222,0.7); }
-[data-theme="light"] .bg-\[#1c1300\]\/40   { background-color: rgba(253,240,222,0.5); }
-[data-theme="light"] .bg-\[#1c1300\]\/30   { background-color: rgba(253,240,222,0.4); }
-[data-theme="light"] .bg-\[#111\]\/40      { background-color: rgba(255,255,255,0.5); }
-[data-theme="light"] .bg-\[#0e0e0e\]\/40   { background-color: rgba(248,244,239,0.5); }
+[data-theme="light"] .bg-\[\#1c1300\]\/60  { background-color: rgba(245,240,235,0.8); }
+[data-theme="light"] .bg-\[\#1c1300\]\/40  { background-color: rgba(245,240,235,0.6); }
+[data-theme="light"] .bg-\[\#1c1300\]\/30  { background-color: rgba(245,240,235,0.5); }
+[data-theme="light"] .bg-\[\#111\]\/40     { background-color: rgba(255,255,255,0.7); }
+[data-theme="light"] .bg-\[\#0e0e0e\]\/40  { background-color: rgba(245,245,245,0.7); }
 
-/* ── bg-white opacity variants (hover cards, surfaces) ── */
-[data-theme="light"] .bg-white\/5          { background-color: rgba(0,0,0,0.04); }
-[data-theme="light"] .bg-white\/10         { background-color: rgba(0,0,0,0.08); }
-[data-theme="light"] .bg-white\/\[0\.08\]  { background-color: rgba(0,0,0,0.06); }
-[data-theme="light"] .hover\:bg-white\/5:hover  { background-color: rgba(0,0,0,0.04); }
+/* ── bg-white opacity variants → bg-black equivalents ── */
+[data-theme="light"] .bg-white\/5         { background-color: rgba(0,0,0,0.04); }
+[data-theme="light"] .bg-white\/10        { background-color: rgba(0,0,0,0.07); }
+[data-theme="light"] .bg-white\/\[0\.08\] { background-color: rgba(0,0,0,0.06); }
+[data-theme="light"] .hover\:bg-white\/5:hover  { background-color: rgba(0,0,0,0.05); }
 [data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(0,0,0,0.08); }
 
-/* ── Gradient: from- overrides ── */
-[data-theme="light"] .from-\[#1a0d00\]     { --tw-gradient-from: #fff8f0; }
-[data-theme="light"] .from-\[#120c04\]     { --tw-gradient-from: #fff3e8; }
-[data-theme="light"] .from-\[#1c1300\]     { --tw-gradient-from: #fdf0de; }
-[data-theme="light"] .from-\[#241a00\]     { --tw-gradient-from: #fde8cc; }
-[data-theme="light"] .from-\[#241a00\]     { --tw-gradient-from: #fde8cc; }
+/* ── Gradient from- overrides ── */
+[data-theme="light"] .from-\[\#1a0d00\]   { --tw-gradient-from: #f9f9f9; }
+[data-theme="light"] .from-\[\#120c04\]   { --tw-gradient-from: #f9f9f9; }
+[data-theme="light"] .from-\[\#1c1300\]   { --tw-gradient-from: #fdf5ec; }
+[data-theme="light"] .from-\[\#241a00\]   { --tw-gradient-from: #fef3e8; }
 
-/* ── Gradient: to- overrides ── */
-[data-theme="light"] .to-\[#0d0800\]       { --tw-gradient-to: #fef3e2; }
-[data-theme="light"] .to-\[#1c1300\]       { --tw-gradient-to: #fdf0de; }
-[data-theme="light"] .to-\[#110d00\]       { --tw-gradient-to: #fdf8ee; }
-[data-theme="light"] .to-\[#0e0900\]       { --tw-gradient-to: #fef7ed; }
+/* ── Gradient to- overrides ── */
+[data-theme="light"] .to-\[\#0d0800\]     { --tw-gradient-to: #f5f5f5; }
+[data-theme="light"] .to-\[\#1c1300\]     { --tw-gradient-to: #fdf5ec; }
+[data-theme="light"] .to-\[\#110d00\]     { --tw-gradient-to: #f9f9f9; }
+[data-theme="light"] .to-\[\#0e0900\]     { --tw-gradient-to: #ffffff; }
 
-/* ── Gradient: via- overrides ── */
-[data-theme="light"] .via-\[#1c1300\]      { --tw-gradient-via: #fdf0de; }
+/* ── Gradient via- overrides ── */
+[data-theme="light"] .via-\[\#1c1300\]    { --tw-gradient-via: #fdf5ec; }
 
-/* ── Text ── */
-[data-theme="light"] .text-white           { color: #1a1208; }
-[data-theme="light"] .text-gray-300        { color: #5a4530; }
+/* ── Text colors ── */
+[data-theme="light"] .text-white          { color: #111111; }
+[data-theme="light"] .text-gray-300       { color: #555555; }
+[data-theme="light"] .text-gray-200       { color: #444444; }
 
-/* ── Borders ── */
-[data-theme="light"] .border-gray-800      { border-color: #e8d5b0; }
-[data-theme="light"] .border-gray-700      { border-color: #d4b896; }
-[data-theme="light"] .border-gray-600      { border-color: #c4a880; }
+/* ── Border colors ── */
+[data-theme="light"] .border-gray-800     { border-color: #e5e5e5; }
+[data-theme="light"] .border-gray-700     { border-color: #d4d4d4; }
+[data-theme="light"] .border-gray-600     { border-color: #c0c0c0; }
 
 /* ── Range input thumb (audio scrubber) ── */
-[data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #1a1208; }
-[data-theme="light"] input[type="range"]::-moz-range-thumb { background: #1a1208; }
+[data-theme="light"] input[type="range"]::-webkit-slider-thumb { background: #111111; }
+[data-theme="light"] input[type="range"]::-moz-range-thumb { background: #111111; }
 
 /* ── Flame icon animation ── */
 @keyframes flame-pulse {

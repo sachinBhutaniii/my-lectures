@@ -68,7 +68,7 @@ function arrayBufferToBase64url(buf: ArrayBuffer): string {
 function waitForActivation(reg: ServiceWorkerRegistration): Promise<void> {
   return new Promise((resolve, reject) => {
     if (reg.active) { resolve(); return; }
-    const sw = reg.installing ?? reg.waiting;
+    const sw = reg.installing || reg.waiting;
     if (!sw) { reject(new Error("No service worker found in registration.")); return; }
     sw.addEventListener("statechange", function handler() {
       if (sw.state === "activated") { sw.removeEventListener("statechange", handler); resolve(); }
