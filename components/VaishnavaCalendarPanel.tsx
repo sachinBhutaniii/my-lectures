@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCalendarEvents } from "@/services/calendar.service";
 import type { VaishnavaEvent } from "@/types/calendar";
 import { FASTING_UPTO_LABELS } from "@/types/calendar";
@@ -32,8 +32,17 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
   const [loading,   setLoading]   = useState(false);
   const [selected,  setSelected]  = useState<string | null>(null);
 
+  const initializedRef = useRef(false);
+  const selectedSectionRef = useRef<HTMLDivElement>(null);
+
   const todayStr = useMemo(() => {
     const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }, []);
+
+  const threeDaysLaterStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }, []);
 
@@ -47,8 +56,26 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
   }, [viewYear, viewMonth]);
 
   useEffect(() => {
-    if (open) fetchEvents();
+    if (open) {
+      fetchEvents();
+    } else {
+      initializedRef.current = false;
+      setSelected(null);
+    }
   }, [open, fetchEvents]);
+
+  // Auto-select first upcoming event on initial open
+  useEffect(() => {
+    if (!open || events.length === 0 || initializedRef.current) return;
+    initializedRef.current = true;
+    const upcoming = events
+      .filter(e => e.eventDate >= todayStr)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate))[0];
+    if (upcoming) {
+      setSelected(upcoming.eventDate);
+      setTimeout(() => selectedSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    }
+  }, [open, events, todayStr]);
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, VaishnavaEvent[]> = {};
@@ -142,24 +169,26 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
           ) : (
             <div className="grid grid-cols-7 gap-1 mb-4">
               {calDays.map(({ dateStr, inMonth, day }) => {
-                const hasEvent = inMonth && !!eventsByDate[dateStr]?.length;
-                const isToday  = dateStr === todayStr;
-                const isSel    = dateStr === selected;
+                const hasEvent   = inMonth && !!eventsByDate[dateStr]?.length;
+                const isToday    = dateStr === todayStr;
+                const isSel      = dateStr === selected;
+                const isUpcoming = hasEvent && dateStr >= todayStr && dateStr <= threeDaysLaterStr;
                 return (
                   <button
                     key={dateStr}
                     disabled={!inMonth}
                     onClick={() => setSelected(isSel ? null : dateStr)}
                     className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all ${
-                      !inMonth ? "opacity-0 pointer-events-none" :
-                      isSel    ? "bg-orange-500 text-white" :
-                      isToday  ? "bg-orange-500/20 border border-orange-500/50 text-orange-300" :
-                                 "bg-gray-800/50 text-gray-300 hover:bg-gray-700/50"
+                      !inMonth    ? "opacity-0 pointer-events-none" :
+                      isSel       ? "bg-orange-500 text-white" :
+                      isUpcoming  ? "bg-amber-400/20 border border-amber-400/60 text-amber-300" :
+                      isToday     ? "bg-orange-500/20 border border-orange-500/50 text-orange-300" :
+                                    "bg-gray-800/50 text-gray-300 hover:bg-gray-700/50"
                     }`}
                   >
                     <span className="text-[11px] font-semibold">{day}</span>
                     {hasEvent && (
-                      <span className={`w-1 h-1 rounded-full mt-0.5 ${isSel ? "bg-white/80" : "bg-orange-400"}`} />
+                      <span className={`w-1 h-1 rounded-full mt-0.5 ${isSel ? "bg-white/80" : isUpcoming ? "bg-amber-400" : "bg-orange-400"}`} />
                     )}
                   </button>
                 );
@@ -169,7 +198,7 @@ export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }
 
           {/* Selected day events */}
           {selected && (
-            <div className="mb-4">
+            <div className="mb-4" ref={selectedSectionRef}>
               <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-2">
                 {new Date(selected + "T12:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </p>

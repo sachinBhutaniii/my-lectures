@@ -93,6 +93,7 @@ export default function Home() {
   // ── Calendar-based recommended lecture ───────────────────────────────────
   const [recommendedLecture, setRecommendedLecture] = useState<LectureVideo | null>(null);
   const [recommendedEvent, setRecommendedEvent] = useState<{ name: string; date: string } | null>(null);
+  const [calendarHasUpcoming, setCalendarHasUpcoming] = useState(false);
 
   useEffect(() => {
     if (lectures.length === 0) return;
@@ -108,6 +109,11 @@ export default function Home() {
         events = [...events, ...next];
       }
       const todayMs = today.setHours(0, 0, 0, 0);
+      const threeDaysMs = todayMs + 3 * 86400000;
+      setCalendarHasUpcoming(events.some(ev => {
+        const evMs = new Date(ev.eventDate + "T00:00:00").getTime();
+        return evMs >= todayMs && evMs <= threeDaysMs;
+      }));
       for (const ev of events) {
         if (!ev.suggestedVideoId) continue;
         const evMs = new Date(ev.eventDate + "T00:00:00").getTime();
@@ -391,6 +397,9 @@ export default function Home() {
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5 text-gray-300">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
             </svg>
+            {calendarHasUpcoming && (
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#1a1208]" />
+            )}
           </button>
 
           {/* Streak / Flame button */}
