@@ -505,7 +505,7 @@ export default function Home() {
 
         {/* Recommended lecture (calendar-linked) */}
         {recommendedLecture && !search && !selectedCategory && (
-          <div className="mb-4">
+          <div className="mb-2">
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-orange-400 text-xs">🪔</span>
               <span className="text-[11px] font-semibold text-orange-400 truncate">
@@ -517,31 +517,39 @@ export default function Home() {
                 </span>
               )}
             </div>
-            <LectureCard
-              lecture={recommendedLecture}
-              isActive={false}
-              isFavourite={isFavourite(recommendedLecture.id)}
-              isDownloaded={isDownloaded(recommendedLecture.id)}
-              downloadProgress={getDownloadProgress(recommendedLecture.id)}
-              onClick={() => {
-                addToHistory(recommendedLecture);
-                playerPlay(recommendedLecture);
-                router.push(`/${recommendedLecture.id}`);
-              }}
-              onToggleFavourite={() => toggleFavourite(recommendedLecture)}
-              onAddToPlaylist={() => setPlaylistTarget({
-                id: recommendedLecture.id,
-                title: recommendedLecture.title,
-                thumbnailUrl: recommendedLecture.thumbnailUrl,
-                category: recommendedLecture.category,
-                date: recommendedLecture.date,
-                place: recommendedLecture.place,
-                speaker: recommendedLecture.speaker,
-                addedAt: Date.now(),
-              })}
-              onDownload={() => downloadLecture(recommendedLecture)}
-              onDeleteDownload={() => deleteDownload(recommendedLecture.id)}
-            />
+            <div className="border-l-2 border-orange-500 pl-2 rounded-r-xl bg-orange-500/5">
+              <LectureCard
+                lecture={recommendedLecture}
+                isActive={false}
+                isRecommended
+                isFavourite={isFavourite(recommendedLecture.id)}
+                isDownloaded={isDownloaded(recommendedLecture.id)}
+                downloadProgress={getDownloadProgress(recommendedLecture.id)}
+                onClick={() => {
+                  addToHistory(recommendedLecture);
+                  playerPlay(recommendedLecture);
+                  router.push(`/${recommendedLecture.id}`);
+                }}
+                onToggleFavourite={() => toggleFavourite(recommendedLecture)}
+                onAddToPlaylist={() => setPlaylistTarget({
+                  id: recommendedLecture.id,
+                  title: recommendedLecture.title,
+                  thumbnailUrl: recommendedLecture.thumbnailUrl,
+                  category: recommendedLecture.category,
+                  date: recommendedLecture.date,
+                  place: recommendedLecture.place,
+                  speaker: recommendedLecture.speaker,
+                  addedAt: Date.now(),
+                })}
+                onDownload={() => downloadLecture(recommendedLecture)}
+                onDeleteDownload={() => deleteDownload(recommendedLecture.id)}
+              />
+            </div>
+            <div className="flex items-center gap-2 mt-3 mb-2">
+              <div className="flex-1 h-px bg-gray-800" />
+              <span className="text-[10px] text-gray-600 uppercase tracking-widest">All Lectures</span>
+              <div className="flex-1 h-px bg-gray-800" />
+            </div>
           </div>
         )}
 
