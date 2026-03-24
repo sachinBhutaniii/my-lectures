@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
           { key: "Service-Worker-Allowed", value: "/" },
+          // Explicitly declare MIME type so X-Content-Type-Options: nosniff
+          // (set by Vercel's default security headers) never blocks sw.js
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
         ],
       },
     ];

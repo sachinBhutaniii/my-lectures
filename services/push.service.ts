@@ -64,19 +64,44 @@ function arrayBufferToBase64url(buf: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/** Wait for a SW registration to reach "activated" state. */
+function waitForActivation(reg: ServiceWorkerRegistration): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (reg.active) { resolve(); return; }
+    const sw = reg.installing ?? reg.waiting;
+    if (!sw) { reject(new Error("No service worker found in registration.")); return; }
+    sw.addEventListener("statechange", function handler() {
+      if (sw.state === "activated") { sw.removeEventListener("statechange", handler); resolve(); }
+      if (sw.state === "redundant") { sw.removeEventListener("statechange", handler); reject(new Error("Service worker became redundant.")); }
+    });
+  });
+}
+
 export async function subscribePush(reminderTimeLocal: string): Promise<void> {
-  // Kick any waiting SW into active state so navigator.serviceWorker.ready resolves
-  const existingReg = await navigator.serviceWorker.getRegistration();
-  if (existingReg?.waiting) {
-    existingReg.waiting.postMessage({ type: "SKIP_WAITING" });
+  // Get or create the SW registration — don't rely on navigator.serviceWorker.ready
+  // which never resolves if a previous registration attempt failed.
+  let reg: ServiceWorkerRegistration;
+  try {
+    const existing = await navigator.serviceWorker.getRegistration("/");
+    if (existing) {
+      // Kick any waiting SW into active state
+      if (existing.waiting) existing.waiting.postMessage({ type: "SKIP_WAITING" });
+      reg = existing;
+    } else {
+      // No registration at all — try to register fresh
+      reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    }
+  } catch (err: any) {
+    throw new Error(err?.message || "Could not register service worker. Try refreshing the page.");
   }
 
-  const reg = await Promise.race([
-    navigator.serviceWorker.ready,
+  // Wait for the SW to become active (with timeout)
+  await Promise.race([
+    waitForActivation(reg),
     new Promise<never>((_, reject) =>
       setTimeout(
-        () => reject(new Error("Service worker not ready. Try refreshing the page.")),
-        10000,
+        () => reject(new Error("Service worker timed out. Try refreshing the page.")),
+        12000,
       )
     ),
   ]);

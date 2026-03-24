@@ -34,8 +34,17 @@ export default function ServiceWorkerRegister() {
               });
             });
           })
-          .catch((err) => {
+          .catch(async (err) => {
             console.warn("✗ Service worker registration failed:", err);
+            // Auto-recovery: unregister any stale/broken SW registrations and retry once
+            try {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map((r) => r.unregister()));
+              await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+              console.log("✓ Service worker re-registered after initial failure");
+            } catch (retryErr) {
+              console.warn("✗ Service worker retry also failed:", retryErr);
+            }
           });
       };
 
