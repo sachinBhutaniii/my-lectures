@@ -417,7 +417,7 @@ export default function VaishnavaCalendarAdmin() {
                       {ev.suggestedVideoTitle}
                     </p>
                   )}
-                  {ev.description && <p className="text-gray-500 text-[12px] mt-1 leading-relaxed line-clamp-2">{ev.description}</p>}
+                  {ev.description && <p className="text-gray-500 text-[12px] mt-1 leading-relaxed line-clamp-2 whitespace-pre-wrap">{ev.description}</p>}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button

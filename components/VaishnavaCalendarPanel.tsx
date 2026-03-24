@@ -210,6 +210,8 @@ function EventCard({
   showDate?: boolean;
   onLectureClick?: (videoId: number) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="bg-gray-900/70 rounded-2xl px-4 py-3 mb-2 border border-gray-800">
       <div className="flex items-start justify-between gap-2 mb-1">
@@ -227,7 +229,19 @@ function EventCard({
         <p className="text-orange-300/70 text-[11px] mb-1">🙏 Fasting upto: {FASTING_UPTO_LABELS[event.fastingUpto]}</p>
       )}
       {event.description && (
-        <p className="text-gray-400 text-[12px] leading-relaxed mt-1">{event.description}</p>
+        <div className="mt-1">
+          <p className={`text-gray-400 text-[12px] leading-relaxed whitespace-pre-wrap ${!expanded ? "line-clamp-2" : ""}`}>
+            {event.description}
+          </p>
+          {event.description.length > 80 && (
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="text-orange-400/80 text-[11px] font-semibold mt-0.5 hover:text-orange-300"
+            >
+              {expanded ? "Read less" : "Read more"}
+            </button>
+          )}
+        </div>
       )}
       {event.suggestedVideoId && (
         <button
