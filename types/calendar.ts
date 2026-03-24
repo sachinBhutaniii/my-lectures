@@ -14,6 +14,8 @@ export interface VaishnavaEvent {
   description?: string;
   tithi?: string;
   fastingUpto?: FastingUpto;
+  suggestedVideoId?: number;
+  suggestedVideoTitle?: string;
   createdAt?: string;
 }
 
@@ -23,4 +25,6 @@ export interface VaishnavaEventRequest {
   description?: string;
   tithi?: string;
   fastingUpto?: FastingUpto;
+  suggestedVideoId?: number;
+  suggestedVideoTitle?: string;
 }

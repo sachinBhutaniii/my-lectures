@@ -269,6 +269,10 @@ export default function Home() {
       <VaishnavaCalendarPanel
         open={showCalendar}
         onClose={() => setShowCalendar(false)}
+        onLectureClick={(videoId) => {
+          setShowCalendar(false);
+          router.push(`/${videoId}`);
+        }}
       />
 
       {/* ── Downloads Panel ── */}

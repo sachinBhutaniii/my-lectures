@@ -11,9 +11,10 @@ const WEEKDAYS = ["S","M","T","W","T","F","S"];
 interface Props {
   open: boolean;
   onClose: () => void;
+  onLectureClick?: (videoId: number) => void;
 }
 
-export default function VaishnavaCalendarPanel({ open, onClose }: Props) {
+export default function VaishnavaCalendarPanel({ open, onClose, onLectureClick }: Props) {
   const now = new Date();
   const [viewYear,  setViewYear]  = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -165,7 +166,7 @@ export default function VaishnavaCalendarPanel({ open, onClose }: Props) {
                 <p className="text-gray-600 text-sm text-center py-4">No events on this day</p>
               ) : (
                 selectedEvents.map(ev => (
-                  <EventCard key={ev.id} event={ev} />
+                  <EventCard key={ev.id} event={ev} onLectureClick={onLectureClick} />
                 ))
               )}
             </div>
@@ -176,7 +177,7 @@ export default function VaishnavaCalendarPanel({ open, onClose }: Props) {
             <div>
               <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-2">This Month</p>
               {events.map(ev => (
-                <EventCard key={ev.id} event={ev} showDate />
+                <EventCard key={ev.id} event={ev} showDate onLectureClick={onLectureClick} />
               ))}
             </div>
           )}
@@ -189,7 +190,15 @@ export default function VaishnavaCalendarPanel({ open, onClose }: Props) {
   );
 }
 
-function EventCard({ event, showDate }: { event: VaishnavaEvent; showDate?: boolean }) {
+function EventCard({
+  event,
+  showDate,
+  onLectureClick,
+}: {
+  event: VaishnavaEvent;
+  showDate?: boolean;
+  onLectureClick?: (videoId: number) => void;
+}) {
   return (
     <div className="bg-gray-900/70 rounded-2xl px-4 py-3 mb-2 border border-gray-800">
       <div className="flex items-start justify-between gap-2 mb-1">
@@ -208,6 +217,22 @@ function EventCard({ event, showDate }: { event: VaishnavaEvent; showDate?: bool
       )}
       {event.description && (
         <p className="text-gray-400 text-[12px] leading-relaxed mt-1">{event.description}</p>
+      )}
+      {event.suggestedVideoId && (
+        <button
+          onClick={() => onLectureClick?.(event.suggestedVideoId!)}
+          className="mt-2.5 w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-colors active:scale-95"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 flex-shrink-0">
+            <path d="M8 5.14v14l11-7-11-7z" />
+          </svg>
+          <span className="text-[12px] font-semibold flex-1 text-left truncate">
+            {event.suggestedVideoTitle ?? "Watch Lecture"}
+          </span>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5 flex-shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
       )}
     </div>
   );

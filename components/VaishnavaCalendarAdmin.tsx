@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getCalendarEvents,
   createCalendarEvent,
@@ -8,8 +8,10 @@ import {
   deleteCalendarEvent,
   importIcalEvents,
 } from "@/services/calendar.service";
+import { getVideos } from "@/services/video.service";
 import type { VaishnavaEvent, VaishnavaEventRequest, FastingUpto } from "@/types/calendar";
 import { FASTING_UPTO_LABELS } from "@/types/calendar";
+import type { LectureVideo } from "@/types/videos";
 
 const FASTING_OPTIONS: { value: FastingUpto; label: string }[] = [
   { value: "NOON",          label: "Noon" },
@@ -24,6 +26,8 @@ const EMPTY_FORM: VaishnavaEventRequest = {
   description: "",
   tithi: "",
   fastingUpto: undefined,
+  suggestedVideoId: undefined,
+  suggestedVideoTitle: undefined,
 };
 
 export default function VaishnavaCalendarAdmin() {
@@ -37,6 +41,11 @@ export default function VaishnavaCalendarAdmin() {
   const [editId,    setEditId]    = useState<number | null>(null);
   const [showForm,  setShowForm]  = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Lecture search
+  const [allVideos,     setAllVideos]     = useState<LectureVideo[]>([]);
+  const [lectureSearch, setLectureSearch] = useState("");
+  const [showDropdown,  setShowDropdown]  = useState(false);
 
   // View month
   const now = new Date();
@@ -54,6 +63,16 @@ export default function VaishnavaCalendarAdmin() {
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
+  useEffect(() => {
+    getVideos().then(res => setAllVideos(res.videos)).catch(() => {});
+  }, []);
+
+  const filteredVideos = useMemo(() => {
+    const q = lectureSearch.toLowerCase().trim();
+    if (!q) return [];
+    return allVideos.filter(v => v.title.toLowerCase().includes(q)).slice(0, 8);
+  }, [allVideos, lectureSearch]);
+
   function goPrev() {
     if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); }
     else setViewMonth(m => m-1);
@@ -65,6 +84,7 @@ export default function VaishnavaCalendarAdmin() {
 
   function openNew() {
     setForm({ ...EMPTY_FORM });
+    setLectureSearch("");
     setEditId(null);
     setShowForm(true);
     setError(null);
@@ -73,12 +93,15 @@ export default function VaishnavaCalendarAdmin() {
 
   function openEdit(ev: VaishnavaEvent) {
     setForm({
-      eventDate:   ev.eventDate,
-      eventName:   ev.eventName,
-      description: ev.description ?? "",
-      tithi:       ev.tithi ?? "",
-      fastingUpto: ev.fastingUpto,
+      eventDate:          ev.eventDate,
+      eventName:          ev.eventName,
+      description:        ev.description ?? "",
+      tithi:              ev.tithi ?? "",
+      fastingUpto:        ev.fastingUpto,
+      suggestedVideoId:   ev.suggestedVideoId,
+      suggestedVideoTitle: ev.suggestedVideoTitle,
     });
+    setLectureSearch(ev.suggestedVideoTitle ?? "");
     setEditId(ev.id);
     setShowForm(true);
     setError(null);
@@ -95,8 +118,10 @@ export default function VaishnavaCalendarAdmin() {
     try {
       const payload: VaishnavaEventRequest = {
         ...form,
-        description: form.description || undefined,
-        tithi:       form.tithi || undefined,
+        description:         form.description || undefined,
+        tithi:               form.tithi || undefined,
+        suggestedVideoId:    form.suggestedVideoId || undefined,
+        suggestedVideoTitle: form.suggestedVideoTitle || undefined,
       };
       if (editId !== null) {
         await updateCalendarEvent(editId, payload);
@@ -253,6 +278,61 @@ export default function VaishnavaCalendarAdmin() {
               </select>
             </div>
 
+            {/* Suggested Lecture */}
+            <div className="relative">
+              <label className="block text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Suggested Lecture</label>
+              {form.suggestedVideoId ? (
+                <div className="flex items-center gap-2 bg-gray-800 border border-orange-500/40 rounded-xl px-3 py-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-orange-400 flex-shrink-0">
+                    <path d="M8 5.14v14l11-7-11-7z" />
+                  </svg>
+                  <span className="text-white text-sm flex-1 truncate">{form.suggestedVideoTitle}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setForm(f => ({ ...f, suggestedVideoId: undefined, suggestedVideoTitle: undefined })); setLectureSearch(""); }}
+                    className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={lectureSearch}
+                    onChange={e => { setLectureSearch(e.target.value); setShowDropdown(true); }}
+                    onFocus={() => setShowDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                    placeholder="Search lecture by title…"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                  />
+                  {showDropdown && filteredVideos.length > 0 && (
+                    <div className="absolute z-10 left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
+                      {filteredVideos.map(v => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onMouseDown={() => {
+                            setForm(f => ({ ...f, suggestedVideoId: v.id, suggestedVideoTitle: v.title }));
+                            setLectureSearch(v.title);
+                            setShowDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 text-sm text-gray-200 hover:bg-gray-800 flex items-center gap-2 border-b border-gray-800 last:border-0"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 text-orange-400 flex-shrink-0">
+                            <path d="M8 5.14v14l11-7-11-7z" />
+                          </svg>
+                          <span className="truncate">{v.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
             {/* Description */}
             <div>
               <label className="block text-[11px] text-gray-500 font-semibold uppercase tracking-wider mb-1">Description</label>
@@ -324,6 +404,12 @@ export default function VaishnavaCalendarAdmin() {
                   </div>
                   <p className="text-white font-semibold text-sm leading-snug">{ev.eventName}</p>
                   {ev.tithi && <p className="text-amber-400/70 text-[11px] mt-0.5">🌙 {ev.tithi}</p>}
+                  {ev.suggestedVideoTitle && (
+                    <p className="text-orange-400/70 text-[11px] mt-0.5 flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 flex-shrink-0"><path d="M8 5.14v14l11-7-11-7z"/></svg>
+                      {ev.suggestedVideoTitle}
+                    </p>
+                  )}
                   {ev.description && <p className="text-gray-500 text-[12px] mt-1 leading-relaxed line-clamp-2">{ev.description}</p>}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
