@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { QueueItem } from "@/hooks/useQueue";
+import MarqueeText from "@/components/MarqueeText";
 
 interface Props {
   queue: QueueItem[];
@@ -63,9 +64,7 @@ export default function QueueList({ queue, currentId, onRemove }: Props) {
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium leading-snug line-clamp-1 ${isCurrent ? "text-orange-400" : "text-white"}`}>
-                {item.title}
-              </p>
+              <MarqueeText text={item.title} className={`text-sm font-medium leading-snug ${isCurrent ? "text-orange-400" : "text-white"}`} />
               <p className="text-gray-500 text-xs mt-0.5">
                 {[item.speaker, formatDate(item.date)].filter(Boolean).join(" • ")}
               </p>

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { usePlayer } from "@/context/PlayerContext";
+import MarqueeText from "@/components/MarqueeText";
 
 function formatTime(sec: number): string {
   if (!isFinite(sec) || sec < 0) return "0:00";
@@ -49,9 +50,7 @@ export default function MiniPlayerBar() {
             onClick={() => router.push(`/${lecture.id}`)}
             className="flex-1 min-w-0 text-left active:opacity-70 transition-opacity duration-100"
           >
-            <p className="text-white text-xs font-semibold truncate leading-tight">
-              {lecture.title}
-            </p>
+            <MarqueeText text={lecture.title} className="text-white text-xs font-semibold leading-tight" speed={12} />
             <p className="text-gray-500 text-[11px] mt-0.5">
               {formatTime(currentTime)}
               {duration > 0 ? ` / ${formatTime(duration)}` : ""}

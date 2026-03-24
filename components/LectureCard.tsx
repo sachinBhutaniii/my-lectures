@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { LectureVideo } from "@/types/videos";
+import MarqueeText from "@/components/MarqueeText";
 
 interface Props {
   lecture: LectureVideo;
@@ -84,9 +85,7 @@ export default function LectureCard({ lecture, isActive, isRecommended, isFavour
                   🪔 Recommended
                 </span>
               )}
-              <p className="text-white text-sm font-semibold leading-snug line-clamp-2">
-                {lecture.title}
-              </p>
+              <MarqueeText text={lecture.title} className="text-white text-sm font-semibold leading-snug" />
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {/* Download state indicator */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import MarqueeText from "@/components/MarqueeText";
 import { LectureVideo } from "@/types/videos";
 import { usePlayer } from "@/context/PlayerContext";
 import { useFavourites } from "@/hooks/useFavourites";
@@ -74,7 +75,7 @@ export default function PlayerBar({ lecture, onPrev, onNext, onAddToPlaylist }: 
           className="w-10 h-10 rounded-md object-cover flex-shrink-0"
         />
         <div className="flex-1 min-w-0">
-          <p className="text-white text-sm font-semibold truncate">{lecture.title}</p>
+          <MarqueeText text={lecture.title} className="text-white text-sm font-semibold" speed={12} />
           {lecture.category && lecture.category.length > 0 && (
             <p className="text-gray-400 text-xs">{lecture.category[0]}</p>
           )}

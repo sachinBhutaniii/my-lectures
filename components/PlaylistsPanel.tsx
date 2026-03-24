@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Playlist, PlaylistLecture } from "@/hooks/usePlaylists";
+import MarqueeText from "@/components/MarqueeText";
 
 interface Props {
   open: boolean;
@@ -91,7 +92,7 @@ function PlaylistDetail({
                   <img src={lec.thumbnailUrl} alt={lec.title} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium line-clamp-1">{lec.title}</p>
+                  <MarqueeText text={lec.title} className="text-white text-sm font-medium" />
                   <p className="text-gray-500 text-xs">{[lec.speaker, formatDate(lec.date)].filter(Boolean).join(" • ")}</p>
                 </div>
                 <button

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePlayer } from "@/context/PlayerContext";
 import { DownloadedLecture } from "@/hooks/useDownloads";
+import MarqueeText from "@/components/MarqueeText";
 
 interface Props {
   open: boolean;
@@ -110,7 +111,7 @@ export default function DownloadsPanel({ open, onClose, downloads, onDelete, get
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium leading-snug line-clamp-2">{item.title}</p>
+                      <MarqueeText text={item.title} className="text-white text-sm font-medium leading-snug" />
                       <p className="text-gray-500 text-xs mt-0.5">
                         {[item.speaker, formatDate(item.date)].filter(Boolean).join(" · ")}
                       </p>

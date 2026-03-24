@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { LectureVideo } from "@/types/videos";
+import MarqueeText from "@/components/MarqueeText";
 
 function formatDate(dateStr?: string): string {
   if (!dateStr) return "";
@@ -97,7 +98,7 @@ export default function NewContentPanel({ open, items, onClose, onLectureClick }
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium leading-snug line-clamp-2">{lecture.title}</p>
+                    <MarqueeText text={lecture.title} className="text-white text-sm font-medium leading-snug" />
                     <div className="flex items-center gap-2 mt-1">
                       {lecture.date && (
                         <span className="text-gray-600 text-[11px]">{formatDate(lecture.date)}</span>
