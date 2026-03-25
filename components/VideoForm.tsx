@@ -1,7 +1,7 @@
 "use client";
 import { LectureVideo, LanguageData } from "@/types/videos";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio, startPipeline, confirmPipeline, getPipelineStatus } from "@/services/video.service";
+import { uploadImage, getVideoById, getLanguageData, extractYouTubeAudio, uploadAudioFile, startPipeline, confirmPipeline, getPipelineStatus } from "@/services/video.service";
 import { generateShlokaData, getShlokaData, updateShlokaData } from "@/services/shloka.service";
 import { ShlokaEntry } from "@/types/shloka";
 
@@ -118,6 +118,8 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [ytError, setYtError] = useState("");
   const [audioExtracting, setAudioExtracting] = useState(false);
   const [audioError, setAudioError] = useState("");
+  const [audioUploading, setAudioUploading] = useState(false);
+  const audioFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Transcript locale state
@@ -707,14 +709,51 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
       <Field label="Audio URL">
         <div className="relative">
           <input type="text" name="audioUrl" value={formData.audioUrl} onChange={handleChange} placeholder="https://…" className={inputCls} />
-          {audioExtracting && (
+          {(audioExtracting || audioUploading) && (
             <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-orange-400">
               <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-              Extracting audio…
+              {audioUploading ? "Uploading…" : "Extracting audio…"}
             </span>
           )}
         </div>
         {audioError && <p className="text-red-400 text-xs mt-1">{audioError}</p>}
+        {/* Direct file upload — fallback when YouTube extraction is blocked */}
+        <div className="mt-1.5 flex items-center gap-2">
+          <input
+            ref={audioFileInputRef}
+            type="file"
+            accept="audio/*,video/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setAudioUploading(true);
+              setAudioError("");
+              try {
+                const startSecs = formData.startTime ?? undefined;
+                const s3Url = await uploadAudioFile(file, startSecs);
+                setFormData((prev) => ({ ...prev, audioUrl: s3Url }));
+              } catch (err: unknown) {
+                setAudioError(err instanceof Error ? err.message : "Upload failed");
+              } finally {
+                setAudioUploading(false);
+                if (audioFileInputRef.current) audioFileInputRef.current.value = "";
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => audioFileInputRef.current?.click()}
+            disabled={audioUploading || audioExtracting}
+            className="flex items-center gap-1.5 text-xs text-gray-400 border border-gray-700 rounded-lg px-3 py-1.5 hover:border-orange-500/50 hover:text-orange-400 transition-colors disabled:opacity-40"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+            Upload audio file
+          </button>
+          <span className="text-gray-600 text-xs">MP3, M4A, MP4, WAV…</span>
+        </div>
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Key (SKU)">

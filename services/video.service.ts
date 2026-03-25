@@ -231,6 +231,16 @@ export const extractYouTubeAudio = async (url: string, startTime?: number): Prom
   return res.data.audioUrl;
 };
 
+export const uploadAudioFile = async (file: File, startTime?: number): Promise<string> => {
+  const form = new FormData();
+  form.append("file", file);
+  if (startTime != null) form.append("startTime", String(startTime));
+  const res = await apiClient.post<{ audioUrl: string }>("/api/youtube/upload-audio", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data.audioUrl;
+};
+
 // ── Transcription pipeline ────────────────────────────────────────────────────
 
 export interface PipelineMetadata {
