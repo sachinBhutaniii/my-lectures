@@ -76,6 +76,7 @@ export default function AdminVideoItem({ video, onEdit, onDelete }: AdminVideoIt
       {/* Info */}
       <div className="p-3">
         <h3 className="text-sm font-medium text-gray-100 line-clamp-2 leading-snug">{video.title}</h3>
+        <p className="text-[10px] text-gray-600 mt-0.5 font-mono">ID: {video.id}</p>
         {video.description && (
           <p className="text-xs text-gray-500 mt-1 line-clamp-1">{video.description}</p>
         )}

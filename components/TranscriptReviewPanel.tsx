@@ -337,6 +337,7 @@ function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onAppr
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-100 truncate leading-tight">{first.videoTitle}</p>
           <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] text-gray-600 font-mono">ID: {first.videoId}</span>
             <span className="text-[11px] text-gray-500">
               {items.length} language{items.length !== 1 ? "s" : ""}
             </span>
