@@ -43,19 +43,25 @@ export function timeToMs(t: string): number {
 
   // No comma — all colons. Last segment might be milliseconds.
   // e.g. "00:10:827" = 0min 10sec 827ms, "01:07:27" = 1min 7sec 27*10ms
-  const parts = t.split(":").map(Number);
+  const parts = t.split(":");
+  const nums = parts.map(Number);
+  if (parts.length === 4) {
+    // HH:MM:SS:mmm (colon instead of comma for ms)
+    const msStr = parts[3].padEnd(3, "0").slice(0, 3);
+    return nums[0] * 3600000 + nums[1] * 60000 + nums[2] * 1000 + parseInt(msStr, 10);
+  }
   if (parts.length === 3) {
     // Could be HH:MM:SS or MM:SS:mmm — disambiguate by checking if last part > 59
-    if (parts[2] > 59) {
+    if (nums[2] > 59) {
       // MM:SS:mmm format (last part is ms)
-      const msStr = t.split(":")[2].padEnd(3, "0").slice(0, 3);
-      return parts[0] * 60000 + parts[1] * 1000 + parseInt(msStr, 10);
+      const msStr = parts[2].padEnd(3, "0").slice(0, 3);
+      return nums[0] * 60000 + nums[1] * 1000 + parseInt(msStr, 10);
     }
     // Standard HH:MM:SS (no ms)
-    return parts[0] * 3600000 + parts[1] * 60000 + parts[2] * 1000;
+    return nums[0] * 3600000 + nums[1] * 60000 + nums[2] * 1000;
   }
   if (parts.length === 2) {
-    return parts[0] * 60000 + parts[1] * 1000;
+    return nums[0] * 60000 + nums[1] * 1000;
   }
   return 0;
 }
@@ -75,20 +81,39 @@ export function msToTime(ms: number): string {
 
 export function parseSrt(srt: string): SrtCue[] {
   if (!srt?.trim()) return [];
-  const blocks = srt.trim().split(/\n\n+/);
+  // Normalize line endings; replace em/en-dash arrows with -->
+  const normalized = srt
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[—–]>/g, "-->");
+  const lines = normalized.split("\n");
   const cues: SrtCue[] = [];
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    if (lines.length < 3) continue;
-    const id = parseInt(lines[0], 10);
-    if (isNaN(id)) continue;
-    // Split timestamp line by --> (handles any timestamp format)
-    const arrowIdx = lines[1].indexOf("-->");
-    if (arrowIdx === -1) continue;
-    const startTime = lines[1].slice(0, arrowIdx).trim();
-    const endTime = lines[1].slice(arrowIdx + 3).trim();
-    if (!startTime || !endTime) continue;
-    const text = lines.slice(2).join("\n").trim();
+  let i = 0;
+  while (i < lines.length) {
+    // Skip blank lines
+    while (i < lines.length && !lines[i].trim()) i++;
+    if (i >= lines.length) break;
+    // Expect cue index
+    const id = parseInt(lines[i].trim(), 10);
+    if (isNaN(id)) { i++; continue; }
+    i++;
+    if (i >= lines.length) break;
+    // Expect timestamp line
+    const timeLine = lines[i].trim();
+    const arrowIdx = timeLine.indexOf("-->");
+    if (arrowIdx === -1) { i++; continue; }
+    const startTime = timeLine.slice(0, arrowIdx).trim();
+    const endTime = timeLine.slice(arrowIdx + 3).trim();
+    if (!startTime || !endTime) { i++; continue; }
+    i++;
+    // Collect text lines until blank line or end
+    const textLines: string[] = [];
+    while (i < lines.length && lines[i].trim()) {
+      textLines.push(lines[i]);
+      i++;
+    }
+    const text = textLines.join("\n").trim();
+    if (!text) continue;
     cues.push({
       id,
       startTime,
