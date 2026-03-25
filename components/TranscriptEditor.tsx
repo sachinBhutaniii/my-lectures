@@ -25,6 +25,39 @@ interface Props {
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+/** Convert plain transcript text to basic SRT cues (30s each, sequential). */
+function plainTextToSrtCues(text: string): SrtCue[] {
+  if (!text?.trim()) return [];
+  const chunks = text.trim().split(/\n\n+/).filter(Boolean);
+  // If only one big block (no double newlines), split by single newline
+  const parts = chunks.length > 1 ? chunks : text.trim().split(/\n/).filter(Boolean);
+  const cues: SrtCue[] = [];
+  const chunkDurationMs = 30000; // 30 seconds per cue
+  for (let i = 0; i < parts.length; i++) {
+    const t = parts[i].trim();
+    if (!t) continue;
+    const startMs = i * chunkDurationMs;
+    const endMs = (i + 1) * chunkDurationMs;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmtMs = (ms: number) => {
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      const mil = ms % 1000;
+      return `${pad(h)}:${pad(m)}:${pad(s)},${String(mil).padStart(3, "0")}`;
+    };
+    cues.push({
+      id: i + 1,
+      startTime: fmtMs(startMs),
+      endTime: fmtMs(endMs),
+      startMs,
+      endMs,
+      text: t,
+    });
+  }
+  return cues;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function TranscriptEditor({ data, mode, level = 1, onBack }: Props) {
@@ -83,12 +116,21 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [fsHint, setFsHint] = useState<"entered" | "exited" | null>(null);
   const tapTimesRef = useRef<number[]>([]);
   const fsHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rawTranscriptUsed, setRawTranscriptUsed] = useState(false);
 
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const orig = parseSrt(data.originalSrt ?? "");
+    let orig = parseSrt(data.originalSrt ?? "");
     const l1 = parseSrt(data.level1Srt ?? "");
     const l2 = parseSrt(data.level2Srt ?? "");
+
+    // Fallback: if originalSrt is missing or has ≤1 cue, generate from plain transcript
+    if (orig.length <= 1 && data.rawTranscript?.trim()) {
+      orig = plainTextToSrtCues(data.rawTranscript);
+      setRawTranscriptUsed(true);
+    } else {
+      setRawTranscriptUsed(false);
+    }
 
     origCuesRef.current = orig;
 
@@ -635,6 +677,19 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           <span>Diffs shown below each changed cue:</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" />L1 vs Original</span>
           {hasL2 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" />L2 vs L1</span>}
+        </div>
+      )}
+
+      {/* ── Raw transcript fallback warning ──────────────────────────────────── */}
+      {rawTranscriptUsed && (
+        <div className="flex-shrink-0 flex items-start gap-2.5 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/25">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-xs font-medium text-amber-300">Timestamps not available</p>
+            <p className="text-[11px] text-amber-500/80 mt-0.5">SRT data is missing or incomplete. Content loaded from plain transcript — timestamps are placeholders. Please fix timings while reviewing.</p>
+          </div>
         </div>
       )}
 

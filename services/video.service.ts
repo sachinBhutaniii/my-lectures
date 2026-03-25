@@ -168,6 +168,7 @@ export interface TranscriptEditorData {
   level1ProofreaderId: number | null;
   level2ProofreaderId: number | null;
   deployed: boolean;
+  rawTranscript?: string | null;
 }
 
 export const getTranscriptForEditor = async (id: number): Promise<TranscriptEditorData> => {
