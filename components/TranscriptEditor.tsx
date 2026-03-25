@@ -25,37 +25,36 @@ interface Props {
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-/** Convert plain transcript text to basic SRT cues (30s each, sequential). */
+/** Convert plain transcript text to basic SRT cues (~20 words each, 30s intervals). */
 function plainTextToSrtCues(text: string): SrtCue[] {
   if (!text?.trim()) return [];
-  const chunks = text.trim().split(/\n\n+/).filter(Boolean);
-  // If only one big block (no double newlines), split by single newline
-  const parts = chunks.length > 1 ? chunks : text.trim().split(/\n/).filter(Boolean);
-  const cues: SrtCue[] = [];
-  const chunkDurationMs = 30000; // 30 seconds per cue
-  for (let i = 0; i < parts.length; i++) {
-    const t = parts[i].trim();
-    if (!t) continue;
-    const startMs = i * chunkDurationMs;
-    const endMs = (i + 1) * chunkDurationMs;
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const fmtMs = (ms: number) => {
-      const h = Math.floor(ms / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      const s = Math.floor((ms % 60000) / 1000);
-      const mil = ms % 1000;
-      return `${pad(h)}:${pad(m)}:${pad(s)},${String(mil).padStart(3, "0")}`;
-    };
-    cues.push({
-      id: i + 1,
-      startTime: fmtMs(startMs),
-      endTime: fmtMs(endMs),
-      startMs,
-      endMs,
-      text: t,
-    });
+
+  // Split into ~20-word chunks
+  const WORDS_PER_CUE = 20;
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const parts: string[] = [];
+  for (let i = 0; i < words.length; i += WORDS_PER_CUE) {
+    parts.push(words.slice(i, i + WORDS_PER_CUE).join(" "));
   }
-  return cues;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmtMs = (ms: number) => {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const mil = ms % 1000;
+    return `${pad(h)}:${pad(m)}:${pad(s)},${String(mil).padStart(3, "0")}`;
+  };
+
+  const chunkDurationMs = 30000; // 30s per cue (placeholder)
+  return parts.map((t, i) => ({
+    id: i + 1,
+    startTime: fmtMs(i * chunkDurationMs),
+    endTime: fmtMs((i + 1) * chunkDurationMs),
+    startMs: i * chunkDurationMs,
+    endMs: (i + 1) * chunkDurationMs,
+    text: t,
+  }));
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
