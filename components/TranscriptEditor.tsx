@@ -121,12 +121,16 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
     let orig = parseSrt(data.originalSrt ?? "");
-    const l1 = parseSrt(data.level1Srt ?? "");
-    const l2 = parseSrt(data.level2Srt ?? "");
+    let l1 = parseSrt(data.level1Srt ?? "");
+    let l2 = parseSrt(data.level2Srt ?? "");
 
-    // Fallback: if originalSrt is missing or has ≤1 cue, generate from plain transcript
+    // Fallback: if SRT data is missing or has ≤1 cue, generate from plain transcript.
+    // Apply to all levels that are also incomplete so L1/L2 mode uses the generated cues.
     if (orig.length <= 1 && data.rawTranscript?.trim()) {
-      orig = plainTextToSrtCues(data.rawTranscript);
+      const generated = plainTextToSrtCues(data.rawTranscript);
+      orig = generated;
+      if (l1.length <= 1) l1 = generated;
+      if (l2.length <= 1) l2 = generated;
       setRawTranscriptUsed(true);
     } else {
       setRawTranscriptUsed(false);
