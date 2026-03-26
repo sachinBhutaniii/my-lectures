@@ -237,7 +237,7 @@ export default function StreakPanel({ open, onClose, streakData }: Props) {
               </div>
 
               {/* Bars */}
-              <div className="flex-1 flex gap-0.5 items-end h-full">
+              <div className="flex-1 flex gap-0.5 h-full">
                 {chartData.map((bar, i) => {
                   const heightPct = maxSecs > 0 ? (bar.seconds / maxSecs) * 100 : 0;
                   const isToday =
@@ -247,22 +247,23 @@ export default function StreakPanel({ open, onClose, streakData }: Props) {
                     ) === today;
 
                   return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full flex-1 flex items-end">
+                    <div key={i} className="flex-1 h-full flex flex-col items-center gap-1">
+                      {/* Bar area: takes remaining height, bar grows from bottom */}
+                      <div className="w-full flex-1 relative">
                         <div
-                          className={`w-full rounded-t-sm transition-all duration-500 ${
+                          className={`absolute bottom-0 left-0 right-0 rounded-t-sm transition-all duration-500 ${
                             bar.seconds >= STREAK_THRESHOLD
                               ? "bg-orange-400"
                               : bar.seconds > 0
                               ? "bg-orange-800"
-                              : "bg-gray-800"
+                              : ""
                           }`}
                           style={{ height: `${Math.max(heightPct, bar.seconds > 0 ? 4 : 0)}%` }}
                         />
                       </div>
                       {bar.label && (
                         <span
-                          className={`text-[8px] leading-none ${
+                          className={`text-[8px] leading-none flex-shrink-0 ${
                             isToday ? "text-orange-400 font-bold" : "text-gray-600"
                           }`}
                         >
