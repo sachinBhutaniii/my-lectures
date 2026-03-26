@@ -242,14 +242,16 @@ export default function TranscriptView({
         {/* Start time indicator — removed per user request */}
 
         {filtered.map((entry) => {
-          const isActive = hasTiming && !search && entry.originalIndex === activeIndex;
-          const seekable = hasTiming && entry.startMs >= 0 && !!onSeek;
+          const isExact   = hasTiming && !search && entry.originalIndex === activeIndex;
+          const isAdjacent = hasTiming && !search &&
+            (entry.originalIndex === activeIndex - 1 || entry.originalIndex === activeIndex + 1);
+          const seekable  = hasTiming && entry.startMs >= 0 && !!onSeek;
           return (
             <p
               key={entry.index}
-              ref={isActive ? activeRef : undefined}
+              ref={isExact ? activeRef : undefined}
               onClick={seekable ? () => {
-                userScrolledRef.current = false; // resume auto-scroll to clicked position
+                userScrolledRef.current = false;
                 onSeek!(entry.startMs / 1000);
               } : undefined}
               className={`text-lg leading-relaxed mb-5 transition-colors duration-300 ${
@@ -257,8 +259,10 @@ export default function TranscriptView({
               } ${
                 !autoScroll
                   ? "text-gray-300"
-                  : isActive
+                  : isExact
                   ? "text-white font-medium"
+                  : isAdjacent
+                  ? "text-gray-300"
                   : hasTiming && !search
                   ? entry.originalIndex < activeIndex
                     ? "text-gray-600 hover:text-gray-400"
