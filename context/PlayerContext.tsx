@@ -63,6 +63,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const audio = audioRef.current;
       if (lec && audio) {
         localStorage.setItem(posKey(lec.id), String(Math.floor(audio.currentTime)));
+        if (audio.duration > 0) {
+          const pct = Math.round((audio.currentTime / audio.duration) * 100);
+          const existing = parseFloat(localStorage.getItem(`bdd_pct_${lec.id}`) ?? "0") || 0;
+          if (pct > existing) localStorage.setItem(`bdd_pct_${lec.id}`, String(pct));
+        }
       }
     }, 5000);
     return () => clearInterval(id);
@@ -142,6 +147,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.addEventListener("ended", () => {
         setIsPlaying(false);
         localStorage.removeItem(posKey(newLecture.id));
+        localStorage.setItem(`bdd_pct_${newLecture.id}`, "100");
       });
     },
     [addToHistory]
@@ -154,6 +160,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     if (lec && audio) {
       localStorage.setItem(posKey(lec.id), String(Math.floor(audio.currentTime)));
+      if (audio.duration > 0) {
+        const pct = Math.round((audio.currentTime / audio.duration) * 100);
+        const existing = parseFloat(localStorage.getItem(`bdd_pct_${lec.id}`) ?? "0") || 0;
+        if (pct > existing) localStorage.setItem(`bdd_pct_${lec.id}`, String(pct));
+      }
     }
   }, []);
 

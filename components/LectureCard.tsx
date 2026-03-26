@@ -11,6 +11,7 @@ interface Props {
   isFavourite?: boolean;
   isDownloaded?: boolean;
   downloadProgress?: number | null;
+  listenPct?: number;
   onClick: () => void;
   onToggleFavourite?: (e: React.MouseEvent) => void;
   onAddToPlaylist?: () => void;
@@ -26,7 +27,7 @@ function formatDate(dateStr?: string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function LectureCard({ lecture, isActive, isRecommended, isFavourite, isDownloaded, downloadProgress, onClick, onToggleFavourite, onAddToPlaylist, onAddToQueue, isInQueue, onDownload, onDeleteDownload }: Props) {
+export default function LectureCard({ lecture, isActive, isRecommended, isFavourite, isDownloaded, downloadProgress, listenPct = 0, onClick, onToggleFavourite, onAddToPlaylist, onAddToQueue, isInQueue, onDownload, onDeleteDownload }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -56,12 +57,20 @@ export default function LectureCard({ lecture, isActive, isRecommended, isFavour
       <div className="flex gap-3">
         {/* Thumbnail */}
         <div className="flex-shrink-0 w-20">
-          <div className="w-20 h-14 rounded-lg overflow-hidden">
+          <div className="w-20 h-14 rounded-lg overflow-hidden relative">
             <img
               src={lecture.thumbnailUrl}
               alt={lecture.title}
               className="w-full h-full object-cover"
             />
+            {/* Listen progress bar */}
+            {listenPct >= 80 ? (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500" />
+            ) : listenPct >= 20 ? (
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
+                <div className="h-full bg-amber-400" style={{ width: `${listenPct}%` }} />
+              </div>
+            ) : null}
           </div>
           {/* Dotted progress indicator */}
           <div className="flex gap-0.5 mt-1.5 justify-center">

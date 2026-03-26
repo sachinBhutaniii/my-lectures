@@ -32,6 +32,7 @@ import NewContentPanel from "@/components/NewContentPanel";
 import { useBackClose, suppressBackOnClose } from "@/hooks/useBackClose";
 import VaishnavaCalendarPanel from "@/components/VaishnavaCalendarPanel";
 import { getCalendarEvents } from "@/services/calendar.service";
+import { useListenProgress } from "@/hooks/useListenProgress";
 
 export default function Home() {
   const router = useRouter();
@@ -167,6 +168,7 @@ export default function Home() {
   const { favouriteItems, isFavourite, toggleFavourite } = useFavourites();
   const { playlists, createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist, lecturePlaylistIds } = usePlaylists();
   const { streakData } = useStreak();
+  const { getListenPct } = useListenProgress();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -545,6 +547,7 @@ export default function Home() {
                 isFavourite={isFavourite(recommendedLecture.id)}
                 isDownloaded={isDownloaded(recommendedLecture.id)}
                 downloadProgress={getDownloadProgress(recommendedLecture.id)}
+                listenPct={getListenPct(recommendedLecture.id)}
                 onClick={() => {
                   addToHistory(recommendedLecture);
                   playerPlay(recommendedLecture);
@@ -585,6 +588,7 @@ export default function Home() {
               isFavourite={isFavourite(lecture.id)}
               isDownloaded={isDownloaded(lecture.id)}
               downloadProgress={getDownloadProgress(lecture.id)}
+              listenPct={getListenPct(lecture.id)}
               onClick={() => {
                 addToHistory(lecture);
                 playerPlay(lecture);
