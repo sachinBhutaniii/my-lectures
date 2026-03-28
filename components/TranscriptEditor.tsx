@@ -57,6 +57,16 @@ function plainTextToSrtCues(text: string): SrtCue[] {
   }));
 }
 
+/** Format milliseconds to SRT timestamp string. */
+function msToSrtTime(ms: number): string {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const mil = ms % 1000;
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)},${String(mil).padStart(3, "0")}`;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function TranscriptEditor({ data, mode, level = 1, onBack }: Props) {
@@ -344,6 +354,35 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       setIsPlaying(true);
     }
   }, [editingId, draft]);
+
+  // ── Delete / Insert cue ──────────────────────────────────────────────────────
+  const deleteCue = useCallback((id: number) => {
+    setCues((prev) => prev.filter((c) => c.id !== id).map((c, i) => ({ ...c, id: i + 1 })));
+  }, []);
+
+  const insertCueAfter = useCallback((afterId: number) => {
+    setCues((prev) => {
+      const idx = prev.findIndex((c) => c.id === afterId);
+      if (idx === -1) return prev;
+      const cur = prev[idx];
+      const nxt = prev[idx + 1];
+      const newStartMs = cur.endMs;
+      const newEndMs = nxt ? Math.max(cur.endMs + 1000, Math.round((cur.endMs + nxt.startMs) / 2)) : cur.endMs + 5000;
+      const newCue: SrtCue = {
+        id: 0,
+        startTime: msToSrtTime(newStartMs),
+        endTime: msToSrtTime(newEndMs),
+        startMs: newStartMs,
+        endMs: newEndMs,
+        text: "",
+      };
+      return [
+        ...prev.slice(0, idx + 1),
+        newCue,
+        ...prev.slice(idx + 1),
+      ].map((c, i) => ({ ...c, id: i + 1 }));
+    });
+  }, []);
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
   const acceptL1Change = (cueId: number) => {
@@ -711,47 +750,69 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             <p className="text-xs mt-1 text-gray-700">Add an SRT transcript to this lecture first (Admin → Videos → Edit).</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-800/60">
-            {cues.map((cue) => (
-              <CueRow
-                key={cue.id}
-                cue={cue}
-                isActive={activeCueId === cue.id}
-                isEditing={editingId === cue.id}
-                draft={draft}
-                mode={mode}
-                l1Diff={l1Diff.get(cue.id)}
-                l2Diff={l2Diff.get(cue.id)}
-                isL1Accepted={acceptedL1Ids.has(cue.id)}
-                onEdit={() => startEdit(cue)}
-                onCancelEdit={cancelEdit}
-                onSaveEdit={saveEdit}
-                onDraftChange={setDraft}
-                onAcceptL1={() => acceptL1Change(cue.id)}
-                onSeekTo={() => { if (audioRef.current) { audioRef.current.currentTime = cue.startMs / 1000; } }}
-                selectMode={selectMode}
-                isSelected={selectedIds.has(cue.id)}
-                onCheckboxPointerDown={() => {
-                  dragStartId.current = cue.id;
-                  isDragging.current = true;
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(cue.id)) {
-                      next.delete(cue.id);
-                    } else {
-                      // Select this cue + next (autoSelectCount - 1) by default
-                      const startIdx = cues.findIndex((c) => c.id === cue.id);
-                      cues.slice(startIdx, startIdx + autoSelectCount).forEach((c) => next.add(c.id));
+          <div>
+            {cues.map((cue, idx) => (
+              <div key={cue.id}>
+                <CueRow
+                  cue={cue}
+                  isActive={activeCueId === cue.id}
+                  isEditing={editingId === cue.id}
+                  draft={draft}
+                  mode={mode}
+                  l1Diff={l1Diff.get(cue.id)}
+                  l2Diff={l2Diff.get(cue.id)}
+                  isL1Accepted={acceptedL1Ids.has(cue.id)}
+                  onEdit={() => startEdit(cue)}
+                  onCancelEdit={cancelEdit}
+                  onSaveEdit={saveEdit}
+                  onDraftChange={setDraft}
+                  onAcceptL1={() => acceptL1Change(cue.id)}
+                  onSeekTo={() => { if (audioRef.current) { audioRef.current.currentTime = cue.startMs / 1000; } }}
+                  onDelete={() => deleteCue(cue.id)}
+                  selectMode={selectMode}
+                  isSelected={selectedIds.has(cue.id)}
+                  onCheckboxPointerDown={() => {
+                    dragStartId.current = cue.id;
+                    isDragging.current = true;
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(cue.id)) {
+                        next.delete(cue.id);
+                      } else {
+                        // Select this cue + next (autoSelectCount - 1) by default
+                        const startIdx = cues.findIndex((c) => c.id === cue.id);
+                        cues.slice(startIdx, startIdx + autoSelectCount).forEach((c) => next.add(c.id));
+                      }
+                      return next;
+                    });
+                  }}
+                  onCheckboxPointerEnter={() => {
+                    if (isDragging.current && dragStartId.current !== null) {
+                      selectRange(dragStartId.current, cue.id);
                     }
-                    return next;
-                  });
-                }}
-                onCheckboxPointerEnter={() => {
-                  if (isDragging.current && dragStartId.current !== null) {
-                    selectRange(dragStartId.current, cue.id);
-                  }
-                }}
-              />
+                  }}
+                />
+                {/* Insert strip between rows (hidden in select mode) */}
+                {!selectMode && idx < cues.length - 1 && (
+                  <div className="flex items-center px-4 h-6 group relative z-10">
+                    <div className="flex-1 h-px bg-gray-800/60" />
+                    <button
+                      onClick={() => insertCueAfter(cue.id)}
+                      className="mx-1.5 w-5 h-5 rounded-full bg-gray-900 border border-gray-700 text-gray-600 hover:bg-green-500/15 hover:text-green-400 hover:border-green-500/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"
+                      title="Insert new cue here"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                        <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                      </svg>
+                    </button>
+                    <div className="flex-1 h-px bg-gray-800/60" />
+                  </div>
+                )}
+                {/* Bottom border for last row */}
+                {(selectMode || idx === cues.length - 1) && (
+                  <div className="border-b border-gray-800/60" />
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -868,6 +929,7 @@ interface CueRowProps {
   onDraftChange: (d: DraftState) => void;
   onAcceptL1: () => void;
   onSeekTo: () => void;
+  onDelete: () => void;
   selectMode?: boolean;
   isSelected?: boolean;
   onCheckboxPointerDown?: () => void;
@@ -878,6 +940,7 @@ function CueRow({
   cue, isActive, isEditing, draft, mode,
   l1Diff, l2Diff, isL1Accepted,
   onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1, onSeekTo,
+  onDelete,
   selectMode, isSelected, onCheckboxPointerDown, onCheckboxPointerEnter,
 }: CueRowProps) {
   const inputCls = "w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-blue-500 transition-colors";
@@ -985,6 +1048,12 @@ function CueRow({
             <button onClick={onEdit} className="flex-shrink-0 text-gray-700 hover:text-blue-400 transition-colors pt-0.5" title="Edit cue">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
+              </svg>
+            </button>
+            {/* Delete icon */}
+            <button onClick={onDelete} className="flex-shrink-0 text-gray-700 hover:text-red-400 transition-colors pt-0.5" title="Delete cue">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
               </svg>
             </button>
           </div>
