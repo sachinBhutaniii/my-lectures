@@ -131,6 +131,11 @@ export const rejectTranscript = async (id: number): Promise<TranscriptReviewItem
   return res.data;
 };
 
+export const restartTranscriptReview = async (id: number): Promise<TranscriptReviewItem> => {
+  const res = await apiClient.put<TranscriptReviewItem>(`/api/transcripts/${id}/restart-review`);
+  return res.data;
+};
+
 export const assignProofreader = async (
   transcriptId: number,
   userId: number | null,

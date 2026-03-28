@@ -8,6 +8,7 @@ import {
   rejectTranscript,
   assignProofreader,
   deployTranscript,
+  restartTranscriptReview,
   getProofreaders,
   getAllLocales,
   createLocale,
@@ -127,6 +128,18 @@ export default function TranscriptReviewPanel() {
     }
   };
 
+  const handleRestartReview = async (item: TranscriptReviewItem) => {
+    setActing(item.id);
+    setError("");
+    try {
+      updateItem(await restartTranscriptReview(item.id));
+    } catch {
+      setError("Restart failed. Please try again.");
+    } finally {
+      setActing(null);
+    }
+  };
+
   const handleAssign = async (transcriptId: number, userId: number | null, level: 1 | 2) => {
     setError("");
     try {
@@ -204,6 +217,7 @@ export default function TranscriptReviewPanel() {
               onApprove={handleApprove}
               onReject={handleReject}
               onDeploy={handleDeploy}
+              onRestartReview={handleRestartReview}
             />
           ))}
         </div>
@@ -294,9 +308,10 @@ type VideoGroupProps = {
   onApprove: (item: TranscriptReviewItem) => void;
   onReject: (item: TranscriptReviewItem) => void;
   onDeploy: (item: TranscriptReviewItem) => void;
+  onRestartReview: (item: TranscriptReviewItem) => void;
 };
 
-function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onApprove, onReject, onDeploy }: VideoGroupProps) {
+function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: VideoGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
 
@@ -415,6 +430,7 @@ function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onAppr
               onApprove={() => onApprove(selectedItem)}
               onReject={() => onReject(selectedItem)}
               onDeploy={() => onDeploy(selectedItem)}
+              onRestartReview={() => onRestartReview(selectedItem)}
             />
           )}
         </div>
@@ -434,15 +450,18 @@ type RowProps = {
   onApprove: () => void;
   onReject: () => void;
   onDeploy: () => void;
+  onRestartReview: () => void;
 };
 
-function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, onReject, onDeploy }: RowProps) {
+function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: RowProps) {
+  const [confirmRestart, setConfirmRestart] = useState(false);
   const l1Status = getL1Status(item);
   const l2Status = getL2Status(item);
   const canApproveL1 = item.approvalStatus === "DRAFT";
   const canApproveFinal = item.approvalStatus === "LEVEL1_APPROVED" && isParentAdmin;
   const canReset = item.approvalStatus !== "DRAFT" && isParentAdmin;
   const canDeploy = item.approvalStatus === "APPROVED" && !item.deployed && isParentAdmin;
+  const canRestartReview = item.deployed && isParentAdmin;
 
   const hasHistory = item.level1ProofreaderName || item.level2ProofreaderName ||
     item.level1ApprovedByName || item.finalApprovedByName || item.deployed;
@@ -539,8 +558,39 @@ function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, on
               {acting ? <Spinner color="green" /> : "Deploy ↑"}
             </button>
           )}
-          {item.deployed && (
-            <span className="text-[11px] text-emerald-500 font-medium">Live</span>
+          {item.deployed && !canRestartReview && (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </span>
+          )}
+          {canRestartReview && !confirmRestart && (
+            <button
+              onClick={() => setConfirmRestart(true)}
+              title="Restart proofreading (keeps current live version)"
+              className="flex items-center gap-1 text-[11px] text-emerald-500 font-medium hover:text-emerald-400 hover:underline transition-colors"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </button>
+          )}
+          {confirmRestart && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-400">Re-proof while keeping live?</span>
+              <button
+                onClick={() => { setConfirmRestart(false); onRestartReview(); }}
+                disabled={acting}
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/30 transition-colors disabled:opacity-50"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setConfirmRestart(false)}
+                className="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                No
+              </button>
+            </div>
           )}
         </div>
       </div>
