@@ -101,6 +101,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [autoSelectCount, setAutoSelectCount] = useState(20);
   const [regenerating, setRegenerating] = useState(false);
+  const [selectAction, setSelectAction] = useState<"text" | "timestamps">("text");
+  const [tsRangeStart, setTsRangeStart] = useState("");
+  const [tsRangeEnd, setTsRangeEnd] = useState("");
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
 
@@ -485,6 +488,48 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }
   };
 
+  // ── Pre-fill timestamp inputs when selection changes ─────────────────────────
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const selected = cues.filter((c) => selectedIds.has(c.id));
+    if (selected.length === 0) return;
+    setTsRangeStart(selected[0].startTime);
+    setTsRangeEnd(selected[selected.length - 1].endTime);
+  }, [selectedIds, cues]);
+
+  // ── Redistribute timestamps across selected cues ──────────────────────────────
+  const handleRedistributeTimestamps = () => {
+    const newStartMs = timeToMs(tsRangeStart);
+    const newEndMs = timeToMs(tsRangeEnd);
+    if (newEndMs <= newStartMs) {
+      alert("End time must be after start time.");
+      return;
+    }
+    const selected = cues.filter((c) => selectedIds.has(c.id));
+    const totalMs = newEndMs - newStartMs;
+    const wordCounts = selected.map((c) => Math.max(1, c.text.trim().split(/\s+/).filter(Boolean).length));
+    const totalWords = wordCounts.reduce((a, b) => a + b, 0);
+    let cursor = newStartMs;
+    const updated = new Map<number, { startTime: string; endTime: string; startMs: number; endMs: number }>();
+    selected.forEach((cue, i) => {
+      const s = cursor;
+      const e = i === selected.length - 1
+        ? newEndMs
+        : cursor + Math.round((wordCounts[i] / totalWords) * totalMs);
+      updated.set(cue.id, {
+        startTime: msToSrtTime(s),
+        endTime: msToSrtTime(e),
+        startMs: s,
+        endMs: e,
+      });
+      cursor = e;
+    });
+    setCues((prev) => prev.map((c) => (updated.has(c.id) ? { ...c, ...updated.get(c.id)! } : c)));
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setSelectAction("text");
+  };
+
   const pendingL1Changes = l1Diff.size - acceptedL1Ids.size;
   const allAccepted = l1Diff.size > 0 && pendingL1Changes === 0;
   const hasL2 = data.level2Srt != null;
@@ -818,55 +863,141 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         )}
       </div>
 
-      {/* ── Regenerate action bar ─────────────────────────────────────────────── */}
+      {/* ── Select mode action bar ───────────────────────────────────────────── */}
       {selectMode && (
         <div
-          className="flex-shrink-0 flex items-center justify-between px-4 pt-3 bg-gray-950 border-t border-orange-500/20"
+          className="flex-shrink-0 bg-gray-950 border-t border-orange-500/20 px-4 pt-2.5"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
-          {selectedIds.size > 0 ? (
-            <span className="text-sm text-orange-400 font-medium">
-              {selectedIds.size} cue{selectedIds.size > 1 ? "s" : ""} selected
-            </span>
-          ) : (
-            <span className="text-xs text-gray-600">Tap a checkbox to select</span>
-          )}
-          <div className="flex items-center gap-2">
-            {/* Auto-select count input */}
-            <div className="flex items-center gap-1.5">
-              <label className="text-[10px] text-gray-500 whitespace-nowrap">Auto-select</label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={autoSelectCount}
-                onChange={(e) => {
-                  const v = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
-                  setAutoSelectCount(v);
-                }}
-                className="w-12 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-200 text-center outline-none focus:border-orange-500 transition-colors"
-              />
-              <label className="text-[10px] text-gray-500">cues</label>
+          {/* Row 1: mode toggle + selected count */}
+          <div className="flex items-center justify-between mb-2">
+            {/* Fix Text / Fix Timestamps toggle */}
+            <div className="flex items-center rounded-lg border border-gray-700 overflow-hidden text-xs">
+              <button
+                onClick={() => setSelectAction("text")}
+                className={`px-2.5 py-1 transition-colors ${
+                  selectAction === "text"
+                    ? "bg-orange-500/20 text-orange-400"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                Fix Text
+              </button>
+              <div className="w-px h-4 bg-gray-700" />
+              <button
+                onClick={() => setSelectAction("timestamps")}
+                className={`px-2.5 py-1 transition-colors ${
+                  selectAction === "timestamps"
+                    ? "bg-blue-500/20 text-blue-400"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                Fix Timestamps
+              </button>
             </div>
-            {selectedIds.size > 0 && (
+            {selectedIds.size > 0 ? (
+              <span className="text-xs text-orange-400 font-medium">
+                {selectedIds.size} cue{selectedIds.size > 1 ? "s" : ""} selected
+              </span>
+            ) : (
+              <span className="text-xs text-gray-600">Tap a checkbox to select</span>
+            )}
+          </div>
+
+          {/* Row 2: actions */}
+          <div className="flex items-center justify-end gap-2">
+            {selectAction === "text" && (
               <>
-                <button
-                  onClick={() => setSelectedIds(new Set())}
-                  className="px-3 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
-                >
-                  Clear
-                </button>
-                <button
-                  onClick={handleRegenerate}
-                  disabled={regenerating}
-                  className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {regenerating ? (
-                    <><Spinner /> Regenerating…</>
-                  ) : (
-                    "✦ Regenerate Transcript"
-                  )}
-                </button>
+                {/* Auto-select count input */}
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[10px] text-gray-500 whitespace-nowrap">Auto-select</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={autoSelectCount}
+                    onChange={(e) => {
+                      const v = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+                      setAutoSelectCount(v);
+                    }}
+                    className="w-12 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs text-gray-200 text-center outline-none focus:border-orange-500 transition-colors"
+                  />
+                  <label className="text-[10px] text-gray-500">cues</label>
+                </div>
+                {selectedIds.size > 0 && (
+                  <>
+                    <button
+                      onClick={() => setSelectedIds(new Set())}
+                      className="px-3 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={handleRegenerate}
+                      disabled={regenerating}
+                      className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-xs font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {regenerating ? <><Spinner /> Regenerating…</> : "✦ Regenerate Transcript"}
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {selectAction === "timestamps" && (
+              <>
+                {selectedIds.size > 0 ? (
+                  <>
+                    {/* From time */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500">From</span>
+                      <input
+                        value={tsRangeStart}
+                        onChange={(e) => setTsRangeStart(e.target.value)}
+                        className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs font-mono text-gray-200 outline-none focus:border-blue-500 transition-colors"
+                        placeholder="00:00:00,000"
+                      />
+                      <button
+                        onClick={() => setTsRangeStart(msToSrtTime(currentTime * 1000))}
+                        title="Snap to current audio position"
+                        className="text-gray-600 hover:text-blue-400 transition-colors text-sm leading-none"
+                      >
+                        📍
+                      </button>
+                    </div>
+                    {/* To time */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500">To</span>
+                      <input
+                        value={tsRangeEnd}
+                        onChange={(e) => setTsRangeEnd(e.target.value)}
+                        className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs font-mono text-gray-200 outline-none focus:border-blue-500 transition-colors"
+                        placeholder="00:00:00,000"
+                      />
+                      <button
+                        onClick={() => setTsRangeEnd(msToSrtTime(currentTime * 1000))}
+                        title="Snap to current audio position"
+                        className="text-gray-600 hover:text-blue-400 transition-colors text-sm leading-none"
+                      >
+                        📍
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setSelectedIds(new Set())}
+                      className="px-3 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={handleRedistributeTimestamps}
+                      className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-xs font-semibold text-white transition-colors flex items-center gap-1.5"
+                    >
+                      ↺ Redistribute
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-600">Select cues to fix their timestamps</span>
+                )}
               </>
             )}
           </div>
