@@ -215,12 +215,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
 
   // ── Auto-save (L1 / L2 only) ─────────────────────────────────────────────────
   useEffect(() => {
-    if (mode === "admin" || cues.length === 0) return;
+    if (cues.length === 0) return;
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        await saveTranscriptDraft(data.id, level as 1 | 2, serializeSrt(cues));
+        const saveLevel: 1 | 2 = mode === "admin" ? 2 : level as 1 | 2;
+        await saveTranscriptDraft(data.id, saveLevel, serializeSrt(cues));
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 2500);
       } catch {
