@@ -207,8 +207,11 @@ export default function AdminUserManager() {
     try {
       const updated = await updateUserRole(user.id, newRole);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    } catch {
-      setError("Failed to update role. Please try again.");
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
+      const msg = axiosErr?.response?.data?.error ?? axiosErr?.response?.data?.message;
+      const status = axiosErr?.response?.status;
+      setError(msg ? `Failed to update role: ${msg}` : `Failed to update role (${status ?? "network error"}). Please try again.`);
     } finally {
       setUpdating(null);
     }
