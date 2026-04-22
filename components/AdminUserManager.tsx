@@ -28,10 +28,11 @@ import {
 } from "@/services/volunteer.service";
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
-  ROLE_ADMIN:        { label: "Child Admin",  color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
-  ROLE_PROOFREADER:  { label: "Proofreader",  color: "text-blue-400 bg-blue-500/10 border-blue-500/30" },
-  ROLE_USER:         { label: "User",          color: "text-gray-400 bg-gray-800 border-gray-700" },
-  ROLE_PARENT_ADMIN: { label: "Parent Admin",  color: "text-amber-300 bg-amber-500/10 border-amber-400/30" },
+  ROLE_ADMIN:             { label: "Child Admin",       color: "text-orange-400 bg-orange-500/10 border-orange-500/30" },
+  ROLE_TRANSCRIPT_ADMIN:  { label: "Transcript Admin",  color: "text-purple-400 bg-purple-500/10 border-purple-500/30" },
+  ROLE_PROOFREADER:       { label: "Proofreader",       color: "text-blue-400 bg-blue-500/10 border-blue-500/30" },
+  ROLE_USER:              { label: "User",               color: "text-gray-400 bg-gray-800 border-gray-700" },
+  ROLE_PARENT_ADMIN:      { label: "Parent Admin",       color: "text-amber-300 bg-amber-500/10 border-amber-400/30" },
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -592,6 +593,17 @@ export default function AdminUserManager() {
                               ) : "Admin"}
                             </button>
                           )}
+                          {user.role !== "ROLE_TRANSCRIPT_ADMIN" && (
+                            <button
+                              onClick={() => handleRoleChange(user, "ROLE_TRANSCRIPT_ADMIN")}
+                              disabled={updating !== null}
+                              className="px-2.5 py-1 rounded-lg text-xs font-medium border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-50"
+                            >
+                              {updating?.id === user.id && updating.role === "ROLE_TRANSCRIPT_ADMIN" ? (
+                                <div className="w-3.5 h-3.5 border border-purple-400 border-t-transparent rounded-full animate-spin" />
+                              ) : "Transcript Admin"}
+                            </button>
+                          )}
                           {user.role !== "ROLE_PROOFREADER" && (
                             <button
                               onClick={() => handleRoleChange(user, "ROLE_PROOFREADER")}
@@ -603,7 +615,7 @@ export default function AdminUserManager() {
                               ) : "Proofreader"}
                             </button>
                           )}
-                          {(user.role === "ROLE_ADMIN" || user.role === "ROLE_PROOFREADER") && (
+                          {(user.role === "ROLE_ADMIN" || user.role === "ROLE_TRANSCRIPT_ADMIN" || user.role === "ROLE_PROOFREADER") && (
                             <button
                               onClick={() => handleRoleChange(user, "ROLE_USER")}
                               disabled={updating !== null}

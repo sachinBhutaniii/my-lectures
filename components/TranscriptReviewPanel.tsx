@@ -79,7 +79,7 @@ const LEVEL_BUTTON_STYLE: Record<LevelStatus, string> = {
 type ModalState = { item: TranscriptReviewItem; level: 1 | 2 } | null;
 
 export default function TranscriptReviewPanel() {
-  const { isParentAdmin, isAdmin } = useAuth();
+  const { isParentAdmin, isAdmin, isTranscriptAdmin } = useAuth();
 
   const transcriptFn = useCallback(() => getAllTranscripts(), []);
   const { data: items, loading, setData } = useFetch<TranscriptReviewItem[]>(transcriptFn);
@@ -160,7 +160,7 @@ export default function TranscriptReviewPanel() {
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-white">Transcript Review</h2>
             <p className="text-xs text-gray-500 mt-1">
-              {isParentAdmin
+              {isParentAdmin || isTranscriptAdmin
                 ? "Assign proofreaders, approve transcripts, and deploy."
                 : "Assign proofreaders and give Level 1 approval."}
             </p>
@@ -212,6 +212,7 @@ export default function TranscriptReviewPanel() {
               items={group}
               isParentAdmin={isParentAdmin}
               isAdmin={isAdmin}
+              isTranscriptAdmin={isTranscriptAdmin}
               acting={acting}
               onOpenModal={(item, level) => setModal({ item, level })}
               onApprove={handleApprove}
@@ -230,6 +231,7 @@ export default function TranscriptReviewPanel() {
           level={modal.level}
           isParentAdmin={isParentAdmin}
           isAdmin={isAdmin}
+          isTranscriptAdmin={isTranscriptAdmin}
           onAssign={(userId) => handleAssign(modal.item.id, userId, modal.level)}
           onApprove={() => { handleApprove(modal.item); setModal(null); }}
           onReject={() => { handleReject(modal.item); setModal(null); }}
@@ -303,6 +305,7 @@ type VideoGroupProps = {
   items: TranscriptReviewItem[];
   isParentAdmin: boolean;
   isAdmin: boolean;
+  isTranscriptAdmin: boolean;
   acting: number | null;
   onOpenModal: (item: TranscriptReviewItem, level: 1 | 2) => void;
   onApprove: (item: TranscriptReviewItem) => void;
@@ -311,7 +314,7 @@ type VideoGroupProps = {
   onRestartReview: (item: TranscriptReviewItem) => void;
 };
 
-function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: VideoGroupProps) {
+function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: VideoGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
 
@@ -425,6 +428,7 @@ function VideoGroup({ items, isParentAdmin, isAdmin, acting, onOpenModal, onAppr
               item={selectedItem}
               isParentAdmin={isParentAdmin}
               isAdmin={isAdmin}
+              isTranscriptAdmin={isTranscriptAdmin}
               acting={acting === selectedItem.id}
               onOpenModal={(level) => onOpenModal(selectedItem, level)}
               onApprove={() => onApprove(selectedItem)}
@@ -445,6 +449,7 @@ type RowProps = {
   item: TranscriptReviewItem;
   isParentAdmin: boolean;
   isAdmin: boolean;
+  isTranscriptAdmin: boolean;
   acting: boolean;
   onOpenModal: (level: 1 | 2) => void;
   onApprove: () => void;
@@ -453,14 +458,14 @@ type RowProps = {
   onRestartReview: () => void;
 };
 
-function TranscriptRow({ item, isParentAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: RowProps) {
+function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: RowProps) {
   const [confirmRestart, setConfirmRestart] = useState(false);
   const l1Status = getL1Status(item);
   const l2Status = getL2Status(item);
   const canApproveL1 = item.approvalStatus === "DRAFT";
-  const canApproveFinal = item.approvalStatus === "LEVEL1_APPROVED" && isParentAdmin;
+  const canApproveFinal = item.approvalStatus === "LEVEL1_APPROVED" && (isParentAdmin || isTranscriptAdmin);
   const canReset = item.approvalStatus !== "DRAFT" && isParentAdmin;
-  const canDeploy = item.approvalStatus === "APPROVED" && !item.deployed && isParentAdmin;
+  const canDeploy = item.approvalStatus === "APPROVED" && !item.deployed && (isParentAdmin || isTranscriptAdmin);
   const canRestartReview = item.deployed && isParentAdmin;
 
   const hasHistory = item.level1ProofreaderName || item.level2ProofreaderName ||
@@ -669,13 +674,14 @@ type ModalProps = {
   level: 1 | 2;
   isParentAdmin: boolean;
   isAdmin: boolean;
+  isTranscriptAdmin: boolean;
   onAssign: (userId: number | null) => void;
   onApprove: () => void;
   onReject: () => void;
   onClose: () => void;
 };
 
-function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove, onReject, onClose }: ModalProps) {
+function AssignModal({ item, level, isParentAdmin, isAdmin, isTranscriptAdmin, onAssign, onApprove, onReject, onClose }: ModalProps) {
   const [locales, setLocales] = useState<LocaleInfo[]>([]);
   const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
   const [proofreaders, setProofreaders] = useState<UserSearchResult[]>([]);
@@ -709,7 +715,7 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, onAssign, onApprove,
 
   const canApproveHere =
     (level === 1 && item.approvalStatus === "DRAFT") ||
-    (level === 2 && item.approvalStatus === "LEVEL1_APPROVED" && isParentAdmin);
+    (level === 2 && item.approvalStatus === "LEVEL1_APPROVED" && (isParentAdmin || isTranscriptAdmin));
   const canReset = item.approvalStatus !== "DRAFT" && isParentAdmin;
 
   return (

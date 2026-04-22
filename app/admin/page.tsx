@@ -88,7 +88,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; adminOnly?: boolean
 ];
 
 export default function AdminPage() {
-  const { user, authLoading, isAdmin, isParentAdmin } = useAuth();
+  const { user, authLoading, isAdmin, isParentAdmin, isTranscriptAdmin } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("videos");
 
@@ -109,9 +109,14 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Transcript admins land directly on the transcripts tab
+  useEffect(() => {
+    if (isTranscriptAdmin && !isAdmin) setActiveTab("transcripts");
+  }, [isTranscriptAdmin, isAdmin]);
+
   // Fetch transcripts + volunteer requests to derive all notifications
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isTranscriptAdmin) return;
     Promise.all([getAllTranscripts(), getAllVolunteerRequests()])
       .then(([transcripts, volRequests]) => {
         const all: AdminNotif[] = [
@@ -146,10 +151,10 @@ export default function AdminPage() {
   // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !isAdmin) router.replace("/");
-  }, [user, authLoading, isAdmin, router]);
+    if (!user || (!isAdmin && !isTranscriptAdmin)) router.replace("/");
+  }, [user, authLoading, isAdmin, isTranscriptAdmin, router]);
 
-  if (authLoading || !isAdmin) {
+  if (authLoading || (!isAdmin && !isTranscriptAdmin)) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -157,7 +162,11 @@ export default function AdminPage() {
     );
   }
 
-  const visibleTabs = TABS.filter((t) => !t.adminOnly || isParentAdmin);
+  // Transcript admins only see the Transcripts tab
+  const visibleTabs = TABS.filter((t) => {
+    if (isTranscriptAdmin && !isAdmin) return t.id === "transcripts";
+    return !t.adminOnly || isParentAdmin;
+  });
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-x-hidden w-full">
@@ -180,6 +189,11 @@ export default function AdminPage() {
           {isParentAdmin && (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 border border-amber-400/30 text-amber-300 flex-shrink-0">
               Parent
+            </span>
+          )}
+          {isTranscriptAdmin && !isAdmin && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 border border-purple-400/30 text-purple-300 flex-shrink-0">
+              Transcript
             </span>
           )}
         </div>
