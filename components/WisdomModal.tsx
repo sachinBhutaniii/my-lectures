@@ -108,7 +108,7 @@ export default function WisdomModal({ open, onClose }: Props) {
             <p className="text-gray-400 text-sm leading-[1.75]">{wisdom.body}</p>
 
             {/* ── Attribution ── */}
-            <p className="text-gray-600 text-[11px] mt-4 italic">— Srila Prabhupada</p>
+            <p className="text-gray-600 text-[11px] mt-4 italic">— Srila Gurudev</p>
 
             {/* ── CTA ── */}
             <div className="mt-6">
