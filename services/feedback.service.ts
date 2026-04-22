@@ -59,7 +59,10 @@ export const replyToFeedback = async (id: number, reply: string): Promise<Feedba
 export const uploadFile = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await apiClient.post<{ url: string }>("/api/upload", formData, {
+  const endpoint = file.type.startsWith("audio/") || file.type.startsWith("video/webm")
+    ? "/api/upload/audio"
+    : "/api/upload";
+  const res = await apiClient.post<{ url: string }>(endpoint, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data.url;
