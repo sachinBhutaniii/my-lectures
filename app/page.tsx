@@ -33,10 +33,12 @@ import { useBackClose, suppressBackOnClose } from "@/hooks/useBackClose";
 import VaishnavaCalendarPanel from "@/components/VaishnavaCalendarPanel";
 import { getCalendarEvents } from "@/services/calendar.service";
 import { useListenProgress } from "@/hooks/useListenProgress";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Home() {
   const router = useRouter();
   const t = useT();
+  const { isParentAdmin } = useAuth();
   const { data, loading } = useFetch<VideoApiResponse>(getVideos);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("media");
@@ -50,6 +52,7 @@ export default function Home() {
   const [playlistTarget, setPlaylistTarget] = useState<PlaylistLecture | null>(null);
   const [showWisdom, setShowWisdom] = useState(false);
   const [showBhajansModal, setShowBhajansModal] = useState(false);
+  const [comingSoonSection, setComingSoonSection] = useState<"sadhana" | "jnana" | null>(null);
   const [showDownloads, setShowDownloads] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const { downloads, isDownloaded, getDownloadProgress, downloadLecture, deleteDownload, getBlobUrl } = useDownloads();
@@ -70,6 +73,7 @@ export default function Home() {
   useBackClose(showStreak, () => setShowStreak(false));
   useBackClose(showWisdom, () => setShowWisdom(false));
   useBackClose(showBhajansModal, () => setShowBhajansModal(false));
+  useBackClose(!!comingSoonSection, () => setComingSoonSection(null));
   useBackClose(showDownloads, () => setShowDownloads(false));
   useBackClose(showNotifications, () => setShowNotifications(false));
   useBackClose(showCalendar, () => setShowCalendar(false));
@@ -303,6 +307,59 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ── Coming Soon Modal (Sadhana / Jñāna Yajña) ── */}
+      {comingSoonSection && (() => {
+        const isSadhana = comingSoonSection === "sadhana";
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center p-0">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setComingSoonSection(null)} />
+            <div className="relative w-full max-w-xl bg-gradient-to-b from-[#1a0d00] to-[#0d0800] border-t border-orange-500/20 rounded-t-3xl px-6 pt-6 pb-28 shadow-2xl">
+              <div className="w-10 h-1 rounded-full bg-gray-700 mx-auto mb-6" />
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+                  {isSadhana ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="#f97316" className="w-8 h-8">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#f97316" className="w-8 h-8">
+                      <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <h2 className="text-center text-white text-lg font-bold mb-1 tracking-wide">
+                {isSadhana ? "Sādhana Tracker" : "Jñāna Yajña"}
+              </h2>
+              <p className="text-center text-orange-400 text-xs font-semibold tracking-widest uppercase mb-4">
+                {isSadhana ? "✦ Daily Practice ✦" : "✦ Sacrifice of Knowledge ✦"}
+              </p>
+              <p className="text-center text-gray-300 text-sm leading-relaxed mb-2">
+                {isSadhana
+                  ? "Like a devotee carefully arranging the altar before the Deity arrives, this sacred space for daily practice is being lovingly prepared."
+                  : "Like firewood gathered before the sacred fire is lit, this space for the sacrifice of knowledge is being carefully assembled."}
+              </p>
+              <p className="text-center text-gray-400 text-sm leading-relaxed mb-6">
+                {isSadhana
+                  ? <>Until the doors open, let the transcendental sound of Śrīla Prabhupāda&apos;s lectures be your daily sādhana. <span className="text-orange-400 italic">The flame is gathering strength.</span></>
+                  : <>Until the yajña begins, nourish your heart through Śrīla Prabhupāda&apos;s vāṇī. <span className="text-orange-400 italic">The sacred fire is being kindled.</span></>}
+              </p>
+              <p className="text-center text-gray-600 text-xs italic mb-6">
+                {isSadhana
+                  ? '"śravaṇaṁ kīrtanaṁ viṣṇoḥ smaraṇaṁ pāda-sevanam" — hearing and chanting are the very foundation of all sādhana.'
+                  : '"jñāna-yajñena cāpy anye yajanto mām upāsate" — by the sacrifice of knowledge, they worship the Lord Himself.'}
+              </p>
+              <button
+                onClick={() => setComingSoonSection(null)}
+                className="w-full py-3 rounded-2xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-semibold text-sm hover:bg-orange-500/25 transition-colors active:scale-95"
+              >
+                Hare Kṛṣṇa 🙏
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Streak Panel ── */}
       <StreakPanel
@@ -619,8 +676,14 @@ export default function Home() {
         activeTab={activeTab}
         onTabChange={(tab) => {
           if (tab === "bhajans") { setShowBhajansModal(true); return; }
-          if (tab === "jnana") { router.push("/jnana-yagya"); return; }
-          if (tab === "sadhna") { router.push("/sadhana"); return; }
+          if (tab === "jnana") {
+            if (!isParentAdmin) { setComingSoonSection("jnana"); return; }
+            router.push("/jnana-yagya"); return;
+          }
+          if (tab === "sadhna") {
+            if (!isParentAdmin) { setComingSoonSection("sadhana"); return; }
+            router.push("/sadhana"); return;
+          }
           if (tab === "downloads") { setShowDownloads(true); return; }
           setActiveTab(tab);
         }}

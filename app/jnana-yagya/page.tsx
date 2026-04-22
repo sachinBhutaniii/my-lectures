@@ -339,10 +339,17 @@ function TimerCircle({ timeLeft }: { timeLeft: number }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function JnanaYagyaPage() {
   const router   = useRouter();
-  const { user } = useAuth();
+  const { user, authLoading, isParentAdmin } = useAuth();
   const progress = useJnanaProgress();
 
   const [view, setView] = useState<View>("courses");
+
+  // Access guard — redirect non-parent-admins back to home
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { router.replace("/login"); return; }
+    if (!isParentAdmin) router.replace("/");
+  }, [user, authLoading, isParentAdmin, router]);
 
   // Splash
   const [showSplash,  setShowSplash]  = useState(false);

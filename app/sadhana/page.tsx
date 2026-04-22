@@ -20,7 +20,7 @@ type SadhanaTab = "today" | "records" | "qa" | "mentees";
 
 export default function SadhanaPage() {
   const router = useRouter();
-  const { user, authLoading } = useAuth();
+  const { user, authLoading, isParentAdmin } = useAuth();
   const t = useT();
   const [activeTab, setActiveTab] = useState<SadhanaTab>("today");
   const [showMentorSheet, setShowMentorSheet] = useState(false);
@@ -33,10 +33,10 @@ export default function SadhanaPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
-    }
-  }, [user, authLoading, router]);
+    if (authLoading) return;
+    if (!user) { router.replace("/login"); return; }
+    if (!isParentAdmin) router.replace("/");
+  }, [user, authLoading, isParentAdmin, router]);
 
   useEffect(() => {
     if (!user) return;
