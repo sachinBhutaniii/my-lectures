@@ -6,23 +6,13 @@ import { useEffect, useRef } from "react";
  * of navigating away from the page.
  */
 
-// Prevents cleanup's history.back() from firing other overlays' popstate handlers
-let _backInProgress = false;
-
-// Call before any onClose()+router.push() pair to skip the history.back() cleanup
-// entirely — avoids cancelling in-progress navigations.
+// Call before any onClose()+router.push() pair to skip the replaceState cleanup
+// entirely — avoids racing with in-progress navigations.
 let _suppress = false;
 
 export function suppressBackOnClose() {
   _suppress = true;
   setTimeout(() => { _suppress = false; }, 500);
-}
-
-function safeBack() {
-  _backInProgress = true;
-  history.back();
-  // Reset after the browser has dispatched the resulting popstate event
-  setTimeout(() => { _backInProgress = false; }, 50);
 }
 
 export function useBackClose(isOpen: boolean, onClose: () => void) {
@@ -33,7 +23,10 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
       if (pushedRef.current) {
         pushedRef.current = false;
         if (!_suppress) {
-          safeBack();
+          // Replace the fake overlay entry in-place rather than calling
+          // history.back(), which navigates away on a fresh tab/PWA with
+          // no prior history entry.
+          history.replaceState(null, "");
         }
       }
       return;
@@ -44,7 +37,6 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
     pushedRef.current = true;
 
     const handler = () => {
-      if (_backInProgress) return; // ignore popstate from cleanup, not user gesture
       pushedRef.current = false;
       onClose();
     };
@@ -56,7 +48,7 @@ export function useBackClose(isOpen: boolean, onClose: () => void) {
       if (pushedRef.current) {
         pushedRef.current = false;
         if (!_suppress) {
-          safeBack();
+          history.replaceState(null, "");
         }
       }
     };
