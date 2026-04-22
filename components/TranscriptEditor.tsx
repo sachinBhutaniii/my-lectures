@@ -129,6 +129,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const tapTimesRef = useRef<number[]>([]);
   const fsHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [rawTranscriptUsed, setRawTranscriptUsed] = useState(false);
+  const [truncatedDraftRecovered, setTruncatedDraftRecovered] = useState(false);
 
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -151,7 +152,26 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     origCuesRef.current = orig;
 
     if (mode === "l1") {
-      setCues(l1.length > 0 ? l1 : orig);
+      // Detect a truncated draft: if L1 ends significantly before the original audio,
+      // the saved draft was incomplete — append the missing original cues so the proofreader
+      // can see and review the full transcript.
+      if (l1.length > 0 && orig.length > 0) {
+        const l1LastMs = l1[l1.length - 1].endMs;
+        const origLastMs = orig[orig.length - 1].endMs;
+        if (origLastMs > 0 && l1LastMs < origLastMs * 0.95) {
+          const remaining = orig
+            .filter((c) => c.startMs > l1LastMs)
+            .map((c, i) => ({ ...c, id: l1.length + i + 1 }));
+          setCues(remaining.length > 0 ? [...l1, ...remaining] : l1);
+          setTruncatedDraftRecovered(remaining.length > 0);
+        } else {
+          setCues(l1);
+          setTruncatedDraftRecovered(false);
+        }
+      } else {
+        setCues(l1.length > 0 ? l1 : orig);
+        setTruncatedDraftRecovered(false);
+      }
     } else if (mode === "l2") {
       // L2 starts from original; L1 diff is highlighted for acceptance
       setCues(l2.length > 0 ? l2 : orig);
@@ -777,6 +797,19 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           <div>
             <p className="text-xs font-medium text-amber-300">Timestamps not available</p>
             <p className="text-[11px] text-amber-500/80 mt-0.5">SRT data is missing or incomplete. Content loaded from plain transcript — timestamps are placeholders. Please fix timings while reviewing.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Truncated draft recovery notice ──────────────────────────────────── */}
+      {truncatedDraftRecovered && (
+        <div className="flex-shrink-0 flex items-start gap-2.5 px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5">
+            <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-xs font-medium text-blue-300">Partial draft detected — full transcript restored</p>
+            <p className="text-[11px] text-blue-400/70 mt-0.5">The saved draft covered only part of the audio. The remaining original cues have been appended so the full transcript is available for review.</p>
           </div>
         </div>
       )}
