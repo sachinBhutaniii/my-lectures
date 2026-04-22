@@ -45,6 +45,11 @@ export const submitFeedback = async (data: {
   return res.data;
 };
 
+export const getMyFeedback = async (): Promise<FeedbackItem[]> => {
+  const res = await apiClient.get<FeedbackItem[]>("/api/feedback/my");
+  return res.data;
+};
+
 export const getFeedback = async (categoryId?: number): Promise<FeedbackItem[]> => {
   const url = categoryId ? `/api/feedback?categoryId=${categoryId}` : "/api/feedback";
   const res = await apiClient.get<FeedbackItem[]>(url);
