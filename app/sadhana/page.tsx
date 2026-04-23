@@ -16,6 +16,8 @@ import {
   SadhanaNotifications,
 } from "@/services/sadhana.service";
 
+const SADHANA_PASSKEY = "108108";
+
 type SadhanaTab = "today" | "records" | "qa" | "mentees";
 
 export default function SadhanaPage() {
@@ -27,16 +29,29 @@ export default function SadhanaPage() {
   useBackClose(showMentorSheet, () => setShowMentorSheet(false));
   const [isMentor, setIsMentor] = useState(false);
   const [notifications, setNotifications] = useState<SadhanaNotifications>({ pendingQuestions: 0, newAnswers: 0 });
+  const [passKeyUnlocked, setPassKeyUnlocked] = useState(
+    () => typeof window !== "undefined" && localStorage.getItem("bbd_sadhana_unlocked") === "true"
+  );
+  const [passKeyInput, setPassKeyInput] = useState("");
+  const [passKeyError, setPassKeyError] = useState(false);
 
   const refreshNotifications = () => {
     getNotifications().then(setNotifications).catch(() => {});
   };
 
+  const handlePassKeySubmit = () => {
+    if (passKeyInput === SADHANA_PASSKEY) {
+      localStorage.setItem("bbd_sadhana_unlocked", "true");
+      setPassKeyUnlocked(true);
+    } else {
+      setPassKeyError(true);
+    }
+  };
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace("/login"); return; }
-    if (!isParentAdmin) router.replace("/");
-  }, [user, authLoading, isParentAdmin, router]);
+  }, [user, authLoading, router]);
 
   useEffect(() => {
     if (!user) return;
@@ -48,6 +63,46 @@ export default function SadhanaPage() {
     return (
       <div className="h-screen bg-black flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isParentAdmin && !passKeyUnlocked) {
+    return (
+      <div className="h-screen bg-black flex items-center justify-center px-6">
+        <div className="w-full max-w-xs flex flex-col items-center gap-5">
+          <div className="w-14 h-14 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+              strokeWidth={1.8} stroke="currentColor" className="w-7 h-7 text-orange-400">
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <h2 className="text-white font-bold text-lg">Sadhana Card</h2>
+            <p className="text-gray-500 text-xs mt-1">Enter passkey to continue</p>
+          </div>
+          <div className="w-full flex flex-col gap-3">
+            <input
+              type="password"
+              value={passKeyInput}
+              onChange={(e) => { setPassKeyInput(e.target.value); setPassKeyError(false); }}
+              onKeyDown={(e) => e.key === "Enter" && handlePassKeySubmit()}
+              placeholder="Passkey"
+              className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-orange-500 transition-colors text-center tracking-widest"
+              autoFocus
+            />
+            {passKeyError && (
+              <p className="text-red-400 text-xs text-center">Incorrect passkey. Try again.</p>
+            )}
+            <button
+              onClick={handlePassKeySubmit}
+              className="w-full bg-orange-500 hover:bg-orange-400 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+            >
+              Unlock
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
