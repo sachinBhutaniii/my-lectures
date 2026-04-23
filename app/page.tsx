@@ -681,7 +681,6 @@ export default function Home() {
             router.push("/jnana-yagya"); return;
           }
           if (tab === "sadhna") {
-            if (!isParentAdmin) { setComingSoonSection("sadhana"); return; }
             router.push("/sadhana"); return;
           }
           if (tab === "downloads") { setShowDownloads(true); return; }
