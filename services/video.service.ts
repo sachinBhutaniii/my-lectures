@@ -325,3 +325,16 @@ export const regenerateTranscriptRange = async (
   );
   return res.data;
 };
+
+export const redistributeTimestamps = async (
+  videoLocaleId: number,
+  fromSeconds: number,
+  toSeconds: number,
+  cues: { id: number; text: string }[]
+): Promise<{ id: number; startTime: string; endTime: string; startMs: number; endMs: number }[]> => {
+  const res = await apiClient.post<{ cues: { id: number; startTime: string; endTime: string; startMs: number; endMs: number }[] }>(
+    `/api/transcripts/${videoLocaleId}/redistribute-timestamps`,
+    { fromSeconds, toSeconds, cues }
+  );
+  return res.data.cues;
+};

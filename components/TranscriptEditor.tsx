@@ -10,6 +10,7 @@ import {
   submitTranscriptReview,
   publishTranscript,
   regenerateTranscriptRange,
+  redistributeTimestamps,
   SrtCueDtoItem,
 } from "@/services/video.service";
 import { useStreak } from "@/hooks/useStreak";
@@ -101,6 +102,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [autoSelectCount, setAutoSelectCount] = useState(20);
   const [regenerating, setRegenerating] = useState(false);
+  const [isRedistributing, setIsRedistributing] = useState(false);
   const [selectAction, setSelectAction] = useState<"text" | "timestamps">("text");
   const [tsRangeStart, setTsRangeStart] = useState("");
   const [tsRangeEnd, setTsRangeEnd] = useState("");
@@ -518,37 +520,38 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setTsRangeEnd(selected[selected.length - 1].endTime);
   }, [selectedIds, cues]);
 
-  // ── Redistribute timestamps across selected cues ──────────────────────────────
-  const handleRedistributeTimestamps = () => {
-    const newStartMs = timeToMs(tsRangeStart);
-    const newEndMs = timeToMs(tsRangeEnd);
-    if (newEndMs <= newStartMs) {
+  // ── Redistribute timestamps via Gemini audio analysis ──────────────────────────
+  const handleRedistributeTimestamps = async () => {
+    const fromMs = timeToMs(tsRangeStart);
+    const toMs = timeToMs(tsRangeEnd);
+    if (toMs <= fromMs) {
       alert("End time must be after start time.");
       return;
     }
     const selected = cues.filter((c) => selectedIds.has(c.id));
-    const totalMs = newEndMs - newStartMs;
-    const wordCounts = selected.map((c) => Math.max(1, c.text.trim().split(/\s+/).filter(Boolean).length));
-    const totalWords = wordCounts.reduce((a, b) => a + b, 0);
-    let cursor = newStartMs;
-    const updated = new Map<number, { startTime: string; endTime: string; startMs: number; endMs: number }>();
-    selected.forEach((cue, i) => {
-      const s = cursor;
-      const e = i === selected.length - 1
-        ? newEndMs
-        : cursor + Math.round((wordCounts[i] / totalWords) * totalMs);
-      updated.set(cue.id, {
-        startTime: msToSrtTime(s),
-        endTime: msToSrtTime(e),
-        startMs: s,
-        endMs: e,
-      });
-      cursor = e;
-    });
-    setCues((prev) => prev.map((c) => (updated.has(c.id) ? { ...c, ...updated.get(c.id)! } : c)));
-    setSelectedIds(new Set());
-    setSelectMode(false);
-    setSelectAction("text");
+    if (selected.length === 0) return;
+
+    setIsRedistributing(true);
+    try {
+      const updated = await redistributeTimestamps(
+        data.id,
+        fromMs / 1000,
+        toMs / 1000,
+        selected.map((c) => ({ id: c.id, text: c.text }))
+      );
+      const updatedMap = new Map(updated.map((u) => [u.id, u]));
+      setCues((prev) => prev.map((c) => {
+        const u = updatedMap.get(c.id);
+        return u ? { ...c, startTime: u.startTime, endTime: u.endTime, startMs: u.startMs, endMs: u.endMs } : c;
+      }));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      setSelectAction("text");
+    } catch {
+      alert("Failed to redistribute timestamps. Please try again.");
+    } finally {
+      setIsRedistributing(false);
+    }
   };
 
   const pendingL1Changes = l1Diff.size - acceptedL1Ids.size;
@@ -1024,9 +1027,17 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                     </button>
                     <button
                       onClick={handleRedistributeTimestamps}
-                      className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-xs font-semibold text-white transition-colors flex items-center gap-1.5"
+                      disabled={isRedistributing}
+                      className="px-3 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-semibold text-white transition-colors flex items-center gap-1.5"
                     >
-                      ↺ Redistribute
+                      {isRedistributing ? (
+                        <>
+                          <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                          Analysing...
+                        </>
+                      ) : (
+                        <>↺ Redistribute</>
+                      )}
                     </button>
                   </>
                 ) : (
