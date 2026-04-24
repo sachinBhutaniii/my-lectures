@@ -1219,7 +1219,6 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           audioRef={audioRef}
           previewCueRef={previewCueRef}
           previewLoopCountRef={previewLoopCountRef}
-          isPlaying={isPlaying}
           isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
           onSave={(startMs, endMs) => saveTsEdit(tsEditCue.id, startMs, endMs)}
           onClose={closeTsEditor}
@@ -1518,7 +1517,6 @@ interface TsEditorProps {
   audioRef: React.RefObject<HTMLAudioElement | null>;
   previewCueRef: React.MutableRefObject<{ startMs: number; endMs: number } | null>;
   previewLoopCountRef: React.MutableRefObject<number>;
-  isPlaying: boolean;
   isLastCue: boolean;
   onSave: (startMs: number, endMs: number) => void;
   onClose: () => void;
@@ -1527,7 +1525,7 @@ interface TsEditorProps {
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
-  isPlaying, isLastCue, onSave, onClose, onMergeWithNext,
+  isLastCue, onSave, onClose, onMergeWithNext,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
@@ -1535,10 +1533,15 @@ function CueTimestampEditor({
   const stripRef = useRef<HTMLDivElement>(null);
   const dragTarget = useRef<"start" | "end" | null>(null);
 
-  // Sync strip-play button when audio stops externally (preview loop finished)
+  // Reset strip-play button when audio pauses (preview loop ended by parent's timeupdate handler)
   useEffect(() => {
-    if (!isPlaying && stripPlaying) setStripPlaying(false);
-  }, [isPlaying, stripPlaying]);
+    if (!stripPlaying) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onPause = () => setStripPlaying(false);
+    audio.addEventListener("pause", onPause);
+    return () => audio.removeEventListener("pause", onPause);
+  }, [stripPlaying, audioRef]);
 
   const windowDuration = 20_000;
   const cueMidMs = Math.round((cue.startMs + cue.endMs) / 2);
