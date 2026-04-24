@@ -479,6 +479,35 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setTsEditCue(null);
   }, []);
 
+  const saveAndGoToNext = useCallback((cueId: number, startMs: number, endMs: number) => {
+    setCues((prev) => {
+      const idx = prev.findIndex((c) => c.id === cueId);
+      if (idx === -1) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs) };
+      for (let i = idx + 1; i < next.length; i++) {
+        if (next[i - 1].endMs <= next[i].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newStart = next[i - 1].endMs;
+        next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
+      }
+      for (let i = idx - 1; i >= 0; i--) {
+        if (next[i].endMs <= next[i + 1].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newEnd = next[i + 1].startMs;
+        const newStart = Math.max(0, newEnd - dur);
+        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
+      }
+      // Open the next cue after state settles
+      const nextCue = next[idx + 1];
+      if (nextCue) setTimeout(() => setTsEditCue(nextCue), 0);
+      return next;
+    });
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+  }, []);
+
   const mergeCueWithNext = useCallback((id: number) => {
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === id);
@@ -1257,6 +1286,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           audioDuration={duration}
           isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
           onSave={(startMs, endMs) => saveTsEdit(tsEditCue.id, startMs, endMs)}
+          onNext={(startMs, endMs) => saveAndGoToNext(tsEditCue.id, startMs, endMs)}
           onClose={closeTsEditor}
           onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
         />
@@ -1561,13 +1591,14 @@ interface TsEditorProps {
   audioDuration: number; // seconds
   isLastCue: boolean;
   onSave: (startMs: number, endMs: number) => void;
+  onNext: (startMs: number, endMs: number) => void;
   onClose: () => void;
   onMergeWithNext: () => void;
 }
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
-  audioDuration, isLastCue, onSave, onClose, onMergeWithNext,
+  audioDuration, isLastCue, onSave, onNext, onClose, onMergeWithNext,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
@@ -1748,7 +1779,16 @@ function CueTimestampEditor({
           Done
         </button>
         <span className="text-xs font-semibold text-gray-300">Adjust Timestamp</span>
-        <div className="w-14" />
+        {!isLastCue ? (
+          <button onClick={() => onNext(markerStart, markerEnd)} className="flex items-center gap-1 text-sm text-amber-400 hover:text-amber-300 transition-colors">
+            Next
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
+        ) : (
+          <div className="w-14" />
+        )}
       </div>
 
       {/* Cue text preview */}
