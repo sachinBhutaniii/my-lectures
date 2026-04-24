@@ -746,6 +746,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             onChange={seekTo}
             className="w-full h-1 accent-blue-500 mb-2 cursor-pointer"
           />
+          {/* Row 1: transport controls + time */}
           <div className="flex items-center gap-3">
             {/* Skip back */}
             <button onClick={() => skip(-10)} className="text-gray-400 hover:text-white transition-colors" title="Skip back 10s">
@@ -772,11 +773,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
               </svg>
             </button>
             {/* Time */}
-            <span className="text-xs text-gray-500 tabular-nums flex-1">
+            <span className="text-xs text-gray-500 tabular-nums">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
-            {/* Speed */}
-            <div className="flex items-center gap-0.5">
+          </div>
+          {/* Row 2: speed + auto-scroll */}
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-0.5 flex-1">
               {SPEEDS.map((s) => (
                 <button
                   key={s}
@@ -794,7 +797,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             {/* Auto-scroll toggle */}
             <button
               onClick={() => setAutoScroll((v) => !v)}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border transition-colors ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium border transition-colors flex-shrink-0 ${
                 autoScroll
                   ? "bg-blue-500/20 border-blue-500/40 text-blue-400"
                   : "bg-gray-800 border-gray-700 text-gray-500"
