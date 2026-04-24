@@ -88,9 +88,13 @@ const CATEGORY_META: Record<Category, { label: string; description: string; colo
 function getGroupCategory(items: TranscriptReviewItem[]): Category {
   const en = items.find((i) => i.localeCode === "en") ?? items[0];
   if (!en) return "C";
-  if (en.deployed) return "D";
+  // Cleanly deployed with no active review cycle
+  if (en.deployed && en.approvalStatus === "APPROVED") return "D";
+  // Active review (including post-deployment restart cycles)
   if (en.approvalStatus === "LEVEL1_APPROVED" || en.approvalStatus === "APPROVED" || en.level2ProofreaderId != null) return "A";
   if (en.level1ProofreaderId != null) return "B";
+  // Deployed but restarted with no proofreader yet assigned
+  if (en.deployed) return "D";
   return "C";
 }
 
