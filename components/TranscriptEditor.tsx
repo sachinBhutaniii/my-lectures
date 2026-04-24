@@ -1219,6 +1219,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           audioRef={audioRef}
           previewCueRef={previewCueRef}
           previewLoopCountRef={previewLoopCountRef}
+          audioDuration={duration}
           isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
           onSave={(startMs, endMs) => saveTsEdit(tsEditCue.id, startMs, endMs)}
           onClose={closeTsEditor}
@@ -1517,6 +1518,7 @@ interface TsEditorProps {
   audioRef: React.RefObject<HTMLAudioElement | null>;
   previewCueRef: React.MutableRefObject<{ startMs: number; endMs: number } | null>;
   previewLoopCountRef: React.MutableRefObject<number>;
+  audioDuration: number; // seconds
   isLastCue: boolean;
   onSave: (startMs: number, endMs: number) => void;
   onClose: () => void;
@@ -1525,7 +1527,7 @@ interface TsEditorProps {
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
-  isLastCue, onSave, onClose, onMergeWithNext,
+  audioDuration, isLastCue, onSave, onClose, onMergeWithNext,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
@@ -1543,9 +1545,11 @@ function CueTimestampEditor({
     return () => audio.removeEventListener("pause", onPause);
   }, [stripPlaying, audioRef]);
 
-  const windowDuration = 20_000;
-  const cueMidMs = Math.round((cue.startMs + cue.endMs) / 2);
-  const windowStartMs = Math.max(0, cueMidMs - windowDuration / 2);
+  // Full audio as the window so markers can be placed anywhere in the lecture
+  const windowStartMs = 0;
+  const windowDuration = audioDuration > 0
+    ? Math.ceil(audioDuration * 1000)
+    : Math.max(markerEnd * 2, 60_000); // fallback when audio not yet loaded
 
   const computeMs = (clientX: number): number => {
     if (!stripRef.current) return 0;
