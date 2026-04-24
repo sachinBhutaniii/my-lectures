@@ -86,10 +86,11 @@ const CATEGORY_META: Record<Category, { label: string; description: string; colo
 };
 
 function getGroupCategory(items: TranscriptReviewItem[]): Category {
-  const active = items.filter((i) => !i.deployed);
-  if (active.length === 0) return "D";
-  if (active.some((i) => i.approvalStatus === "LEVEL1_APPROVED" || i.approvalStatus === "APPROVED")) return "A";
-  if (active.some((i) => i.level1ProofreaderId != null)) return "B";
+  const en = items.find((i) => i.localeCode === "en") ?? items[0];
+  if (!en) return "C";
+  if (en.deployed) return "D";
+  if (en.approvalStatus === "LEVEL1_APPROVED" || en.approvalStatus === "APPROVED") return "A";
+  if (en.level1ProofreaderId != null) return "B";
   return "C";
 }
 
