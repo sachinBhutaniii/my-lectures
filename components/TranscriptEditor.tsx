@@ -1564,6 +1564,17 @@ function CueTimestampEditor({
     return () => audio.removeEventListener("pause", onPause);
   }, [stripPlaying, audioRef]);
 
+  // Playhead — tracks current audio position while strip is playing
+  const [playheadMs, setPlayheadMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!stripPlaying) { setPlayheadMs(null); return; }
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onTimeUpdate = () => setPlayheadMs(audio.currentTime * 1000);
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    return () => audio.removeEventListener("timeupdate", onTimeUpdate);
+  }, [stripPlaying, audioRef]);
+
   // 20-second zoomed window; drag background left/right to pan
   const windowDuration = 20_000;
   const totalDurationMs = audioDuration > 0
@@ -1672,19 +1683,14 @@ function CueTimestampEditor({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-        <button onClick={onClose} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+        <button onClick={() => onSave(markerStart, markerEnd)} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
-          Close
+          Done
         </button>
         <span className="text-xs font-semibold text-gray-300">Adjust Timestamp</span>
-        <button
-          onClick={() => onSave(markerStart, markerEnd)}
-          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-xs font-semibold text-white transition-colors"
-        >
-          Save
-        </button>
+        <div className="w-14" />
       </div>
 
       {/* Cue text preview */}
@@ -1708,7 +1714,14 @@ function CueTimestampEditor({
           onPointerMove={onStripPointerMove}
           onPointerUp={onStripPointerUp}
         >
-          <div className="absolute inset-x-0 top-5 bottom-5 rounded-full bg-gray-800" />
+          <div
+            className="absolute inset-x-0 top-5 bottom-5 rounded-full bg-gray-800"
+            style={{
+              backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.14) 1px, transparent 1px)',
+              backgroundSize: `${(1000 / windowDuration) * 100}% 100%`,
+              backgroundPositionX: `${((1000 - (windowStartMs % 1000)) % 1000) / windowDuration * 100}%`,
+            }}
+          />
           <div
             className="absolute top-5 bottom-5 rounded-full bg-amber-500/40 border border-amber-500/60"
             style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
@@ -1733,6 +1746,13 @@ function CueTimestampEditor({
           >
             <div className="w-1.5 h-10 bg-orange-400 rounded-full shadow-lg shadow-orange-900/50" />
           </div>
+          {/* Playhead */}
+          {playheadMs !== null && (
+            <div
+              className="absolute top-1 bottom-1 w-0.5 bg-white/80 rounded-full z-20 pointer-events-none"
+              style={{ left: `${Math.max(0, Math.min(100, ((playheadMs - windowStartMs) / windowDuration) * 100))}%` }}
+            />
+          )}
         </div>
 
         {/* Marker time labels */}
