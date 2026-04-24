@@ -179,8 +179,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         setTruncatedDraftRecovered(false);
       }
     } else if (mode === "l2") {
-      // L2 starts from original; L1 diff is highlighted for acceptance
-      setCues(l2.length > 0 ? l2 : orig);
+      // L2 starts from L1's approved version (falls back to orig if L1 is empty)
+      setCues(l2.length > 0 ? l2 : l1.length > 0 ? l1 : orig);
       if (l1.length > 0) setL1Diff(diffCues(orig, l1));
     } else {
       // Admin: start from best available version
