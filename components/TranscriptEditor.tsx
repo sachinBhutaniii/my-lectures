@@ -1668,23 +1668,38 @@ function CueTimestampEditor({
     const target = dragTarget.current;
     dragTarget.current = null;
     const ms = computeMs(e.clientX);
-    let finalMs: number;
+    let finalStart: number;
+    let finalEnd: number;
     if (target === "start") {
-      finalMs = Math.min(ms, markerEnd - 200);
-      setMarkerStart(finalMs);
+      finalStart = Math.min(ms, markerEnd - 200);
+      finalEnd = markerEnd;
+      setMarkerStart(finalStart);
+      // Play full strip on loop x2
+      const audio = audioRef.current;
+      if (audio) {
+        previewCueRef.current = null;
+        setStripPlaying(false);
+        previewCueRef.current = { startMs: finalStart, endMs: finalEnd };
+        previewLoopCountRef.current = 0; // plays twice: loops once then stops
+        audio.currentTime = finalStart / 1000;
+        audio.play().catch(() => {});
+        setStripPlaying(true);
+      }
     } else {
-      finalMs = Math.max(ms, markerStart + 200);
-      setMarkerEnd(finalMs);
-    }
-    // Seek to dropped position + 1s auto-preview
-    const audio = audioRef.current;
-    if (audio) {
-      previewCueRef.current = null;
-      setStripPlaying(false);
-      previewCueRef.current = { startMs: finalMs, endMs: finalMs + 1000 };
-      previewLoopCountRef.current = 1;
-      audio.currentTime = finalMs / 1000;
-      audio.play().catch(() => {});
+      finalEnd = Math.max(ms, markerStart + 200);
+      finalStart = markerStart;
+      setMarkerEnd(finalEnd);
+      // Play last 1s before end marker
+      const audio = audioRef.current;
+      if (audio) {
+        previewCueRef.current = null;
+        setStripPlaying(false);
+        const previewStart = Math.max(finalStart, finalEnd - 1000);
+        previewCueRef.current = { startMs: previewStart, endMs: finalEnd };
+        previewLoopCountRef.current = 1;
+        audio.currentTime = previewStart / 1000;
+        audio.play().catch(() => {});
+      }
     }
   };
 
