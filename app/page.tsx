@@ -38,7 +38,7 @@ import { useAuth } from "@/context/AuthContext";
 export default function Home() {
   const router = useRouter();
   const t = useT();
-  const { isParentAdmin } = useAuth();
+  const { isParentAdmin, user } = useAuth();
   const { data, loading } = useFetch<VideoApiResponse>(getVideos);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("media");
@@ -424,11 +424,38 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="text-white"
+            className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-orange-500/50 active:scale-95 transition-transform flex-shrink-0"
+            title="Menu"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+            ) : user?.name ? (
+              <div className="w-full h-full bg-orange-500/20 flex items-center justify-center">
+                <span className="text-sm font-bold text-orange-300">{user.name.charAt(0).toUpperCase()}</span>
+              </div>
+            ) : (
+              /* Devotee silhouette for guests */
+              <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                  <rect width="40" height="40" fill="#1f1f1f"/>
+                  {/* dhoti */}
+                  <path d="M12 38 Q14 28 20 27 Q26 28 28 38Z" fill="#b45309" opacity="0.7"/>
+                  {/* kurta */}
+                  <path d="M13 22 Q11 30 12 38 L28 38 Q29 30 27 22 Q24 26 20 26 Q16 26 13 22Z" fill="#92400e" opacity="0.8"/>
+                  {/* shikha */}
+                  <path d="M20 6 Q21 2 20 1 Q19 2 20 6Z" fill="#78350f" strokeWidth="0.5"/>
+                  {/* head */}
+                  <ellipse cx="20" cy="11" rx="5.5" ry="6" fill="#c2956c"/>
+                  {/* tilak */}
+                  <path d="M18.5 7.5 Q20 6.5 21.5 7.5" stroke="#f97316" strokeWidth="0.8" strokeLinecap="round"/>
+                  <line x1="20" y1="7" x2="20" y2="10" stroke="#f97316" strokeWidth="0.7" strokeLinecap="round"/>
+                  {/* neck */}
+                  <rect x="18.5" y="16.5" width="3" height="3" rx="1" fill="#b07850"/>
+                  {/* tulasi mala */}
+                  <path d="M15 20 Q20 23 25 20" stroke="#22c55e" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.8"/>
+                </svg>
+              </div>
+            )}
           </button>
           <span className="text-xl font-semibold tracking-wide">{t("home.title")}</span>
         </div>

@@ -111,12 +111,23 @@ export function useStreak() {
     } catch { /* ignore */ }
   }, []);
 
+  const clearStreak = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(DAILY_TIME_KEY);
+    setListenDates([]);
+    setDailyTimes({});
+    dailyTimesRef.current = {};
+  }, []);
+
   useEffect(() => {
     reloadFromStorage();
-    // Re-read from localStorage after backend sync on login
     window.addEventListener("bdd-streak-synced", reloadFromStorage);
-    return () => window.removeEventListener("bdd-streak-synced", reloadFromStorage);
-  }, [reloadFromStorage]);
+    window.addEventListener("bdd-logout", clearStreak);
+    return () => {
+      window.removeEventListener("bdd-streak-synced", reloadFromStorage);
+      window.removeEventListener("bdd-logout", clearStreak);
+    };
+  }, [reloadFromStorage, clearStreak]);
 
   // Add seconds listened — automatically marks streak when threshold is crossed
   const addListeningTime = useCallback((seconds: number) => {
