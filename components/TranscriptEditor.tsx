@@ -1564,7 +1564,7 @@ function CueTimestampEditor({
     return () => audio.removeEventListener("pause", onPause);
   }, [stripPlaying, audioRef]);
 
-  // 20-second zoomed window; user can pan via the mini-map below
+  // 20-second zoomed window; drag background left/right to pan
   const windowDuration = 20_000;
   const totalDurationMs = audioDuration > 0
     ? Math.ceil(audioDuration * 1000)
@@ -1575,23 +1575,8 @@ function CueTimestampEditor({
   );
   const windowStartMs = Math.max(0, Math.min(windowOffset, totalDurationMs - windowDuration));
 
-  const panTo = (centerMs: number) => {
-    setWindowOffset(Math.max(0, Math.min(totalDurationMs - windowDuration, centerMs - windowDuration / 2)));
-  };
-
-  const miniMapRef = useRef<HTMLDivElement>(null);
-  const onMiniPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    panTo(pct * totalDurationMs);
-  };
-  const onMiniPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.buttons) return;
-    const rect = (miniMapRef.current ?? e.currentTarget).getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    panTo(pct * totalDurationMs);
-  };
+  // Panning the window by dragging the strip background
+  const panStartRef = useRef<{ x: number; offset: number } | null>(null);
 
   const computeMs = (clientX: number): number => {
     if (!stripRef.current) return 0;
@@ -1602,6 +1587,7 @@ function CueTimestampEditor({
 
   const onMarkerPointerDown = (target: "start" | "end") => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation(); // don't let the strip background start panning
     e.currentTarget.setPointerCapture(e.pointerId);
     dragTarget.current = target;
   };
@@ -1632,11 +1618,26 @@ function CueTimestampEditor({
       previewCueRef.current = null;
       setStripPlaying(false);
       previewCueRef.current = { startMs: finalMs, endMs: finalMs + 1000 };
-      previewLoopCountRef.current = 1; // play once, no loop
+      previewLoopCountRef.current = 1;
       audio.currentTime = finalMs / 1000;
       audio.play().catch(() => {});
     }
   };
+
+  // Strip background pan handlers
+  const onStripPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragTarget.current) return; // marker drag takes priority
+    e.currentTarget.setPointerCapture(e.pointerId);
+    panStartRef.current = { x: e.clientX, offset: windowOffset };
+  };
+  const onStripPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragTarget.current || !panStartRef.current) return;
+    const rect = stripRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const deltaMs = -((e.clientX - panStartRef.current.x) / rect.width) * windowDuration;
+    setWindowOffset(Math.max(0, Math.min(totalDurationMs - windowDuration, panStartRef.current.offset + deltaMs)));
+  };
+  const onStripPointerUp = () => { panStartRef.current = null; };
 
   const toggleStripPlay = () => {
     const audio = audioRef.current;
@@ -1699,8 +1700,14 @@ function CueTimestampEditor({
           <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs + windowDuration)}</span>
         </div>
 
-        {/* Main zoomed strip */}
-        <div ref={stripRef} className="relative w-full h-14 select-none touch-none">
+        {/* Main zoomed strip — drag background to pan, drag markers to adjust */}
+        <div
+          ref={stripRef}
+          className="relative w-full h-14 select-none touch-none cursor-grab active:cursor-grabbing"
+          onPointerDown={onStripPointerDown}
+          onPointerMove={onStripPointerMove}
+          onPointerUp={onStripPointerUp}
+        >
           <div className="absolute inset-x-0 top-5 bottom-5 rounded-full bg-gray-800" />
           <div
             className="absolute top-5 bottom-5 rounded-full bg-amber-500/40 border border-amber-500/60"
@@ -1728,57 +1735,10 @@ function CueTimestampEditor({
           </div>
         </div>
 
-        {/* Marker time labels + snap buttons */}
+        {/* Marker time labels */}
         <div className="flex justify-between mt-1 px-0.5">
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] font-mono text-amber-400">{fmtMs(markerStart)}</span>
-            <button
-              onClick={() => panTo(markerStart)}
-              className="text-[10px] text-amber-600 hover:text-amber-400 transition-colors"
-              title="Center window on start marker"
-            >⬡</button>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => panTo(markerEnd)}
-              className="text-[10px] text-orange-600 hover:text-orange-400 transition-colors"
-              title="Center window on end marker"
-            >⬡</button>
-            <span className="text-[11px] font-mono text-orange-400">{fmtMs(markerEnd)}</span>
-          </div>
-        </div>
-
-        {/* Mini-map — full lecture, drag to pan the window */}
-        <div className="mt-3">
-          <div className="flex items-center justify-between mb-0.5 px-0.5">
-            <span className="text-[9px] text-gray-700 uppercase tracking-wide">Full lecture — drag to navigate</span>
-            <span className="text-[9px] font-mono text-gray-700">{fmtMs(totalDurationMs)}</span>
-          </div>
-          <div
-            ref={miniMapRef}
-            className="relative w-full h-3 rounded-full bg-gray-800 cursor-pointer touch-none select-none"
-            onPointerDown={onMiniPointerDown}
-            onPointerMove={onMiniPointerMove}
-          >
-            {/* Current window indicator */}
-            <div
-              className="absolute top-0 bottom-0 rounded-full bg-amber-500/50 border border-amber-500/80"
-              style={{
-                left: `${(windowStartMs / totalDurationMs) * 100}%`,
-                width: `${(windowDuration / totalDurationMs) * 100}%`,
-              }}
-            />
-            {/* Start marker dot */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-amber-400"
-              style={{ left: `${(markerStart / totalDurationMs) * 100}%` }}
-            />
-            {/* End marker dot */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-orange-400"
-              style={{ left: `${(markerEnd / totalDurationMs) * 100}%` }}
-            />
-          </div>
+          <span className="text-[11px] font-mono text-amber-400">{fmtMs(markerStart)}</span>
+          <span className="text-[11px] font-mono text-orange-400">{fmtMs(markerEnd)}</span>
         </div>
       </div>
 
