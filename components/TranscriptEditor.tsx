@@ -445,13 +445,34 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   }, []);
 
   const saveTsEdit = useCallback((cueId: number, startMs: number, endMs: number) => {
-    setCues((prev) =>
-      prev.map((c) =>
-        c.id === cueId
-          ? { ...c, startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs) }
-          : c
-      )
-    );
+    setCues((prev) => {
+      const idx = prev.findIndex((c) => c.id === cueId);
+      if (idx === -1) return prev;
+      const next = [...prev];
+
+      // Apply the edited cue
+      next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs) };
+
+      // Cascade forward: push subsequent cues that now start inside the edited endMs
+      for (let i = idx + 1; i < next.length; i++) {
+        if (next[i - 1].endMs <= next[i].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newStart = next[i - 1].endMs;
+        const newEnd = newStart + dur;
+        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
+      }
+
+      // Cascade backward: pull previous cues whose endMs now overlaps the edited startMs
+      for (let i = idx - 1; i >= 0; i--) {
+        if (next[i].endMs <= next[i + 1].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newEnd = next[i + 1].startMs;
+        const newStart = Math.max(0, newEnd - dur);
+        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
+      }
+
+      return next;
+    });
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
