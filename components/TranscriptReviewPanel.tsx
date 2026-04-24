@@ -74,6 +74,25 @@ const LEVEL_BUTTON_STYLE: Record<LevelStatus, string> = {
   neutral:   "bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400",
 };
 
+// ── Category grouping ─────────────────────────────────────────────────────────
+
+type Category = "A" | "B" | "C" | "D";
+
+const CATEGORY_META: Record<Category, { label: string; description: string; color: string; dot: string }> = {
+  A: { label: "A — L2 Stage",        description: "L1 approved · Needs L2 assignment or in L2 review",  color: "text-purple-300", dot: "bg-purple-400" },
+  B: { label: "B — L1 In Progress",  description: "L1 assigned · Awaiting submission",                  color: "text-orange-300", dot: "bg-orange-400" },
+  C: { label: "C — Unassigned",      description: "No proofreader assigned yet",                        color: "text-gray-400",   dot: "bg-gray-500"  },
+  D: { label: "D — Deployed",        description: "Live on the app",                                    color: "text-green-400",  dot: "bg-green-500" },
+};
+
+function getGroupCategory(items: TranscriptReviewItem[]): Category {
+  const active = items.filter((i) => !i.deployed);
+  if (active.length === 0) return "D";
+  if (active.some((i) => i.approvalStatus === "LEVEL1_APPROVED" || i.approvalStatus === "APPROVED")) return "A";
+  if (active.some((i) => i.level1ProofreaderId != null)) return "B";
+  return "C";
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 type ModalState = { item: TranscriptReviewItem; level: 1 | 2 } | null;
@@ -199,30 +218,54 @@ export default function TranscriptReviewPanel() {
           </svg>
           <p className="text-sm">No transcripts found.</p>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {Object.values(
-            list.reduce<Record<number, TranscriptReviewItem[]>>((acc, item) => {
-              (acc[item.videoId] ??= []).push(item);
-              return acc;
-            }, {})
-          ).map((group) => (
-            <VideoGroup
-              key={group[0].videoId}
-              items={group}
-              isParentAdmin={isParentAdmin}
-              isAdmin={isAdmin}
-              isTranscriptAdmin={isTranscriptAdmin}
-              acting={acting}
-              onOpenModal={(item, level) => setModal({ item, level })}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              onDeploy={handleDeploy}
-              onRestartReview={handleRestartReview}
-            />
-          ))}
-        </div>
-      )}
+      ) : (() => {
+        // Group items by videoId, then bucket video groups into categories A–D
+        const videoGroups = Object.values(
+          list.reduce<Record<number, TranscriptReviewItem[]>>((acc, item) => {
+            (acc[item.videoId] ??= []).push(item);
+            return acc;
+          }, {})
+        );
+        const buckets: Record<Category, TranscriptReviewItem[][]> = { A: [], B: [], C: [], D: [] };
+        for (const group of videoGroups) buckets[getGroupCategory(group)].push(group);
+
+        return (
+          <div className="space-y-6">
+            {(["A", "B", "C", "D"] as Category[]).map((cat) => {
+              const groups = buckets[cat];
+              if (groups.length === 0) return null;
+              const meta = CATEGORY_META[cat];
+              return (
+                <section key={cat} className="space-y-2">
+                  {/* Category header */}
+                  <div className="flex items-center gap-2 px-1 pb-1 border-b border-gray-800">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+                    <span className={`text-xs font-bold tracking-wide ${meta.color}`}>{meta.label}</span>
+                    <span className="text-[11px] text-gray-600">{meta.description}</span>
+                    <span className="ml-auto text-[11px] text-gray-600">{groups.length}</span>
+                  </div>
+                  {/* Video groups */}
+                  {groups.map((group) => (
+                    <VideoGroup
+                      key={group[0].videoId}
+                      items={group}
+                      isParentAdmin={isParentAdmin}
+                      isAdmin={isAdmin}
+                      isTranscriptAdmin={isTranscriptAdmin}
+                      acting={acting}
+                      onOpenModal={(item, level) => setModal({ item, level })}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onDeploy={handleDeploy}
+                      onRestartReview={handleRestartReview}
+                    />
+                  ))}
+                </section>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Assignment modal */}
       {modal && (
