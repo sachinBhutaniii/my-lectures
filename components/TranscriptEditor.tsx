@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import type React from "react";
 import {
   SrtCue, CueDiff,
   parseSrt, serializeSrt, diffCues, timeToMs, formatTime,
@@ -110,6 +111,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [selectAction, setSelectAction] = useState<"text" | "timestamps">("text");
   const [tsRangeStart, setTsRangeStart] = useState("");
   const [tsRangeEnd, setTsRangeEnd] = useState("");
+  const [tsEditCue, setTsEditCue] = useState<SrtCue | null>(null);
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
 
@@ -412,6 +414,57 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         ...prev.slice(idx + 1),
       ].map((c, i) => ({ ...c, id: i + 1 }));
     });
+  }, []);
+
+  // ── Timestamp editor ─────────────────────────────────────────────────────────
+  const openTsEditor = useCallback((cue: SrtCue) => {
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    previewCueRef.current = null;
+    setTsEditCue(cue);
+  }, []);
+
+  const closeTsEditor = useCallback(() => {
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setTsEditCue(null);
+  }, []);
+
+  const saveTsEdit = useCallback((cueId: number, startMs: number, endMs: number) => {
+    setCues((prev) =>
+      prev.map((c) =>
+        c.id === cueId
+          ? { ...c, startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs) }
+          : c
+      )
+    );
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setTsEditCue(null);
+  }, []);
+
+  const mergeCueWithNext = useCallback((id: number) => {
+    setCues((prev) => {
+      const idx = prev.findIndex((c) => c.id === id);
+      if (idx === -1 || idx === prev.length - 1) return prev;
+      const cur = prev[idx];
+      const nxt = prev[idx + 1];
+      const merged: SrtCue = {
+        id: cur.id,
+        startMs: cur.startMs,
+        endMs: nxt.endMs,
+        startTime: cur.startTime,
+        endTime: nxt.endTime,
+        text: cur.text.trim() + " " + nxt.text.trim(),
+      };
+      return [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)].map((c, i) => ({ ...c, id: i + 1 }));
+    });
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setTsEditCue(null);
   }, []);
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
@@ -959,6 +1012,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                   onAdminAcceptL2={() => adminAcceptL2(cue.id)}
                   onAdminRejectL2={() => adminRejectL2(cue.id)}
                   onSeekTo={() => { if (audioRef.current) { audioRef.current.currentTime = cue.startMs / 1000; } }}
+                  onEditTimestamp={!selectMode ? openTsEditor : undefined}
                   onDelete={() => deleteCue(cue.id)}
                   selectMode={selectMode}
                   isSelected={selectedIds.has(cue.id)}
@@ -1158,6 +1212,21 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         </div>
       )}
 
+      {/* ── Timestamp editor bottom sheet ────────────────────────────────────── */}
+      {tsEditCue && (
+        <CueTimestampEditor
+          cue={tsEditCue}
+          audioRef={audioRef}
+          previewCueRef={previewCueRef}
+          previewLoopCountRef={previewLoopCountRef}
+          isPlaying={isPlaying}
+          isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
+          onSave={(startMs, endMs) => saveTsEdit(tsEditCue.id, startMs, endMs)}
+          onClose={closeTsEditor}
+          onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
+        />
+      )}
+
       {/* ── Publish confirmation modal ─────────────────────────────────────────── */}
       {publishConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1223,6 +1292,7 @@ interface CueRowProps {
   onAdminRejectL2?: () => void;
   onSeekTo: () => void;
   onDelete: () => void;
+  onEditTimestamp?: (cue: SrtCue) => void;
   selectMode?: boolean;
   isSelected?: boolean;
   onCheckboxPointerDown?: () => void;
@@ -1235,7 +1305,7 @@ function CueRow({
   isL1AdminAccepted, isL1AdminRejected, isL2AdminAccepted, isL2AdminRejected,
   onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1,
   onAdminAcceptL1, onAdminRejectL1, onAdminAcceptL2, onAdminRejectL2,
-  onSeekTo, onDelete,
+  onSeekTo, onDelete, onEditTimestamp,
   selectMode, isSelected, onCheckboxPointerDown, onCheckboxPointerEnter,
 }: CueRowProps) {
   const inputCls = "w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-blue-500 transition-colors";
@@ -1339,6 +1409,14 @@ function CueRow({
               {cue.text}
             </button>
 
+            {/* Adjust timestamp icon */}
+            {onEditTimestamp && (
+              <button onClick={() => onEditTimestamp(cue)} className="flex-shrink-0 text-gray-700 hover:text-amber-400 transition-colors pt-0.5" title="Adjust timestamp">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </button>
+            )}
             {/* Edit icon */}
             <button onClick={onEdit} className="flex-shrink-0 text-gray-700 hover:text-blue-400 transition-colors pt-0.5" title="Edit cue">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -1427,6 +1505,227 @@ function CueRow({
               </div>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cue Timestamp Editor ─────────────────────────────────────────────────────
+
+interface TsEditorProps {
+  cue: SrtCue;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+  previewCueRef: React.MutableRefObject<{ startMs: number; endMs: number } | null>;
+  previewLoopCountRef: React.MutableRefObject<number>;
+  isPlaying: boolean;
+  isLastCue: boolean;
+  onSave: (startMs: number, endMs: number) => void;
+  onClose: () => void;
+  onMergeWithNext: () => void;
+}
+
+function CueTimestampEditor({
+  cue, audioRef, previewCueRef, previewLoopCountRef,
+  isPlaying, isLastCue, onSave, onClose, onMergeWithNext,
+}: TsEditorProps) {
+  const [markerStart, setMarkerStart] = useState(cue.startMs);
+  const [markerEnd, setMarkerEnd] = useState(cue.endMs);
+  const [stripPlaying, setStripPlaying] = useState(false);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const dragTarget = useRef<"start" | "end" | null>(null);
+
+  // Sync strip-play button when audio stops externally (preview loop finished)
+  useEffect(() => {
+    if (!isPlaying && stripPlaying) setStripPlaying(false);
+  }, [isPlaying, stripPlaying]);
+
+  const windowDuration = 20_000;
+  const cueMidMs = Math.round((cue.startMs + cue.endMs) / 2);
+  const windowStartMs = Math.max(0, cueMidMs - windowDuration / 2);
+
+  const computeMs = (clientX: number): number => {
+    if (!stripRef.current) return 0;
+    const rect = stripRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(windowStartMs + pct * windowDuration);
+  };
+
+  const onMarkerPointerDown = (target: "start" | "end") => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragTarget.current = target;
+  };
+
+  const onMarkerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragTarget.current) return;
+    const ms = computeMs(e.clientX);
+    if (dragTarget.current === "start") setMarkerStart(Math.min(ms, markerEnd - 200));
+    else setMarkerEnd(Math.max(ms, markerStart + 200));
+  };
+
+  const onMarkerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragTarget.current) return;
+    const target = dragTarget.current;
+    dragTarget.current = null;
+    const ms = computeMs(e.clientX);
+    let finalMs: number;
+    if (target === "start") {
+      finalMs = Math.min(ms, markerEnd - 200);
+      setMarkerStart(finalMs);
+    } else {
+      finalMs = Math.max(ms, markerStart + 200);
+      setMarkerEnd(finalMs);
+    }
+    // Seek to dropped position + 1s auto-preview
+    const audio = audioRef.current;
+    if (audio) {
+      previewCueRef.current = null;
+      setStripPlaying(false);
+      previewCueRef.current = { startMs: finalMs, endMs: finalMs + 1000 };
+      previewLoopCountRef.current = 1; // play once, no loop
+      audio.currentTime = finalMs / 1000;
+      audio.play().catch(() => {});
+    }
+  };
+
+  const toggleStripPlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (stripPlaying) {
+      previewCueRef.current = null;
+      audio.pause();
+      setStripPlaying(false);
+    } else {
+      previewCueRef.current = { startMs: markerStart, endMs: markerEnd };
+      previewLoopCountRef.current = 0;
+      audio.currentTime = markerStart / 1000;
+      audio.play().catch(() => {});
+      setStripPlaying(true);
+    }
+  };
+
+  const startPct = ((markerStart - windowStartMs) / windowDuration) * 100;
+  const endPct = ((markerEnd - windowStartMs) / windowDuration) * 100;
+
+  const fmtMs = (ms: number): string => {
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const tenth = Math.floor((ms % 1000) / 100);
+    return `${m}:${String(s).padStart(2, "0")}.${tenth}`;
+  };
+
+  return (
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 bg-[#111] border-t border-gray-700 rounded-t-2xl shadow-2xl flex flex-col"
+      style={{ height: "44vh", paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+        <button onClick={onClose} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+          Close
+        </button>
+        <span className="text-xs font-semibold text-gray-300">Adjust Timestamp</span>
+        <button
+          onClick={() => onSave(markerStart, markerEnd)}
+          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-xs font-semibold text-white transition-colors"
+        >
+          Save
+        </button>
+      </div>
+
+      {/* Cue text preview */}
+      <div className="px-4 py-2 text-xs text-gray-500 truncate border-b border-gray-800/60 flex-shrink-0">
+        <span className="text-gray-600">#{cue.id}</span> <span className="text-gray-400">{cue.text}</span>
+      </div>
+
+      {/* Timeline strip */}
+      <div className="px-5 pt-5 pb-1 flex-shrink-0">
+        {/* Window time range labels */}
+        <div className="flex justify-between mb-1 px-0.5">
+          <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs)}</span>
+          <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs + windowDuration)}</span>
+        </div>
+
+        <div ref={stripRef} className="relative w-full h-14 select-none touch-none">
+          {/* Background track */}
+          <div className="absolute inset-x-0 top-5 bottom-5 rounded-full bg-gray-800" />
+
+          {/* Highlighted region */}
+          <div
+            className="absolute top-5 bottom-5 rounded-full bg-amber-500/40 border border-amber-500/60"
+            style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
+          />
+
+          {/* Start marker (amber) */}
+          <div
+            className="absolute top-0 bottom-0 w-11 -translate-x-1/2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing z-10"
+            style={{ left: `${startPct}%` }}
+            onPointerDown={onMarkerPointerDown("start")}
+            onPointerMove={onMarkerPointerMove}
+            onPointerUp={onMarkerPointerUp}
+          >
+            <div className="w-1.5 h-10 bg-amber-400 rounded-full shadow-lg shadow-amber-900/50" />
+          </div>
+
+          {/* End marker (orange) */}
+          <div
+            className="absolute top-0 bottom-0 w-11 -translate-x-1/2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing z-10"
+            style={{ left: `${endPct}%` }}
+            onPointerDown={onMarkerPointerDown("end")}
+            onPointerMove={onMarkerPointerMove}
+            onPointerUp={onMarkerPointerUp}
+          >
+            <div className="w-1.5 h-10 bg-orange-400 rounded-full shadow-lg shadow-orange-900/50" />
+          </div>
+        </div>
+
+        {/* Marker time labels */}
+        <div className="flex justify-between mt-1 px-0.5">
+          <span className="text-[11px] font-mono text-amber-400">{fmtMs(markerStart)}</span>
+          <span className="text-[11px] font-mono text-orange-400">{fmtMs(markerEnd)}</span>
+        </div>
+      </div>
+
+      {/* Strip play button */}
+      <div className="flex justify-center py-3 flex-shrink-0">
+        <button
+          onClick={toggleStripPlay}
+          className="flex items-center gap-2 px-5 py-2 rounded-full bg-gray-800 border border-gray-700 hover:bg-gray-700 active:bg-gray-600 transition-colors text-sm text-gray-200"
+        >
+          {stripPlaying ? (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-amber-400">
+                <path fillRule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7 0a.75.75 0 0 1 .75-.75H16.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clipRule="evenodd" />
+              </svg>
+              Stop Preview
+            </>
+          ) : (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-amber-400">
+                <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" />
+              </svg>
+              Play Strip
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Merge with next */}
+      {!isLastCue && (
+        <div className="flex justify-center flex-shrink-0">
+          <button
+            onClick={onMergeWithNext}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-gray-700 text-xs text-gray-500 hover:text-gray-300 hover:border-gray-500 active:bg-gray-800 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+            </svg>
+            Merge with next cue
+          </button>
         </div>
       )}
     </div>
