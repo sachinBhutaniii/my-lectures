@@ -89,7 +89,7 @@ function getGroupCategory(items: TranscriptReviewItem[]): Category {
   const en = items.find((i) => i.localeCode === "en") ?? items[0];
   if (!en) return "C";
   if (en.deployed) return "D";
-  if (en.approvalStatus === "LEVEL1_APPROVED" || en.approvalStatus === "APPROVED") return "A";
+  if (en.approvalStatus === "LEVEL1_APPROVED" || en.approvalStatus === "APPROVED" || en.level2ProofreaderId != null) return "A";
   if (en.level1ProofreaderId != null) return "B";
   return "C";
 }
