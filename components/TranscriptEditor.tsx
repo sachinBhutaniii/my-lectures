@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type React from "react";
 import {
   SrtCue, CueDiff,
@@ -227,10 +227,23 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     };
   }, []);
 
+  // ── Regressed cue detection ──────────────────────────────────────────────────
+  // A cue is "regressed" if its startMs is earlier than the highest endMs seen
+  // so far — meaning timestamps went backwards (AI hallucination artifact).
+  const regressedIds = useMemo(() => {
+    const ids = new Set<number>();
+    let highwater = 0;
+    for (const cue of cues) {
+      if (cue.startMs < highwater) ids.add(cue.id);
+      if (cue.endMs > highwater) highwater = cue.endMs;
+    }
+    return ids;
+  }, [cues]);
+
   // ── Active cue + auto-scroll ─────────────────────────────────────────────────
   useEffect(() => {
     const ms = currentTime * 1000;
-    const active = cues.find((c) => ms >= c.startMs && ms < c.endMs);
+    const active = cues.find((c) => !regressedIds.has(c.id) && ms >= c.startMs && ms < c.endMs);
     if (active && active.id !== activeCueId) {
       setActiveCueId(active.id);
       if (autoScroll && editingId === null) {
@@ -239,7 +252,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           ?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
-  }, [currentTime, cues, activeCueId, autoScroll, editingId]);
+  }, [currentTime, cues, activeCueId, autoScroll, editingId, regressedIds]);
 
   // ── Auto-save (L1 / L2 only) ─────────────────────────────────────────────────
   useEffect(() => {
@@ -992,6 +1005,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                 <CueRow
                   cue={cue}
                   isActive={activeCueId === cue.id}
+                  isRegressed={regressedIds.has(cue.id)}
                   isEditing={editingId === cue.id}
                   draft={draft}
                   mode={mode}
@@ -1271,6 +1285,7 @@ type DraftState = { text: string; startTime: string; endTime: string };
 interface CueRowProps {
   cue: SrtCue;
   isActive: boolean;
+  isRegressed?: boolean;
   isEditing: boolean;
   draft: DraftState;
   mode: EditorMode;
@@ -1300,7 +1315,7 @@ interface CueRowProps {
 }
 
 function CueRow({
-  cue, isActive, isEditing, draft, mode,
+  cue, isActive, isRegressed, isEditing, draft, mode,
   l1Diff, l2Diff, isL1Accepted,
   isL1AdminAccepted, isL1AdminRejected, isL2AdminAccepted, isL2AdminRejected,
   onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1,
@@ -1314,7 +1329,9 @@ function CueRow({
     <div
       data-cue={cue.id}
       className={`px-4 py-3 transition-colors ${
-        isSelected
+        isRegressed
+          ? "bg-red-500/10 border-l-2 border-red-500"
+          : isSelected
           ? "bg-orange-500/10 border-l-2 border-orange-500"
           : isActive
           ? "bg-blue-500/10 border-l-2 border-blue-500"
@@ -1392,10 +1409,12 @@ function CueRow({
             <button
               onClick={onSeekTo}
               className="flex-shrink-0 text-left group"
-              title="Seek to this cue"
+              title={isRegressed ? "Regressed timestamp — goes backwards" : "Seek to this cue"}
             >
-              <span className="block text-[10px] font-mono text-gray-600 group-hover:text-blue-400 transition-colors">#{cue.id}</span>
-              <span className="block text-[10px] font-mono text-gray-700 group-hover:text-blue-400 transition-colors leading-tight">
+              <span className={`block text-[10px] font-mono transition-colors ${isRegressed ? "text-red-400" : "text-gray-600 group-hover:text-blue-400"}`}>
+                #{cue.id}{isRegressed && " ⚠"}
+              </span>
+              <span className={`block text-[10px] font-mono transition-colors leading-tight ${isRegressed ? "text-red-400/80" : "text-gray-700 group-hover:text-blue-400"}`}>
                 {cue.startTime}<br />{cue.endTime}
               </span>
             </button>
