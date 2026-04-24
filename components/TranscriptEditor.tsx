@@ -1671,6 +1671,43 @@ function CueTimestampEditor({
   };
   const onStripPointerUp = () => { panStartRef.current = null; };
 
+  // Amber-region drag — moves both markers together (shift the whole range)
+  const ambDragRef = useRef<{ x: number; startMs: number; endMs: number } | null>(null);
+
+  const onAmbPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation(); // prevent strip from starting a pan
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ambDragRef.current = { x: e.clientX, startMs: markerStart, endMs: markerEnd };
+  };
+  const onAmbPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!ambDragRef.current) return;
+    const rect = stripRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const deltaMs = ((e.clientX - ambDragRef.current.x) / rect.width) * windowDuration;
+    const dur = ambDragRef.current.endMs - ambDragRef.current.startMs;
+    const newStart = Math.max(0, Math.round(ambDragRef.current.startMs + deltaMs));
+    setMarkerStart(newStart);
+    setMarkerEnd(newStart + dur);
+  };
+  const onAmbPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!ambDragRef.current) return;
+    const rect = stripRef.current?.getBoundingClientRect();
+    const deltaMs = rect ? ((e.clientX - ambDragRef.current.x) / rect.width) * windowDuration : 0;
+    const finalStart = Math.max(0, Math.round(ambDragRef.current.startMs + deltaMs));
+    ambDragRef.current = null;
+    // 1s preview at final start position
+    const audio = audioRef.current;
+    if (audio) {
+      previewCueRef.current = null;
+      setStripPlaying(false);
+      previewCueRef.current = { startMs: finalStart, endMs: finalStart + 1000 };
+      previewLoopCountRef.current = 1;
+      audio.currentTime = finalStart / 1000;
+      audio.play().catch(() => {});
+    }
+  };
+
   const toggleStripPlay = () => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -1744,8 +1781,11 @@ function CueTimestampEditor({
             }}
           />
           <div
-            className="absolute top-5 bottom-5 rounded-full bg-amber-500/40 border border-amber-500/60"
+            className="absolute top-5 bottom-5 rounded-full bg-amber-500/40 border border-amber-500/60 touch-none cursor-move z-5"
             style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
+            onPointerDown={onAmbPointerDown}
+            onPointerMove={onAmbPointerMove}
+            onPointerUp={onAmbPointerUp}
           />
           {/* Start marker (amber) */}
           <div
