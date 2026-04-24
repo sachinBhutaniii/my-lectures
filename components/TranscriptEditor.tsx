@@ -1564,11 +1564,34 @@ function CueTimestampEditor({
     return () => audio.removeEventListener("pause", onPause);
   }, [stripPlaying, audioRef]);
 
-  // Full audio as the window so markers can be placed anywhere in the lecture
-  const windowStartMs = 0;
-  const windowDuration = audioDuration > 0
+  // 20-second zoomed window; user can pan via the mini-map below
+  const windowDuration = 20_000;
+  const totalDurationMs = audioDuration > 0
     ? Math.ceil(audioDuration * 1000)
-    : Math.max(markerEnd * 2, 60_000); // fallback when audio not yet loaded
+    : Math.max(markerEnd * 2, 60_000);
+  const cueMidMs = Math.round((cue.startMs + cue.endMs) / 2);
+  const [windowOffset, setWindowOffset] = useState(
+    () => Math.max(0, Math.min(cueMidMs - windowDuration / 2, totalDurationMs - windowDuration))
+  );
+  const windowStartMs = Math.max(0, Math.min(windowOffset, totalDurationMs - windowDuration));
+
+  const panTo = (centerMs: number) => {
+    setWindowOffset(Math.max(0, Math.min(totalDurationMs - windowDuration, centerMs - windowDuration / 2)));
+  };
+
+  const miniMapRef = useRef<HTMLDivElement>(null);
+  const onMiniPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    panTo(pct * totalDurationMs);
+  };
+  const onMiniPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.buttons) return;
+    const rect = (miniMapRef.current ?? e.currentTarget).getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    panTo(pct * totalDurationMs);
+  };
 
   const computeMs = (clientX: number): number => {
     if (!stripRef.current) return 0;
@@ -1669,23 +1692,20 @@ function CueTimestampEditor({
       </div>
 
       {/* Timeline strip */}
-      <div className="px-5 pt-5 pb-1 flex-shrink-0">
-        {/* Window time range labels */}
+      <div className="px-5 pt-4 pb-1 flex-shrink-0">
+        {/* Window edge labels */}
         <div className="flex justify-between mb-1 px-0.5">
           <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs)}</span>
           <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs + windowDuration)}</span>
         </div>
 
+        {/* Main zoomed strip */}
         <div ref={stripRef} className="relative w-full h-14 select-none touch-none">
-          {/* Background track */}
           <div className="absolute inset-x-0 top-5 bottom-5 rounded-full bg-gray-800" />
-
-          {/* Highlighted region */}
           <div
             className="absolute top-5 bottom-5 rounded-full bg-amber-500/40 border border-amber-500/60"
             style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
           />
-
           {/* Start marker (amber) */}
           <div
             className="absolute top-0 bottom-0 w-11 -translate-x-1/2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing z-10"
@@ -1696,7 +1716,6 @@ function CueTimestampEditor({
           >
             <div className="w-1.5 h-10 bg-amber-400 rounded-full shadow-lg shadow-amber-900/50" />
           </div>
-
           {/* End marker (orange) */}
           <div
             className="absolute top-0 bottom-0 w-11 -translate-x-1/2 flex items-center justify-center touch-none cursor-grab active:cursor-grabbing z-10"
@@ -1709,10 +1728,57 @@ function CueTimestampEditor({
           </div>
         </div>
 
-        {/* Marker time labels */}
+        {/* Marker time labels + snap buttons */}
         <div className="flex justify-between mt-1 px-0.5">
-          <span className="text-[11px] font-mono text-amber-400">{fmtMs(markerStart)}</span>
-          <span className="text-[11px] font-mono text-orange-400">{fmtMs(markerEnd)}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] font-mono text-amber-400">{fmtMs(markerStart)}</span>
+            <button
+              onClick={() => panTo(markerStart)}
+              className="text-[10px] text-amber-600 hover:text-amber-400 transition-colors"
+              title="Center window on start marker"
+            >⬡</button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => panTo(markerEnd)}
+              className="text-[10px] text-orange-600 hover:text-orange-400 transition-colors"
+              title="Center window on end marker"
+            >⬡</button>
+            <span className="text-[11px] font-mono text-orange-400">{fmtMs(markerEnd)}</span>
+          </div>
+        </div>
+
+        {/* Mini-map — full lecture, drag to pan the window */}
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-0.5 px-0.5">
+            <span className="text-[9px] text-gray-700 uppercase tracking-wide">Full lecture — drag to navigate</span>
+            <span className="text-[9px] font-mono text-gray-700">{fmtMs(totalDurationMs)}</span>
+          </div>
+          <div
+            ref={miniMapRef}
+            className="relative w-full h-3 rounded-full bg-gray-800 cursor-pointer touch-none select-none"
+            onPointerDown={onMiniPointerDown}
+            onPointerMove={onMiniPointerMove}
+          >
+            {/* Current window indicator */}
+            <div
+              className="absolute top-0 bottom-0 rounded-full bg-amber-500/50 border border-amber-500/80"
+              style={{
+                left: `${(windowStartMs / totalDurationMs) * 100}%`,
+                width: `${(windowDuration / totalDurationMs) * 100}%`,
+              }}
+            />
+            {/* Start marker dot */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-amber-400"
+              style={{ left: `${(markerStart / totalDurationMs) * 100}%` }}
+            />
+            {/* End marker dot */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-orange-400"
+              style={{ left: `${(markerEnd / totalDurationMs) * 100}%` }}
+            />
+          </div>
         </div>
       </div>
 
