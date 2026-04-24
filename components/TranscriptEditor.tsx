@@ -77,6 +77,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [l2Diff, setL2Diff] = useState<Map<number, CueDiff>>(new Map());
   const [acceptedL1Ids, setAcceptedL1Ids] = useState<Set<number>>(new Set());
   const [preAcceptAllSnapshot, setPreAcceptAllSnapshot] = useState<{ cues: SrtCue[]; acceptedIds: Set<number> } | null>(null);
+  const [adminAcceptedL1Ids, setAdminAcceptedL1Ids] = useState<Set<number>>(new Set());
+  const [adminRejectedL1Ids, setAdminRejectedL1Ids] = useState<Set<number>>(new Set());
+  const [adminAcceptedL2Ids, setAdminAcceptedL2Ids] = useState<Set<number>>(new Set());
+  const [adminRejectedL2Ids, setAdminRejectedL2Ids] = useState<Set<number>>(new Set());
 
   // Inline edit state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -442,6 +446,73 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setPreAcceptAllSnapshot(null);
   };
 
+  // ── Admin: per-cue accept/reject for L1 and L2 changes ───────────────────────
+  const adminAcceptL1 = (cueId: number) => {
+    const diff = l1Diff.get(cueId);
+    if (!diff) return;
+    setCues((prev) => prev.map((c) => c.id === cueId
+      ? { ...c, text: diff.newText, startTime: diff.newStart, endTime: diff.newEnd, startMs: timeToMs(diff.newStart), endMs: timeToMs(diff.newEnd) }
+      : c
+    ));
+    setAdminAcceptedL1Ids((prev) => new Set([...prev, cueId]));
+    setAdminRejectedL1Ids((prev) => { const s = new Set(prev); s.delete(cueId); return s; });
+  };
+  const adminRejectL1 = (cueId: number) => {
+    const diff = l1Diff.get(cueId);
+    if (!diff) return;
+    setCues((prev) => prev.map((c) => c.id === cueId
+      ? { ...c, text: diff.origText, startTime: diff.origStart, endTime: diff.origEnd, startMs: timeToMs(diff.origStart), endMs: timeToMs(diff.origEnd) }
+      : c
+    ));
+    setAdminRejectedL1Ids((prev) => new Set([...prev, cueId]));
+    setAdminAcceptedL1Ids((prev) => { const s = new Set(prev); s.delete(cueId); return s; });
+  };
+  const adminAcceptL2 = (cueId: number) => {
+    setAdminAcceptedL2Ids((prev) => new Set([...prev, cueId]));
+    setAdminRejectedL2Ids((prev) => { const s = new Set(prev); s.delete(cueId); return s; });
+  };
+  const adminRejectL2 = (cueId: number) => {
+    const diff = l2Diff.get(cueId);
+    if (!diff) return;
+    setCues((prev) => prev.map((c) => c.id === cueId
+      ? { ...c, text: diff.origText, startTime: diff.origStart, endTime: diff.origEnd, startMs: timeToMs(diff.origStart), endMs: timeToMs(diff.origEnd) }
+      : c
+    ));
+    setAdminRejectedL2Ids((prev) => new Set([...prev, cueId]));
+    setAdminAcceptedL2Ids((prev) => { const s = new Set(prev); s.delete(cueId); return s; });
+  };
+  const adminAcceptAllL1 = () => {
+    setCues((prev) => prev.map((c) => {
+      const diff = l1Diff.get(c.id);
+      if (!diff) return c;
+      return { ...c, text: diff.newText, startTime: diff.newStart, endTime: diff.newEnd, startMs: timeToMs(diff.newStart), endMs: timeToMs(diff.newEnd) };
+    }));
+    setAdminAcceptedL1Ids(new Set(l1Diff.keys()));
+    setAdminRejectedL1Ids(new Set());
+  };
+  const adminRejectAllL1 = () => {
+    setCues((prev) => prev.map((c) => {
+      const diff = l1Diff.get(c.id);
+      if (!diff) return c;
+      return { ...c, text: diff.origText, startTime: diff.origStart, endTime: diff.origEnd, startMs: timeToMs(diff.origStart), endMs: timeToMs(diff.origEnd) };
+    }));
+    setAdminRejectedL1Ids(new Set(l1Diff.keys()));
+    setAdminAcceptedL1Ids(new Set());
+  };
+  const adminAcceptAllL2 = () => {
+    setAdminAcceptedL2Ids(new Set(l2Diff.keys()));
+    setAdminRejectedL2Ids(new Set());
+  };
+  const adminRejectAllL2 = () => {
+    setCues((prev) => prev.map((c) => {
+      const diff = l2Diff.get(c.id);
+      if (!diff) return c;
+      return { ...c, text: diff.origText, startTime: diff.origStart, endTime: diff.origEnd, startMs: timeToMs(diff.origStart), endMs: timeToMs(diff.origEnd) };
+    }));
+    setAdminRejectedL2Ids(new Set(l2Diff.keys()));
+    setAdminAcceptedL2Ids(new Set());
+  };
+
   // ── Submit review ────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -782,14 +853,41 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         </div>
       )}
 
-      {/* ── Admin diff legend ─────────────────────────────────────────────────── */}
-      {mode === "admin" && (l1Diff.size > 0 || l2Diff.size > 0) && (
-        <div className="flex-shrink-0 flex items-center gap-4 px-4 py-2 bg-amber-500/5 border-b border-amber-500/15 text-[11px] text-gray-500">
-          <span>Diffs shown below each changed cue:</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" />L1 vs Original</span>
-          {hasL2 && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" />L2 vs L1</span>}
-        </div>
-      )}
+      {/* ── Admin accept/reject bar ───────────────────────────────────────────── */}
+      {mode === "admin" && (l1Diff.size > 0 || l2Diff.size > 0) && (() => {
+        const l1Pending = l1Diff.size - adminAcceptedL1Ids.size - adminRejectedL1Ids.size;
+        const l2Pending = l2Diff.size - adminAcceptedL2Ids.size - adminRejectedL2Ids.size;
+        return (
+          <div className="flex-shrink-0 flex flex-col gap-1.5 px-4 py-2.5 bg-amber-500/5 border-b border-amber-500/15">
+            {l1Diff.size > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+                  <span className="text-blue-400 font-medium">L1</span>
+                  <span>{l1Pending > 0 ? `${l1Pending} pending` : "all reviewed"}</span>
+                </span>
+                <div className="flex gap-1.5">
+                  <button onClick={adminAcceptAllL1} className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/15 border border-green-500/25 text-green-400 hover:bg-green-500/25 transition-colors">Accept All ✓</button>
+                  <button onClick={adminRejectAllL1} className="px-2 py-0.5 rounded text-[10px] font-medium bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500/25 transition-colors">Reject All ✗</button>
+                </div>
+              </div>
+            )}
+            {l2Diff.size > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+                  <span className="text-purple-400 font-medium">L2</span>
+                  <span>{l2Pending > 0 ? `${l2Pending} pending` : "all reviewed"}</span>
+                </span>
+                <div className="flex gap-1.5">
+                  <button onClick={adminAcceptAllL2} className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/15 border border-green-500/25 text-green-400 hover:bg-green-500/25 transition-colors">Accept All ✓</button>
+                  <button onClick={adminRejectAllL2} className="px-2 py-0.5 rounded text-[10px] font-medium bg-red-500/15 border border-red-500/25 text-red-400 hover:bg-red-500/25 transition-colors">Reject All ✗</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Raw transcript fallback warning ──────────────────────────────────── */}
       {rawTranscriptUsed && (
@@ -844,11 +942,19 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                   l1Diff={l1Diff.get(cue.id)}
                   l2Diff={l2Diff.get(cue.id)}
                   isL1Accepted={acceptedL1Ids.has(cue.id)}
+                  isL1AdminAccepted={adminAcceptedL1Ids.has(cue.id)}
+                  isL1AdminRejected={adminRejectedL1Ids.has(cue.id)}
+                  isL2AdminAccepted={adminAcceptedL2Ids.has(cue.id)}
+                  isL2AdminRejected={adminRejectedL2Ids.has(cue.id)}
                   onEdit={() => startEdit(cue)}
                   onCancelEdit={cancelEdit}
                   onSaveEdit={saveEdit}
                   onDraftChange={setDraft}
                   onAcceptL1={() => acceptL1Change(cue.id)}
+                  onAdminAcceptL1={() => adminAcceptL1(cue.id)}
+                  onAdminRejectL1={() => adminRejectL1(cue.id)}
+                  onAdminAcceptL2={() => adminAcceptL2(cue.id)}
+                  onAdminRejectL2={() => adminRejectL2(cue.id)}
                   onSeekTo={() => { if (audioRef.current) { audioRef.current.currentTime = cue.startMs / 1000; } }}
                   onDelete={() => deleteCue(cue.id)}
                   selectMode={selectMode}
@@ -1099,11 +1205,19 @@ interface CueRowProps {
   l1Diff?: CueDiff;
   l2Diff?: CueDiff;
   isL1Accepted?: boolean;
+  isL1AdminAccepted?: boolean;
+  isL1AdminRejected?: boolean;
+  isL2AdminAccepted?: boolean;
+  isL2AdminRejected?: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
   onDraftChange: (d: DraftState) => void;
   onAcceptL1: () => void;
+  onAdminAcceptL1?: () => void;
+  onAdminRejectL1?: () => void;
+  onAdminAcceptL2?: () => void;
+  onAdminRejectL2?: () => void;
   onSeekTo: () => void;
   onDelete: () => void;
   selectMode?: boolean;
@@ -1115,8 +1229,10 @@ interface CueRowProps {
 function CueRow({
   cue, isActive, isEditing, draft, mode,
   l1Diff, l2Diff, isL1Accepted,
-  onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1, onSeekTo,
-  onDelete,
+  isL1AdminAccepted, isL1AdminRejected, isL2AdminAccepted, isL2AdminRejected,
+  onEdit, onCancelEdit, onSaveEdit, onDraftChange, onAcceptL1,
+  onAdminAcceptL1, onAdminRejectL1, onAdminAcceptL2, onAdminRejectL2,
+  onSeekTo, onDelete,
   selectMode, isSelected, onCheckboxPointerDown, onCheckboxPointerEnter,
 }: CueRowProps) {
   const inputCls = "w-full bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-blue-500 transition-colors";
@@ -1240,12 +1356,21 @@ function CueRow({
               <div className="px-3 py-1.5 border-b border-gray-800 flex items-center justify-between">
                 <span className="text-[10px] font-medium text-blue-400 uppercase tracking-wide">Level-1 Edit</span>
                 {mode === "l2" && (
-                  <button
-                    onClick={onAcceptL1}
-                    className="text-[10px] px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30 transition-colors font-medium"
-                  >
+                  <button onClick={onAcceptL1} className="text-[10px] px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30 transition-colors font-medium">
                     Accept ✓
                   </button>
+                )}
+                {mode === "admin" && (
+                  isL1AdminAccepted ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/15 border border-green-500/25 text-green-400 font-medium">Accepted ✓</span>
+                  ) : isL1AdminRejected ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/15 border border-red-500/25 text-red-400 font-medium">Rejected ✗</span>
+                  ) : (
+                    <div className="flex gap-1">
+                      <button onClick={onAdminAcceptL1} className="text-[10px] px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30 transition-colors font-medium">Accept ✓</button>
+                      <button onClick={onAdminRejectL1} className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-colors font-medium">Reject ✗</button>
+                    </div>
+                  )
                 )}
               </div>
               <div className="px-3 py-2 space-y-1">
@@ -1269,8 +1394,18 @@ function CueRow({
           {/* ── L2 diff panel (shown for admin) ── */}
           {l2Diff && mode === "admin" && (
             <div className="mt-1.5 ml-10 rounded-lg border border-gray-800 bg-gray-950/60 overflow-hidden">
-              <div className="px-3 py-1.5 border-b border-gray-800">
+              <div className="px-3 py-1.5 border-b border-gray-800 flex items-center justify-between">
                 <span className="text-[10px] font-medium text-purple-400 uppercase tracking-wide">Level-2 Edit</span>
+                {isL2AdminAccepted ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-green-500/15 border border-green-500/25 text-green-400 font-medium">Accepted ✓</span>
+                ) : isL2AdminRejected ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/15 border border-red-500/25 text-red-400 font-medium">Rejected ✗</span>
+                ) : (
+                  <div className="flex gap-1">
+                    <button onClick={onAdminAcceptL2} className="text-[10px] px-2 py-0.5 rounded bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30 transition-colors font-medium">Accept ✓</button>
+                    <button onClick={onAdminRejectL2} className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-colors font-medium">Reject ✗</button>
+                  </div>
+                )}
               </div>
               <div className="px-3 py-2 space-y-1">
                 {l2Diff.textChanged && (
