@@ -488,8 +488,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       if (idx === -1) return prev;
       const next = [...prev];
       next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs), text };
+      // Pack all subsequent cues with no gaps: each starts exactly where the previous ends
       for (let i = idx + 1; i < next.length; i++) {
-        if (next[i - 1].endMs <= next[i].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
         const newStart = next[i - 1].endMs;
         next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
