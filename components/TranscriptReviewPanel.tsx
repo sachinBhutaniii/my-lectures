@@ -735,6 +735,7 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, isTranscriptAdmin, o
   const [proofreaders, setProofreaders] = useState<UserSearchResult[]>([]);
   const [loadingLocales, setLoadingLocales] = useState(true);
   const [loadingProofreaders, setLoadingProofreaders] = useState(false);
+  const [search, setSearch] = useState("");
 
   // Load available languages on mount
   useEffect(() => {
@@ -748,6 +749,7 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, isTranscriptAdmin, o
   // When a language is selected, fetch proofreaders for that language
   useEffect(() => {
     if (!selectedLocale) { setProofreaders([]); return; }
+    setSearch("");
     let cancelled = false;
     setLoadingProofreaders(true);
     getProofreaders(selectedLocale).then((data) => {
@@ -848,8 +850,25 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, isTranscriptAdmin, o
                   <p className="text-xs mt-1 text-gray-700">Assign this language to proofreaders in the Users tab.</p>
                 </div>
               ) : (
-                <div className="max-h-44 overflow-y-auto space-y-1.5">
-                  {proofreaders.map((u) => (
+                <>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search by name or email…"
+                    className="w-full px-3 py-2 rounded-xl bg-gray-900 border border-gray-700 text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-gray-500 transition-colors"
+                  />
+                {(() => {
+                    const q = search.toLowerCase();
+                    const filtered = proofreaders.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+                    if (filtered.length === 0) return <p className="text-xs text-gray-600 py-2 text-center">No results for "{search}"</p>;
+                    return null;
+                  })()}
+                <div className="max-h-44 overflow-y-auto space-y-1.5 mt-1.5">
+                  {proofreaders.filter((u) => {
+                    const q = search.toLowerCase();
+                    return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+                  }).map((u) => (
                     <button
                       key={u.id}
                       onClick={() => onAssign(u.id)}
@@ -878,6 +897,7 @@ function AssignModal({ item, level, isParentAdmin, isAdmin, isTranscriptAdmin, o
                     </button>
                   ))}
                 </div>
+                </>
               )}
             </div>
           )}
