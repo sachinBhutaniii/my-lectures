@@ -1381,7 +1381,40 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         const nextCue = idx < cues.length - 1 ? cues[idx + 1] : null;
         const prevEnd = prevCue?.endMs ?? null;
         const nextStart = nextCue?.startMs ?? null;
-        return (
+
+        const CueContextCard = ({ cue: c, active }: { cue: SrtCue; active: boolean }) => (
+          <div className={`px-4 py-2.5 rounded-xl border flex-1 min-h-0 overflow-hidden flex flex-col gap-0.5 ${
+            active
+              ? "border-amber-500/50 bg-amber-500/10"
+              : "border-gray-800 bg-gray-900/60"
+          }`}>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className={`text-[10px] font-mono ${active ? "text-amber-400" : "text-gray-600"}`}>#{c.id}</span>
+              <span className={`text-[10px] font-mono ${active ? "text-amber-300/70" : "text-gray-600"}`}>{c.startTime} → {c.endTime}</span>
+            </div>
+            <p className={`text-xs leading-snug overflow-hidden ${active ? "text-gray-200" : "text-gray-500"}`}
+              style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+              {c.text}
+            </p>
+          </div>
+        );
+
+        return (<>
+          {/* 3-cue context panel above the bottom sheet */}
+          <div
+            className="fixed left-0 right-0 z-40 bg-[#0a0a0a]/95 flex flex-col gap-2 px-4 py-3"
+            style={{ bottom: "44vh", top: 0 }}
+          >
+            <div className="flex flex-col gap-2 h-full">
+              {prevCue
+                ? <CueContextCard cue={prevCue} active={false} />
+                : <div className="flex-1 min-h-0" />}
+              <CueContextCard cue={tsEditCue} active={true} />
+              {nextCue
+                ? <CueContextCard cue={nextCue} active={false} />
+                : <div className="flex-1 min-h-0" />}
+            </div>
+          </div>
           <CueTimestampEditor
             key={`${tsEditCue.id}-${tsEditKey}`}
             cue={tsEditCue}
@@ -1398,7 +1431,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             onClose={closeTsEditor}
             onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
           />
-        );
+        </>);
       })()}
 
       {/* ── Publish confirmation modal ─────────────────────────────────────────── */}
