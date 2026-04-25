@@ -1279,6 +1279,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       {/* ── Timestamp editor bottom sheet ────────────────────────────────────── */}
       {tsEditCue && (
         <CueTimestampEditor
+          key={tsEditCue.id}
           cue={tsEditCue}
           audioRef={audioRef}
           previewCueRef={previewCueRef}
