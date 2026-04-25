@@ -1279,8 +1279,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       {/* ── Timestamp editor bottom sheet ────────────────────────────────────── */}
       {tsEditCue && (() => {
         const idx = cues.findIndex((c) => c.id === tsEditCue.id);
-        const prevEnd = idx > 0 ? cues[idx - 1].endMs : null;
-        const nextStart = idx < cues.length - 1 ? cues[idx + 1].startMs : null;
+        const prevCue = idx > 0 ? cues[idx - 1] : null;
+        const nextCue = idx < cues.length - 1 ? cues[idx + 1] : null;
+        const prevEnd = prevCue?.endMs ?? null;
+        const nextStart = nextCue?.startMs ?? null;
         return (
           <CueTimestampEditor
             key={tsEditCue.id}
@@ -1290,7 +1292,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             previewLoopCountRef={previewLoopCountRef}
             audioDuration={duration}
             isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
-            neighbors={{ prevEnd, nextStart }}
+            neighbors={{ prevEnd, prevText: prevCue?.text ?? null, nextStart, nextText: nextCue?.text ?? null }}
             onSave={(startMs, endMs, text) => saveTsEdit(tsEditCue.id, startMs, endMs, text)}
             onNext={(startMs, endMs, text) => saveAndGoToNext(tsEditCue.id, startMs, endMs, text)}
             onClose={closeTsEditor}
@@ -1597,7 +1599,7 @@ interface TsEditorProps {
   previewLoopCountRef: React.MutableRefObject<number>;
   audioDuration: number; // seconds
   isLastCue: boolean;
-  neighbors: { prevEnd: number | null; nextStart: number | null };
+  neighbors: { prevEnd: number | null; prevText: string | null; nextStart: number | null; nextText: string | null };
   onSave: (startMs: number, endMs: number, text: string) => void;
   onNext: (startMs: number, endMs: number, text: string) => void;
   onClose: () => void;
@@ -1878,24 +1880,38 @@ function CueTimestampEditor({
           >
             <div className="w-1.5 h-10 bg-orange-400 rounded-full shadow-lg shadow-orange-900/50" />
           </div>
-          {/* Neighbor boundary: previous cue end (red) */}
+          {/* Neighbor boundary: previous cue end (red) — text shown to the left of line */}
           {neighbors.prevEnd !== null && neighbors.prevEnd > windowStartMs && neighbors.prevEnd < windowStartMs + windowDuration && (
             <div
-              className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-10"
+              className="absolute top-0 bottom-0 pointer-events-none z-10"
               style={{ left: `${((neighbors.prevEnd - windowStartMs) / windowDuration) * 100}%` }}
             >
-              <span className="text-[8px] text-red-400/70 leading-none mb-0.5">prev</span>
-              <div className="w-px flex-1 bg-red-400/50" style={{ borderLeft: "1px dashed rgba(248,113,113,0.6)" }} />
+              <div className="absolute top-0 h-full" style={{ borderLeft: "1px dashed rgba(248,113,113,0.55)" }} />
+              <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5" style={{ transform: "translateX(-100%)" }}>
+                <span className="text-[8px] text-red-400/70 leading-none">←prev</span>
+                {neighbors.prevText && (
+                  <span className="text-[7px] text-red-300/50 leading-tight max-w-[64px] overflow-hidden" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {neighbors.prevText}
+                  </span>
+                )}
+              </div>
             </div>
           )}
-          {/* Neighbor boundary: next cue start (blue) */}
+          {/* Neighbor boundary: next cue start (blue) — text shown to the right of line */}
           {neighbors.nextStart !== null && neighbors.nextStart > windowStartMs && neighbors.nextStart < windowStartMs + windowDuration && (
             <div
-              className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-10"
+              className="absolute top-0 bottom-0 pointer-events-none z-10"
               style={{ left: `${((neighbors.nextStart - windowStartMs) / windowDuration) * 100}%` }}
             >
-              <span className="text-[8px] text-blue-400/70 leading-none mb-0.5">next</span>
-              <div className="w-px flex-1 bg-blue-400/50" style={{ borderLeft: "1px dashed rgba(96,165,250,0.6)" }} />
+              <div className="absolute top-0 h-full" style={{ borderLeft: "1px dashed rgba(96,165,250,0.55)" }} />
+              <div className="absolute top-1 left-1 flex flex-col items-start gap-0.5">
+                <span className="text-[8px] text-blue-400/70 leading-none">next→</span>
+                {neighbors.nextText && (
+                  <span className="text-[7px] text-blue-300/50 leading-tight max-w-[64px] overflow-hidden" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {neighbors.nextText}
+                  </span>
+                )}
+              </div>
             </div>
           )}
           {/* Playhead */}
