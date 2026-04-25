@@ -111,6 +111,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [selectAction, setSelectAction] = useState<"text" | "timestamps">("text");
   const [tsRangeStart, setTsRangeStart] = useState("");
   const [tsRangeEnd, setTsRangeEnd] = useState("");
+  const [shiftSeconds, setShiftSeconds] = useState("1");
+  const [shiftDirection, setShiftDirection] = useState<"forward" | "backward">("forward");
   const [tsEditCue, setTsEditCue] = useState<SrtCue | null>(null);
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
@@ -741,6 +743,23 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }
   };
 
+  const handleShiftTimestamps = useCallback(() => {
+    const secs = parseFloat(shiftSeconds);
+    if (isNaN(secs) || secs <= 0) return;
+    const deltaMs = Math.round(secs * 1000) * (shiftDirection === "forward" ? 1 : -1);
+    setCues((prev) =>
+      prev.map((c) => {
+        if (!selectedIds.has(c.id)) return c;
+        const newStart = Math.max(0, c.startMs + deltaMs);
+        const newEnd = Math.max(newStart + 200, c.endMs + deltaMs);
+        return { ...c, startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
+      })
+    );
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    setSelectAction("text");
+  }, [shiftSeconds, shiftDirection, selectedIds]);
+
   const pendingL1Changes = l1Diff.size - acceptedL1Ids.size;
   const allAccepted = l1Diff.size > 0 && pendingL1Changes === 0;
   const hasL2 = data.level2Srt != null;
@@ -1266,10 +1285,34 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
                         <>↺ Redistribute</>
                       )}
                     </button>
-                  </>
-                ) : (
-                  <span className="text-xs text-gray-600">Select cues to fix their timestamps</span>
-                )}
+                  </> ) : ( <span className="text-xs text-gray-600">Select cues to fix their timestamps</span> )}
+                  {/* Shift row — always shown in timestamps mode when cues are selected */}
+                  {selectedIds.size > 0 && selectAction === "timestamps" && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-800 w-full">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Shift</span>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={shiftSeconds}
+                        onChange={(e) => setShiftSeconds(e.target.value)}
+                        className="w-14 px-2 py-1 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-200 text-center outline-none focus:border-gray-500"
+                      />
+                      <span className="text-xs text-gray-500 flex-shrink-0">sec</span>
+                      <button
+                        onClick={() => setShiftDirection("backward")}
+                        className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${shiftDirection === "backward" ? "bg-blue-500/20 border-blue-500/40 text-blue-300" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600"}`}
+                      >← Back</button>
+                      <button
+                        onClick={() => setShiftDirection("forward")}
+                        className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${shiftDirection === "forward" ? "bg-blue-500/20 border-blue-500/40 text-blue-300" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600"}`}
+                      >Fwd →</button>
+                      <button
+                        onClick={handleShiftTimestamps}
+                        className="ml-auto px-3 py-1 rounded-lg bg-blue-500 hover:bg-blue-600 text-xs font-semibold text-white transition-colors"
+                      >Execute</button>
+                    </div>
+                  )}
               </>
             )}
           </div>
