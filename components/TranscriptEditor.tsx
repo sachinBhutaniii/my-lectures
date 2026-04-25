@@ -1277,21 +1277,27 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       )}
 
       {/* ── Timestamp editor bottom sheet ────────────────────────────────────── */}
-      {tsEditCue && (
-        <CueTimestampEditor
-          key={tsEditCue.id}
-          cue={tsEditCue}
-          audioRef={audioRef}
-          previewCueRef={previewCueRef}
-          previewLoopCountRef={previewLoopCountRef}
-          audioDuration={duration}
-          isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
-          onSave={(startMs, endMs, text) => saveTsEdit(tsEditCue.id, startMs, endMs, text)}
-          onNext={(startMs, endMs, text) => saveAndGoToNext(tsEditCue.id, startMs, endMs, text)}
-          onClose={closeTsEditor}
-          onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
-        />
-      )}
+      {tsEditCue && (() => {
+        const idx = cues.findIndex((c) => c.id === tsEditCue.id);
+        const prevEnd = idx > 0 ? cues[idx - 1].endMs : null;
+        const nextStart = idx < cues.length - 1 ? cues[idx + 1].startMs : null;
+        return (
+          <CueTimestampEditor
+            key={tsEditCue.id}
+            cue={tsEditCue}
+            audioRef={audioRef}
+            previewCueRef={previewCueRef}
+            previewLoopCountRef={previewLoopCountRef}
+            audioDuration={duration}
+            isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
+            neighbors={{ prevEnd, nextStart }}
+            onSave={(startMs, endMs, text) => saveTsEdit(tsEditCue.id, startMs, endMs, text)}
+            onNext={(startMs, endMs, text) => saveAndGoToNext(tsEditCue.id, startMs, endMs, text)}
+            onClose={closeTsEditor}
+            onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
+          />
+        );
+      })()}
 
       {/* ── Publish confirmation modal ─────────────────────────────────────────── */}
       {publishConfirm && (
@@ -1591,6 +1597,7 @@ interface TsEditorProps {
   previewLoopCountRef: React.MutableRefObject<number>;
   audioDuration: number; // seconds
   isLastCue: boolean;
+  neighbors: { prevEnd: number | null; nextStart: number | null };
   onSave: (startMs: number, endMs: number, text: string) => void;
   onNext: (startMs: number, endMs: number, text: string) => void;
   onClose: () => void;
@@ -1599,7 +1606,7 @@ interface TsEditorProps {
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
-  audioDuration, isLastCue, onSave, onNext, onClose, onMergeWithNext,
+  audioDuration, isLastCue, neighbors, onSave, onNext, onClose, onMergeWithNext,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
@@ -1871,6 +1878,26 @@ function CueTimestampEditor({
           >
             <div className="w-1.5 h-10 bg-orange-400 rounded-full shadow-lg shadow-orange-900/50" />
           </div>
+          {/* Neighbor boundary: previous cue end (red) */}
+          {neighbors.prevEnd !== null && neighbors.prevEnd > windowStartMs && neighbors.prevEnd < windowStartMs + windowDuration && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-10"
+              style={{ left: `${((neighbors.prevEnd - windowStartMs) / windowDuration) * 100}%` }}
+            >
+              <span className="text-[8px] text-red-400/70 leading-none mb-0.5">prev</span>
+              <div className="w-px flex-1 bg-red-400/50" style={{ borderLeft: "1px dashed rgba(248,113,113,0.6)" }} />
+            </div>
+          )}
+          {/* Neighbor boundary: next cue start (blue) */}
+          {neighbors.nextStart !== null && neighbors.nextStart > windowStartMs && neighbors.nextStart < windowStartMs + windowDuration && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none z-10"
+              style={{ left: `${((neighbors.nextStart - windowStartMs) / windowDuration) * 100}%` }}
+            >
+              <span className="text-[8px] text-blue-400/70 leading-none mb-0.5">next</span>
+              <div className="w-px flex-1 bg-blue-400/50" style={{ borderLeft: "1px dashed rgba(96,165,250,0.6)" }} />
+            </div>
+          )}
           {/* Playhead */}
           {playheadMs !== null && (
             <div
