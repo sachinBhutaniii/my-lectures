@@ -1977,10 +1977,34 @@ function CueTimestampEditor({
 
       {/* Timeline strip */}
       <div className="px-5 pt-4 pb-1 flex-shrink-0">
-        {/* Window edge labels */}
-        <div className="flex justify-between mb-1 px-0.5">
-          <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs)}</span>
-          <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs + windowDuration)}</span>
+        {/* Window edge labels + pan buttons */}
+        <div className="flex items-center justify-between mb-1 px-0.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              onPointerDown={() => {
+                const step = 5000;
+                setWindowOffset((o) => Math.max(0, o - step));
+                const id = setInterval(() => setWindowOffset((o) => Math.max(0, o - step)), 300);
+                const stop = () => { clearInterval(id); window.removeEventListener("pointerup", stop); };
+                window.addEventListener("pointerup", stop);
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded-md bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 active:bg-gray-700 transition-colors text-sm select-none touch-none"
+            >‹</button>
+            <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono text-gray-600">{fmtMs(windowStartMs + windowDuration)}</span>
+            <button
+              onPointerDown={() => {
+                const step = 5000;
+                setWindowOffset((o) => Math.min(totalDurationMs - windowDuration, o + step));
+                const id = setInterval(() => setWindowOffset((o) => Math.min(totalDurationMs - windowDuration, o + step)), 300);
+                const stop = () => { clearInterval(id); window.removeEventListener("pointerup", stop); };
+                window.addEventListener("pointerup", stop);
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded-md bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 active:bg-gray-700 transition-colors text-sm select-none touch-none"
+            >›</button>
+          </div>
         </div>
 
         {/* Main zoomed strip — drag background to pan, drag markers to adjust */}
