@@ -747,14 +747,35 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     const secs = parseFloat(shiftSeconds);
     if (isNaN(secs) || secs <= 0) return;
     const deltaMs = Math.round(secs * 1000) * (shiftDirection === "forward" ? 1 : -1);
-    setCues((prev) =>
-      prev.map((c) => {
+    setCues((prev) => {
+      const next = prev.map((c) => {
         if (!selectedIds.has(c.id)) return c;
         const newStart = Math.max(0, c.startMs + deltaMs);
         const newEnd = Math.max(newStart + 200, c.endMs + deltaMs);
         return { ...c, startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
-      })
-    );
+      });
+
+      // Cascade forward from the last selected cue into unselected neighbors
+      const lastSelectedIdx = next.reduce((acc, c, i) => selectedIds.has(c.id) ? i : acc, -1);
+      for (let i = lastSelectedIdx + 1; i < next.length; i++) {
+        if (next[i - 1].endMs <= next[i].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newStart = next[i - 1].endMs;
+        next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
+      }
+
+      // Cascade backward from the first selected cue into unselected neighbors
+      const firstSelectedIdx = next.findIndex((c) => selectedIds.has(c.id));
+      for (let i = firstSelectedIdx - 1; i >= 0; i--) {
+        if (next[i].endMs <= next[i + 1].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newEnd = next[i + 1].startMs;
+        const newStart = Math.max(0, newEnd - dur);
+        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
+      }
+
+      return next;
+    });
     setSelectedIds(new Set());
     setSelectMode(false);
     setSelectAction("text");
