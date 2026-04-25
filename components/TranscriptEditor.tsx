@@ -114,6 +114,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [shiftSeconds, setShiftSeconds] = useState("1");
   const [shiftDirection, setShiftDirection] = useState<"forward" | "backward">("forward");
   const [tsEditCue, setTsEditCue] = useState<SrtCue | null>(null);
+  const [tsEditKey, setTsEditKey] = useState(0);
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
 
@@ -510,6 +511,34 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setIsPlaying(false);
   }, []);
 
+  const saveAndGoToPrev = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    setCues((prev) => {
+      const idx = prev.findIndex((c) => c.id === cueId);
+      if (idx === -1) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs), text };
+      for (let i = idx + 1; i < next.length; i++) {
+        if (next[i - 1].endMs <= next[i].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newStart = next[i - 1].endMs;
+        next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
+      }
+      for (let i = idx - 1; i >= 0; i--) {
+        if (next[i].endMs <= next[i + 1].startMs) break;
+        const dur = next[i].endMs - next[i].startMs;
+        const newEnd = next[i + 1].startMs;
+        const newStart = Math.max(0, newEnd - dur);
+        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
+      }
+      const prevCue = next[idx - 1];
+      if (prevCue) setTimeout(() => setTsEditCue(prevCue), 0);
+      return next;
+    });
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+  }, []);
+
   const mergeCueWithNext = useCallback((id: number) => {
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === id);
@@ -524,12 +553,17 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         endTime: nxt.endTime,
         text: cur.text.trim() + " " + nxt.text.trim(),
       };
-      return [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)].map((c, i) => ({ ...c, id: i + 1 }));
+      const updated = [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)].map((c, i) => ({ ...c, id: i + 1 }));
+      // Stay in editor on the merged cue (force remount with new key)
+      setTimeout(() => {
+        setTsEditCue(updated[idx]);
+        setTsEditKey((k) => k + 1);
+      }, 0);
+      return updated;
     });
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-    setTsEditCue(null);
   }, []);
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
@@ -1349,15 +1383,17 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         const nextStart = nextCue?.startMs ?? null;
         return (
           <CueTimestampEditor
-            key={tsEditCue.id}
+            key={`${tsEditCue.id}-${tsEditKey}`}
             cue={tsEditCue}
             audioRef={audioRef}
             previewCueRef={previewCueRef}
             previewLoopCountRef={previewLoopCountRef}
             audioDuration={duration}
+            isFirstCue={idx === 0}
             isLastCue={cues[cues.length - 1]?.id === tsEditCue.id}
             neighbors={{ prevEnd, prevText: prevCue?.text ?? null, nextStart, nextText: nextCue?.text ?? null }}
             onSave={(startMs, endMs, text) => saveTsEdit(tsEditCue.id, startMs, endMs, text)}
+            onPrev={(startMs, endMs, text) => saveAndGoToPrev(tsEditCue.id, startMs, endMs, text)}
             onNext={(startMs, endMs, text) => saveAndGoToNext(tsEditCue.id, startMs, endMs, text)}
             onClose={closeTsEditor}
             onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
@@ -1662,9 +1698,11 @@ interface TsEditorProps {
   previewCueRef: React.MutableRefObject<{ startMs: number; endMs: number } | null>;
   previewLoopCountRef: React.MutableRefObject<number>;
   audioDuration: number; // seconds
+  isFirstCue: boolean;
   isLastCue: boolean;
   neighbors: { prevEnd: number | null; prevText: string | null; nextStart: number | null; nextText: string | null };
   onSave: (startMs: number, endMs: number, text: string) => void;
+  onPrev: (startMs: number, endMs: number, text: string) => void;
   onNext: (startMs: number, endMs: number, text: string) => void;
   onClose: () => void;
   onMergeWithNext: () => void;
@@ -1672,7 +1710,7 @@ interface TsEditorProps {
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
-  audioDuration, isLastCue, neighbors, onSave, onNext, onClose, onMergeWithNext,
+  audioDuration, isFirstCue, isLastCue, neighbors, onSave, onPrev, onNext, onClose, onMergeWithNext,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
@@ -1862,15 +1900,26 @@ function CueTimestampEditor({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-        <button onClick={() => onSave(markerStart, markerEnd, textVal)} className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-          Done
-        </button>
+        {/* Left: Done (✕) + Prev */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => onSave(markerStart, markerEnd, textVal)} className="text-gray-500 hover:text-white transition-colors" title="Save and close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+          {!isFirstCue && (
+            <button onClick={() => onPrev(markerStart, markerEnd, textVal)} className="flex items-center gap-0.5 text-sm text-amber-400 hover:text-amber-300 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+              Prev
+            </button>
+          )}
+        </div>
         <span className="text-xs font-semibold text-gray-300">Adjust Timestamp</span>
+        {/* Right: Next */}
         {!isLastCue ? (
-          <button onClick={() => onNext(markerStart, markerEnd, textVal)} className="flex items-center gap-1 text-sm text-amber-400 hover:text-amber-300 transition-colors">
+          <button onClick={() => onNext(markerStart, markerEnd, textVal)} className="flex items-center gap-0.5 text-sm text-amber-400 hover:text-amber-300 transition-colors">
             Next
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
