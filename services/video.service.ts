@@ -241,8 +241,21 @@ export const uploadAudioFile = async (file: File, startTime?: number): Promise<s
   const form = new FormData();
   form.append("file", file);
   if (startTime != null) form.append("startTime", String(startTime));
-  const res = await apiClient.post<{ audioUrl: string }>("/api/youtube/upload-audio", form);
-  return res.data.audioUrl;
+
+  // Use fetch so FormData sets Content-Type + boundary without axios default header interference
+  const token = typeof window !== "undefined" ? localStorage.getItem("bdd_auth_token") : null;
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch("https://bddsm-production.up.railway.app/api/youtube/upload-audio", {
+    method: "POST",
+    headers,
+    body: form,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Upload failed: ${res.status}`);
+  return (data as { audioUrl: string }).audioUrl;
 };
 
 // ── Transcription pipeline ────────────────────────────────────────────────────
