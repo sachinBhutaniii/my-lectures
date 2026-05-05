@@ -734,7 +734,8 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
                 const s3Url = await uploadAudioFile(file, startSecs);
                 setFormData((prev) => ({ ...prev, audioUrl: s3Url }));
               } catch (err: unknown) {
-                setAudioError(err instanceof Error ? err.message : "Upload failed");
+                const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
+                setAudioError(axiosErr?.response?.data?.error ?? axiosErr?.message ?? "Upload failed");
               } finally {
                 setAudioUploading(false);
                 if (audioFileInputRef.current) audioFileInputRef.current.value = "";
