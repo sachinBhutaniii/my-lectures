@@ -241,9 +241,7 @@ export const uploadAudioFile = async (file: File, startTime?: number): Promise<s
   const form = new FormData();
   form.append("file", file);
   if (startTime != null) form.append("startTime", String(startTime));
-  const res = await apiClient.post<{ audioUrl: string }>("/api/youtube/upload-audio", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const res = await apiClient.post<{ audioUrl: string }>("/api/youtube/upload-audio", form);
   return res.data.audioUrl;
 };
 
