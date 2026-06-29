@@ -349,6 +349,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
       // Phase 2: Confirm and start transcription
       // Pass existing audioUrl so the pipeline skips re-uploading to S3
       await confirmPipeline(metadata.jobId, {
+        title: formData.title || metadata.title || undefined,
         city: formData.place?.city || metadata.city || undefined,
         country: formData.place?.country || metadata.country || undefined,
         categories: formData.category?.length ? formData.category : metadata.categories,
