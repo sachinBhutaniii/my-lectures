@@ -119,6 +119,8 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [audioExtracting, setAudioExtracting] = useState(false);
   const [audioError, setAudioError] = useState("");
   const [audioUploading, setAudioUploading] = useState(false);
+  const [audioFileName, setAudioFileName] = useState("");
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -203,6 +205,18 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     }
   }, [videoId]);
 
+  const loadAudioMeta = (url: string, fileName: string) => {
+    setAudioFileName(fileName);
+    setAudioDuration(null);
+    const audio = new Audio();
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      setAudioDuration(Math.floor(audio.duration));
+      URL.revokeObjectURL(audio.src.startsWith("blob:") ? audio.src : "");
+    };
+    audio.src = url;
+  };
+
   const handleLocaleSelect = (code: string) => {
     setTranscriptLocale(code);
     setShowLangDropdown(false);
@@ -212,6 +226,10 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (name === "audioUrl" && !value) {
+      setAudioFileName("");
+      setAudioDuration(null);
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -297,12 +315,16 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
     // Extract audio in parallel (fire-and-forget, fills audioUrl when done)
     setAudioExtracting(true);
+    setAudioFileName("");
+    setAudioDuration(null);
     extractYouTubeAudio(urlStr, startSeconds ?? undefined)
       .then((s3Url) => {
         setFormData((prev) => {
           if (!prev.audioUrl) return { ...prev, audioUrl: s3Url };
           return prev;
         });
+        const fileName = decodeURIComponent(s3Url.split("/").pop()?.split("?")[0] ?? "audio.mp3");
+        loadAudioMeta(s3Url, fileName);
       })
       .catch((err) => {
         const msg = err?.response?.data?.error || err?.message || "Unknown error";
@@ -718,6 +740,26 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
           )}
         </div>
         {audioError && <p className="text-red-400 text-xs mt-1">{audioError}</p>}
+        {audioFileName && (
+          <div className="flex items-center gap-2 mt-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/5 border border-green-500/20">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 text-green-400 flex-shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z" />
+            </svg>
+            <div className="min-w-0">
+              <p className="text-xs text-green-300 truncate">{audioFileName}</p>
+              {audioDuration != null && (
+                <p className="text-[11px] text-green-500/70">
+                  {Math.floor(audioDuration / 3600) > 0
+                    ? `${Math.floor(audioDuration / 3600)}h ${Math.floor((audioDuration % 3600) / 60)}m ${audioDuration % 60}s`
+                    : `${Math.floor(audioDuration / 60)}m ${audioDuration % 60}s`}
+                </p>
+              )}
+              {audioDuration == null && (
+                <p className="text-[11px] text-green-500/50">Loading duration…</p>
+              )}
+            </div>
+          </div>
+        )}
         {/* Direct file upload — fallback when YouTube extraction is blocked */}
         <div className="mt-1.5 flex items-center gap-2">
           <input
@@ -730,10 +772,14 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
               if (!file) return;
               setAudioUploading(true);
               setAudioError("");
+              setAudioFileName("");
+              setAudioDuration(null);
               try {
                 const startSecs = formData.startTime ?? undefined;
                 const s3Url = await uploadAudioFile(file, startSecs);
                 setFormData((prev) => ({ ...prev, audioUrl: s3Url }));
+                const blobUrl = URL.createObjectURL(file);
+                loadAudioMeta(blobUrl, file.name);
               } catch (err: unknown) {
                 const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
                 setAudioError(axiosErr?.response?.data?.error ?? axiosErr?.message ?? "Upload failed");
