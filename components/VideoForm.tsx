@@ -217,6 +217,15 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     audio.src = url;
   };
 
+  // Auto-populate filename + duration whenever audioUrl is set (including on initial load)
+  useEffect(() => {
+    const url = formData.audioUrl;
+    if (!url) { setAudioFileName(""); setAudioDuration(null); return; }
+    const fileName = decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "");
+    if (fileName) loadAudioMeta(url, fileName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.audioUrl]);
+
   const handleLocaleSelect = (code: string) => {
     setTranscriptLocale(code);
     setShowLangDropdown(false);
@@ -226,10 +235,6 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    if (name === "audioUrl" && !value) {
-      setAudioFileName("");
-      setAudioDuration(null);
-    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -315,16 +320,12 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
     // Extract audio in parallel (fire-and-forget, fills audioUrl when done)
     setAudioExtracting(true);
-    setAudioFileName("");
-    setAudioDuration(null);
     extractYouTubeAudio(urlStr, startSeconds ?? undefined)
       .then((s3Url) => {
         setFormData((prev) => {
           if (!prev.audioUrl) return { ...prev, audioUrl: s3Url };
           return prev;
         });
-        const fileName = decodeURIComponent(s3Url.split("/").pop()?.split("?")[0] ?? "audio.mp3");
-        loadAudioMeta(s3Url, fileName);
       })
       .catch((err) => {
         const msg = err?.response?.data?.error || err?.message || "Unknown error";
@@ -772,14 +773,10 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
               if (!file) return;
               setAudioUploading(true);
               setAudioError("");
-              setAudioFileName("");
-              setAudioDuration(null);
               try {
                 const startSecs = formData.startTime ?? undefined;
                 const s3Url = await uploadAudioFile(file, startSecs);
                 setFormData((prev) => ({ ...prev, audioUrl: s3Url }));
-                const blobUrl = URL.createObjectURL(file);
-                loadAudioMeta(blobUrl, file.name);
               } catch (err: unknown) {
                 const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
                 setAudioError(axiosErr?.response?.data?.error ?? axiosErr?.message ?? "Upload failed");
