@@ -230,14 +230,14 @@ export const deleteLocale = async (id: number): Promise<void> => {
 
 // ── YouTube audio extraction ─────────────────────────────────────────────────
 
-export const extractYouTubeAudio = async (url: string, startTime?: number): Promise<string> => {
+export const extractYouTubeAudio = async (url: string, startTime?: number): Promise<{ audioUrl: string; durationSeconds: number }> => {
   const body: { url: string; startTime?: number } = { url };
   if (startTime != null) body.startTime = startTime;
-  const res = await apiClient.post<{ audioUrl: string }>("/api/youtube/extract-audio", body);
-  return res.data.audioUrl;
+  const res = await apiClient.post<{ audioUrl: string; durationSeconds: number }>("/api/youtube/extract-audio", body);
+  return res.data;
 };
 
-export const uploadAudioFile = async (file: File, startTime?: number): Promise<string> => {
+export const uploadAudioFile = async (file: File, startTime?: number): Promise<{ audioUrl: string; durationSeconds: number }> => {
   const form = new FormData();
   form.append("file", file);
   if (startTime != null) form.append("startTime", String(startTime));
@@ -255,7 +255,7 @@ export const uploadAudioFile = async (file: File, startTime?: number): Promise<s
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Upload failed: ${res.status}`);
-  return (data as { audioUrl: string }).audioUrl;
+  return data as { audioUrl: string; durationSeconds: number };
 };
 
 // ── Transcription pipeline ────────────────────────────────────────────────────

@@ -205,16 +205,6 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   }, [videoId]);
 
   // Load audio duration from URL whenever audioUrl changes
-  useEffect(() => {
-    const url = formData.audioUrl;
-    if (!url) { setAudioDuration(null); return; }
-    setAudioDuration(null);
-    const audio = new Audio();
-    audio.preload = "metadata";
-    audio.onloadedmetadata = () => setAudioDuration(Math.floor(audio.duration));
-    audio.src = url;
-    return () => { audio.src = ""; };
-  }, [formData.audioUrl]);
 
   const handleLocaleSelect = (code: string) => {
     setTranscriptLocale(code);
@@ -225,6 +215,7 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (name === "audioUrl" && !value) setAudioDuration(null);
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -311,11 +302,12 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     // Extract audio in parallel (fire-and-forget, fills audioUrl when done)
     setAudioExtracting(true);
     extractYouTubeAudio(urlStr, startSeconds ?? undefined)
-      .then((s3Url) => {
+      .then(({ audioUrl: s3Url, durationSeconds }) => {
         setFormData((prev) => {
           if (!prev.audioUrl) return { ...prev, audioUrl: s3Url };
           return prev;
         });
+        setAudioDuration(durationSeconds || null);
       })
       .catch((err) => {
         const msg = err?.response?.data?.error || err?.message || "Unknown error";
@@ -741,14 +733,12 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
               </svg>
               <div className="min-w-0">
                 <p className="text-xs text-green-300 truncate">{audioFileName}</p>
-                {audioDuration != null ? (
+                {audioDuration != null && (
                   <p className="text-[11px] text-green-500/70">
                     {Math.floor(audioDuration / 3600) > 0
                       ? `${Math.floor(audioDuration / 3600)}h ${Math.floor((audioDuration % 3600) / 60)}m ${audioDuration % 60}s`
                       : `${Math.floor(audioDuration / 60)}m ${audioDuration % 60}s`}
                   </p>
-                ) : (
-                  <p className="text-[11px] text-green-500/50">Loading duration…</p>
                 )}
               </div>
             </div>
@@ -768,8 +758,9 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
               setAudioError("");
               try {
                 const startSecs = formData.startTime ?? undefined;
-                const s3Url = await uploadAudioFile(file, startSecs);
+                const { audioUrl: s3Url, durationSeconds } = await uploadAudioFile(file, startSecs);
                 setFormData((prev) => ({ ...prev, audioUrl: s3Url }));
+                setAudioDuration(durationSeconds || null);
               } catch (err: unknown) {
                 const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
                 setAudioError(axiosErr?.response?.data?.error ?? axiosErr?.message ?? "Upload failed");
