@@ -119,7 +119,6 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
   const [audioExtracting, setAudioExtracting] = useState(false);
   const [audioError, setAudioError] = useState("");
   const [audioUploading, setAudioUploading] = useState(false);
-  const [audioFileName, setAudioFileName] = useState("");
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -205,25 +204,16 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
     }
   }, [videoId]);
 
-  const loadAudioMeta = (url: string, fileName: string) => {
-    setAudioFileName(fileName);
+  // Load audio duration from URL whenever audioUrl changes
+  useEffect(() => {
+    const url = formData.audioUrl;
+    if (!url) { setAudioDuration(null); return; }
     setAudioDuration(null);
     const audio = new Audio();
     audio.preload = "metadata";
-    audio.onloadedmetadata = () => {
-      setAudioDuration(Math.floor(audio.duration));
-      URL.revokeObjectURL(audio.src.startsWith("blob:") ? audio.src : "");
-    };
+    audio.onloadedmetadata = () => setAudioDuration(Math.floor(audio.duration));
     audio.src = url;
-  };
-
-  // Auto-populate filename + duration whenever audioUrl is set (including on initial load)
-  useEffect(() => {
-    const url = formData.audioUrl;
-    if (!url) { setAudioFileName(""); setAudioDuration(null); return; }
-    const fileName = decodeURIComponent(url.split("/").pop()?.split("?")[0] ?? "");
-    if (fileName) loadAudioMeta(url, fileName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { audio.src = ""; };
   }, [formData.audioUrl]);
 
   const handleLocaleSelect = (code: string) => {
@@ -741,26 +731,29 @@ export default function VideoForm({ initialData, videoId, onSubmit, onCancel, is
           )}
         </div>
         {audioError && <p className="text-red-400 text-xs mt-1">{audioError}</p>}
-        {audioFileName && (
-          <div className="flex items-center gap-2 mt-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/5 border border-green-500/20">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 text-green-400 flex-shrink-0">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z" />
-            </svg>
-            <div className="min-w-0">
-              <p className="text-xs text-green-300 truncate">{audioFileName}</p>
-              {audioDuration != null && (
-                <p className="text-[11px] text-green-500/70">
-                  {Math.floor(audioDuration / 3600) > 0
-                    ? `${Math.floor(audioDuration / 3600)}h ${Math.floor((audioDuration % 3600) / 60)}m ${audioDuration % 60}s`
-                    : `${Math.floor(audioDuration / 60)}m ${audioDuration % 60}s`}
-                </p>
-              )}
-              {audioDuration == null && (
-                <p className="text-[11px] text-green-500/50">Loading duration…</p>
-              )}
+        {formData.audioUrl && (() => {
+          const audioFileName = decodeURIComponent(formData.audioUrl.split("/").pop()?.split("?")[0] ?? "");
+          if (!audioFileName) return null;
+          return (
+            <div className="flex items-center gap-2 mt-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/5 border border-green-500/20">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 text-green-400 flex-shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z" />
+              </svg>
+              <div className="min-w-0">
+                <p className="text-xs text-green-300 truncate">{audioFileName}</p>
+                {audioDuration != null ? (
+                  <p className="text-[11px] text-green-500/70">
+                    {Math.floor(audioDuration / 3600) > 0
+                      ? `${Math.floor(audioDuration / 3600)}h ${Math.floor((audioDuration % 3600) / 60)}m ${audioDuration % 60}s`
+                      : `${Math.floor(audioDuration / 60)}m ${audioDuration % 60}s`}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-green-500/50">Loading duration…</p>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         {/* Direct file upload — fallback when YouTube extraction is blocked */}
         <div className="mt-1.5 flex items-center gap-2">
           <input
