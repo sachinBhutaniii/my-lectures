@@ -12,6 +12,9 @@ import {
   getProofreaders,
   getAllLocales,
   getTranscriptFirstDraft,
+  getLectureFlags,
+  setLectureFlag,
+  saveFlagLegend,
   TranscriptFirstDraft,
   createLocale,
   deleteLocale,
@@ -116,6 +119,33 @@ export default function TranscriptReviewPanel() {
   const [error, setError] = useState("");
   const [showAddLang, setShowAddLang] = useState(false);
 
+  // Internal lecture flags (admin only)
+  const [flags, setFlags] = useState<Record<string, string>>({});
+  const [legend, setLegend] = useState<Record<string, string>>({});
+  const [showLegend, setShowLegend] = useState(false);
+  const [flagFilter, setFlagFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    getLectureFlags()
+      .then((d) => { setFlags(d.flags ?? {}); setLegend(d.legend ?? {}); })
+      .catch(() => {});
+  }, []);
+
+  const handleSetFlag = async (videoId: number, color: string | null) => {
+    const prev = flags;
+    setFlags((f) => {
+      const next = { ...f };
+      if (color) next[videoId] = color; else delete next[videoId];
+      return next;
+    });
+    try {
+      await setLectureFlag(videoId, color);
+    } catch {
+      setFlags(prev);
+      setError("Could not update flag. Please try again.");
+    }
+  };
+
   const updateItem = (updated: TranscriptReviewItem) =>
     setData((prev) => (prev ?? []).map((t) => (t.id === updated.id ? updated : t)));
 
@@ -192,6 +222,15 @@ export default function TranscriptReviewPanel() {
                 : "Assign proofreaders and give Level 1 approval."}
             </p>
           </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Flag meanings button */}
+          <button
+            onClick={() => setShowLegend(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700 text-gray-300 bg-gray-800/60 hover:bg-gray-700/60 transition-colors flex-shrink-0"
+          >
+            <FlagIcon className="w-3.5 h-3.5" />
+            Flags
+          </button>
           {/* Manage Languages button */}
           <button
             onClick={() => setShowAddLang(true)}
@@ -202,6 +241,7 @@ export default function TranscriptReviewPanel() {
             </svg>
             Manage Languages
           </button>
+          </div>
         </div>
         {/* Legend — own row, wraps naturally */}
         <div className="flex items-center gap-3 text-[10px] text-gray-500 flex-wrap">
@@ -212,6 +252,35 @@ export default function TranscriptReviewPanel() {
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm border border-green-500/40 bg-green-500/15" />Deployed</span>
         </div>
       </div>
+
+      {/* Flag filter chips — only flags in use */}
+      {Object.keys(flags).length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wide mr-1">Flags</span>
+          {FLAG_COLORS.filter((c) => Object.values(flags).includes(c)).map((c) => {
+            const count = Object.values(flags).filter((v) => v === c).length;
+            const active = flagFilter === c;
+            return (
+              <button
+                key={c}
+                onClick={() => setFlagFilter(active ? null : c)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                  active ? "border-gray-400 bg-gray-700 text-white" : "border-gray-700 text-gray-400 hover:bg-gray-800"
+                }`}
+              >
+                <FlagIcon className={`w-3 h-3 ${FLAG_TEXT[c]}`} filled />
+                {legend[c] || c}
+                <span className="text-gray-500">{count}</span>
+              </button>
+            );
+          })}
+          {flagFilter && (
+            <button onClick={() => setFlagFilter(null)} className="text-[11px] text-gray-500 hover:text-gray-300 ml-1">
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -235,7 +304,10 @@ export default function TranscriptReviewPanel() {
           }, {})
         );
         const buckets: Record<Category, TranscriptReviewItem[][]> = { A: [], B: [], C: [], D: [] };
-        for (const group of videoGroups) buckets[getGroupCategory(group)].push(group);
+        for (const group of videoGroups) {
+          if (flagFilter && flags[group[0].videoId] !== flagFilter) continue;
+          buckets[getGroupCategory(group)].push(group);
+        }
 
         return (
           <div className="space-y-6">
@@ -266,6 +338,9 @@ export default function TranscriptReviewPanel() {
                       onReject={handleReject}
                       onDeploy={handleDeploy}
                       onRestartReview={handleRestartReview}
+                      flagColor={flags[group[0].videoId] ?? null}
+                      legend={legend}
+                      onSetFlag={(color) => handleSetFlag(group[0].videoId, color)}
                     />
                   ))}
                 </section>
@@ -291,6 +366,14 @@ export default function TranscriptReviewPanel() {
       )}
 
       {/* Manage Languages modal */}
+      {showLegend && (
+        <FlagLegendModal
+          legend={legend}
+          onSaved={(l) => setLegend(l)}
+          onClose={() => setShowLegend(false)}
+        />
+      )}
+
       {showAddLang && (
         <ManageLanguagesModal onClose={() => setShowAddLang(false)} />
       )}
@@ -363,9 +446,13 @@ type VideoGroupProps = {
   onReject: (item: TranscriptReviewItem) => void;
   onDeploy: (item: TranscriptReviewItem) => void;
   onRestartReview: (item: TranscriptReviewItem) => void;
+  flagColor: string | null;
+  legend: Record<string, string>;
+  onSetFlag: (color: string | null) => void;
 };
 
-function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: VideoGroupProps) {
+function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview, flagColor, legend, onSetFlag }: VideoGroupProps) {
+  const [showFlagPicker, setShowFlagPicker] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
@@ -446,6 +533,17 @@ function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, 
           </div>
         )}
       </button>
+        {/* Internal flag */}
+        <button
+          onClick={() => setShowFlagPicker(true)}
+          title={flagColor ? `Flag: ${legend[flagColor] || flagColor}` : "Add flag"}
+          className={`mr-1.5 p-1.5 rounded-lg border transition-colors flex-shrink-0 ${
+            flagColor ? "border-gray-700 bg-gray-800/60" : "border-transparent text-gray-600 hover:text-gray-400 hover:bg-gray-800/60"
+          }`}
+        >
+          <FlagIcon className={`w-4 h-4 ${flagColor ? FLAG_TEXT[flagColor] ?? "" : ""}`} filled={!!flagColor} />
+        </button>
+
         {/* Preview first draft */}
         <button
           onClick={() => setShowPreview(true)}
@@ -459,6 +557,16 @@ function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, 
           Preview
         </button>
       </div>
+
+      {showFlagPicker && (
+        <FlagPickerModal
+          title={items[0].videoTitle}
+          current={flagColor}
+          legend={legend}
+          onPick={(c) => { onSetFlag(c); setShowFlagPicker(false); }}
+          onClose={() => setShowFlagPicker(false)}
+        />
+      )}
 
       {showPreview && (
         <FirstDraftPreviewModal items={items} onClose={() => setShowPreview(false)} />
@@ -1210,6 +1318,135 @@ function FirstDraftPreviewModal({ items, onClose }: { items: TranscriptReviewIte
           ) : (
             <p className="text-sm text-gray-500 text-center py-16">No transcript uploaded.</p>
           )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Internal lecture flags ────────────────────────────────────────────────────
+
+const FLAG_COLORS = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "gray"] as const;
+
+const FLAG_TEXT: Record<string, string> = {
+  red: "text-red-500",
+  orange: "text-orange-500",
+  yellow: "text-yellow-400",
+  green: "text-green-500",
+  blue: "text-blue-500",
+  purple: "text-purple-500",
+  pink: "text-pink-500",
+  gray: "text-gray-400",
+};
+
+function FlagIcon({ className = "", filled = false }: { className?: string; filled?: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor"
+      fill={filled ? "currentColor" : "none"} className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
+    </svg>
+  );
+}
+
+function FlagPickerModal({ title, current, legend, onPick, onClose }: {
+  title: string;
+  current: string | null;
+  legend: Record<string, string>;
+  onPick: (color: string | null) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/70" onClick={onClose} />
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-sm mx-auto bg-[#111] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-800">
+          <p className="text-sm font-semibold text-white">Flag lecture</p>
+          <p className="text-xs text-gray-500 truncate mt-0.5">{title}</p>
+        </div>
+        <div className="p-2 max-h-[60vh] overflow-y-auto">
+          {FLAG_COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => onPick(c)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                current === c ? "bg-gray-800" : "hover:bg-gray-800/60"
+              }`}
+            >
+              <FlagIcon className={`w-4 h-4 flex-shrink-0 ${FLAG_TEXT[c]}`} filled />
+              <span className={`text-sm flex-1 min-w-0 truncate ${legend[c] ? "text-gray-200" : "text-gray-500 capitalize"}`}>
+                {legend[c] || c}
+              </span>
+              {current === c && <span className="text-xs text-gray-400">✓</span>}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
+          {current ? (
+            <button onClick={() => onPick(null)} className="text-xs text-red-400 hover:text-red-300">
+              Remove flag
+            </button>
+          ) : <span />}
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-200">Cancel</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function FlagLegendModal({ legend, onSaved, onClose }: {
+  legend: Record<string, string>;
+  onSaved: (legend: Record<string, string>) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<Record<string, string>>({ ...legend });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      onSaved(await saveFlagLegend(draft));
+      onClose();
+    } catch {
+      setError("Could not save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/70" onClick={onClose} />
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-sm mx-auto bg-[#111] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-800">
+          <p className="text-sm font-semibold text-white">Flag meanings</p>
+          <p className="text-xs text-gray-500 mt-0.5">Internal to admins only — not shown to users.</p>
+        </div>
+        <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
+          {FLAG_COLORS.map((c) => (
+            <div key={c} className="flex items-center gap-3">
+              <FlagIcon className={`w-4 h-4 flex-shrink-0 ${FLAG_TEXT[c]}`} filled />
+              <input
+                value={draft[c] ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, [c]: e.target.value }))}
+                placeholder={`Meaning of ${c}…`}
+                maxLength={200}
+                className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/50"
+              />
+            </div>
+          ))}
+          {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-gray-800">
+          <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-200">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </div>
     </>

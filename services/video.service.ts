@@ -176,6 +176,27 @@ export interface TranscriptEditorData {
   rawTranscript?: string | null;
 }
 
+// ── Internal lecture flags (admin only) ───────────────────────────────────────
+
+export interface LectureFlagsData {
+  flags: Record<string, string>;   // videoId → color
+  legend: Record<string, string>;  // color → meaning
+}
+
+export const getLectureFlags = async (): Promise<LectureFlagsData> => {
+  const res = await apiClient.get<LectureFlagsData>("/api/transcripts/flags");
+  return res.data;
+};
+
+export const setLectureFlag = async (videoId: number, color: string | null): Promise<void> => {
+  await apiClient.put(`/api/transcripts/flags/lecture/${videoId}`, { color });
+};
+
+export const saveFlagLegend = async (legend: Record<string, string>): Promise<Record<string, string>> => {
+  const res = await apiClient.put<Record<string, string>>("/api/transcripts/flags/legend", legend);
+  return res.data;
+};
+
 export interface TranscriptFirstDraft {
   id: number;
   videoTitle: string;
