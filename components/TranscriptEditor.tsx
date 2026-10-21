@@ -114,6 +114,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [shiftSeconds, setShiftSeconds] = useState("1");
   const [shiftDirection, setShiftDirection] = useState<"forward" | "backward">("forward");
   const [tsEditCue, setTsEditCue] = useState<SrtCue | null>(null);
+  // Set by CueTimestampEditor: saves its current (unsaved) values and closes
+  const tsExitRef = useRef<(() => void) | null>(null);
   const [tsEditKey, setTsEditKey] = useState(0);
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
@@ -1433,9 +1435,22 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           {/* 3-cue context panel above the bottom sheet */}
           <div
             className="fixed left-0 right-0 z-40 bg-[#0a0a0a]/95 flex flex-col gap-2 px-4 py-3"
-            style={{ bottom: "44vh", top: 0 }}
+            style={{ bottom: "44vh", top: 0, paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
           >
-            <div className="flex flex-col gap-2 h-full">
+            {/* Exit Timeline Editor Mode → back to normal mode (keeps changes) */}
+            <div className="flex items-center justify-end flex-shrink-0">
+              <button
+                onClick={() => (tsExitRef.current ? tsExitRef.current() : closeTsEditor())}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-600 bg-gray-800 text-gray-100 text-xs font-medium hover:bg-gray-700 transition-colors"
+                title="Back to normal mode"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+                Exit
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 flex-1 min-h-0">
               {prevCue
                 ? <CueContextCard cue={prevCue} active={false} />
                 : <div className="flex-1 min-h-0" />}
@@ -1462,6 +1477,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             onNext={(startMs, endMs, text) => saveAndGoToNext(tsEditCue.id, startMs, endMs, text)}
             onClose={closeTsEditor}
             onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
+            exitRef={tsExitRef}
           />
         </>);
       })()}
@@ -1655,8 +1671,8 @@ function CueRow({
 
             {/* Timeline Editor Mode icon */}
             {onEditTimestamp && (
-              <button onClick={() => onEditTimestamp(cue)} className="flex-shrink-0 text-gray-700 hover:text-amber-400 transition-colors pt-0.5" title="Timeline Editor Mode">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <button onClick={() => onEditTimestamp(cue)} className="flex-shrink-0 -mt-0.5 p-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/25 hover:text-amber-300 transition-colors" title="Timeline Editor Mode">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
               </button>
@@ -1773,15 +1789,18 @@ interface TsEditorProps {
   onNext: (startMs: number, endMs: number, text: string) => void;
   onClose: () => void;
   onMergeWithNext: () => void;
+  exitRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
-  audioDuration, isFirstCue, isLastCue, neighbors, speed, onSpeedChange, onSave, onPrev, onNext, onClose, onMergeWithNext,
+  audioDuration, isFirstCue, isLastCue, neighbors, speed, onSpeedChange, onSave, onPrev, onNext, onClose, onMergeWithNext, exitRef,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
   const [textVal, setTextVal] = useState(cue.text);
+  // Let the parent's Exit button save the latest values
+  if (exitRef) exitRef.current = () => onSave(markerStart, markerEnd, textVal);
   const [stripPlaying, setStripPlaying] = useState(false);
   const stripRef = useRef<HTMLDivElement>(null);
   const dragTarget = useRef<"start" | "end" | null>(null);
@@ -1969,8 +1988,8 @@ function CueTimestampEditor({
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
         {/* Left: Done (✕) + Prev */}
         <div className="flex items-center gap-2">
-          <button onClick={() => onSave(markerStart, markerEnd, textVal)} className="text-gray-500 hover:text-white transition-colors" title="Save and close">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+          <button onClick={() => onSave(markerStart, markerEnd, textVal)} className="p-1 -ml-1 rounded-md text-gray-300 hover:text-white hover:bg-gray-800 transition-colors" title="Back to normal mode">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
             </svg>
           </button>
