@@ -176,6 +176,19 @@ export interface TranscriptEditorData {
   rawTranscript?: string | null;
 }
 
+export interface TranscriptFirstDraft {
+  id: number;
+  videoTitle: string;
+  localeName: string;
+  srt: string | null;
+  rawTranscript: string | null;
+}
+
+export const getTranscriptFirstDraft = async (id: number): Promise<TranscriptFirstDraft> => {
+  const res = await apiClient.get<TranscriptFirstDraft>(`/api/transcripts/${id}/first-draft`);
+  return res.data;
+};
+
 export const getTranscriptForEditor = async (id: number): Promise<TranscriptEditorData> => {
   const res = await apiClient.get<TranscriptEditorData>(`/api/transcripts/${id}/editor`);
   return res.data;

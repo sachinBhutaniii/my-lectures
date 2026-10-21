@@ -11,6 +11,8 @@ import {
   restartTranscriptReview,
   getProofreaders,
   getAllLocales,
+  getTranscriptFirstDraft,
+  TranscriptFirstDraft,
   createLocale,
   deleteLocale,
   TranscriptReviewItem,
@@ -18,6 +20,7 @@ import {
   LocaleInfo,
 } from "@/services/video.service";
 import { useAuth } from "@/context/AuthContext";
+import { parseSrt } from "@/lib/srtUtils";
 
 // ── Language pill status helpers ───────────────────────────────────────────────
 
@@ -508,6 +511,7 @@ type RowProps = {
 
 function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: RowProps) {
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const l1Status = getL1Status(item);
   const l2Status = getL2Status(item);
   const canApproveL1 = item.approvalStatus === "DRAFT";
@@ -539,6 +543,19 @@ function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenM
             </span>
           </div>
         </div>
+
+        {/* Preview first draft */}
+        <button
+          onClick={() => setShowPreview(true)}
+          title="Preview first draft (as uploaded)"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-gray-700 bg-gray-800/60 text-gray-300 hover:bg-gray-700/60 transition-colors flex-shrink-0"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+            <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+            <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41Z" clipRule="evenodd" />
+          </svg>
+          Preview
+        </button>
 
         {/* L1 button */}
         <LevelButton
@@ -647,6 +664,10 @@ function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenM
           )}
         </div>
       </div>
+
+      {showPreview && (
+        <FirstDraftPreviewModal item={item} onClose={() => setShowPreview(false)} />
+      )}
 
       {/* Audit trail */}
       {hasHistory && (
@@ -1102,4 +1123,72 @@ function AuditEntry({ label, name, date, color = "gray" }: {
 function Spinner({ color }: { color: "blue" | "green" | "red" }) {
   const cls = { blue: "border-blue-400", green: "border-green-400", red: "border-red-400" }[color];
   return <div className={`w-3 h-3 border border-t-transparent rounded-full animate-spin ${cls}`} />;
+}
+
+// ── First draft preview modal ─────────────────────────────────────────────────
+
+function FirstDraftPreviewModal({ item, onClose }: { item: TranscriptReviewItem; onClose: () => void }) {
+  const [data, setData] = useState<TranscriptFirstDraft | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    getTranscriptFirstDraft(item.id)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setError("Could not load the first draft."); });
+    return () => { cancelled = true; };
+  }, [item.id]);
+
+  const cues = data?.srt ? parseSrt(data.srt) : [];
+  const shortTime = (t: string) => t.replace(/^00:/, "").split(",")[0];
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/70" onClick={onClose} />
+      <div className="fixed inset-x-4 top-[8vh] bottom-[8vh] z-50 max-w-2xl mx-auto bg-[#111] border border-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-800 flex-shrink-0">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white">First Draft Preview</p>
+            <p className="text-xs text-gray-500 truncate mt-0.5">
+              {item.videoTitle} · {item.localeName}
+              {cues.length > 0 && <span className="text-gray-600"> · {cues.length} lines</span>}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {error ? (
+            <p className="text-red-400 text-sm">{error}</p>
+          ) : !data ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : cues.length > 0 ? (
+            <div className="space-y-2">
+              {cues.map((c, idx) => (
+                <div key={`${c.id}-${idx}`} className="flex gap-3">
+                  <span className="text-[11px] font-mono text-orange-400/80 flex-shrink-0 pt-0.5 w-[92px]">
+                    {shortTime(c.startTime)} – {shortTime(c.endTime)}
+                  </span>
+                  <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed min-w-0">{c.text}</p>
+                </div>
+              ))}
+            </div>
+          ) : data.rawTranscript?.trim() ? (
+            <>
+              <p className="text-[11px] text-gray-500 mb-2">No timestamps available — showing plain text.</p>
+              <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{data.rawTranscript}</p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-16">No transcript uploaded.</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
 }
