@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import apiClient from "@/services/api";
+import apiClient from "@/lib/axios";
 
 interface ConfigEntry {
   key: string;
