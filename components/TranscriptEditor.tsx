@@ -1653,9 +1653,9 @@ function CueRow({
               {cue.text}
             </button>
 
-            {/* Adjust timestamp icon */}
+            {/* Timeline Editor Mode icon */}
             {onEditTimestamp && (
-              <button onClick={() => onEditTimestamp(cue)} className="flex-shrink-0 text-gray-700 hover:text-amber-400 transition-colors pt-0.5" title="Adjust timestamp">
+              <button onClick={() => onEditTimestamp(cue)} className="flex-shrink-0 text-gray-700 hover:text-amber-400 transition-colors pt-0.5" title="Timeline Editor Mode">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
@@ -1755,7 +1755,7 @@ function CueRow({
   );
 }
 
-// ── Cue Timestamp Editor ─────────────────────────────────────────────────────
+// ── Timeline Editor Mode (CueTimestampEditor) ─────────────────────────────────────────────────────
 
 interface TsEditorProps {
   cue: SrtCue;
@@ -1983,7 +1983,7 @@ function CueTimestampEditor({
             </button>
           )}
         </div>
-        <span className="text-xs font-semibold text-gray-300">Adjust Timestamp</span>
+        <span className="text-xs font-semibold text-gray-300">Timeline Editor Mode</span>
         {/* Right: Next */}
         {!isLastCue ? (
           <button onClick={() => onNext(markerStart, markerEnd, textVal)} className="flex items-center gap-0.5 text-sm text-amber-400 hover:text-amber-300 transition-colors">
