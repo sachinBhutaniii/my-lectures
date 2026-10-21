@@ -367,6 +367,7 @@ type VideoGroupProps = {
 
 function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: VideoGroupProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [selectedLocale, setSelectedLocale] = useState<string | null>(null);
 
   const first = items[0];
@@ -381,9 +382,10 @@ function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, 
       deployedCount === items.length && items.length > 0 ? "border-green-500/20" : "border-gray-800"
     } bg-gray-900/60`}>
       {/* Video header row — click to expand */}
+      <div className="flex items-center hover:bg-gray-800/30 transition-colors">
       <button
         onClick={() => { setExpanded(!expanded); if (expanded) setSelectedLocale(null); }}
-        className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-800/30 transition-colors"
+        className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left"
       >
         {/* Expand chevron */}
         <svg
@@ -444,6 +446,23 @@ function VideoGroup({ items, isParentAdmin, isAdmin, isTranscriptAdmin, acting, 
           </div>
         )}
       </button>
+        {/* Preview first draft */}
+        <button
+          onClick={() => setShowPreview(true)}
+          title="Preview first draft (as uploaded)"
+          className="flex items-center gap-1 mr-3 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-gray-700 bg-gray-800/60 text-gray-300 hover:bg-gray-700/60 transition-colors flex-shrink-0"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+            <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+            <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41Z" clipRule="evenodd" />
+          </svg>
+          Preview
+        </button>
+      </div>
+
+      {showPreview && (
+        <FirstDraftPreviewModal items={items} onClose={() => setShowPreview(false)} />
+      )}
 
       {/* Expanded: language tabs + transcript details */}
       {expanded && (
@@ -511,7 +530,6 @@ type RowProps = {
 
 function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenModal, onApprove, onReject, onDeploy, onRestartReview }: RowProps) {
   const [confirmRestart, setConfirmRestart] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const l1Status = getL1Status(item);
   const l2Status = getL2Status(item);
   const canApproveL1 = item.approvalStatus === "DRAFT";
@@ -543,19 +561,6 @@ function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenM
             </span>
           </div>
         </div>
-
-        {/* Preview first draft */}
-        <button
-          onClick={() => setShowPreview(true)}
-          title="Preview first draft (as uploaded)"
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-gray-700 bg-gray-800/60 text-gray-300 hover:bg-gray-700/60 transition-colors flex-shrink-0"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
-            <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-            <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41Z" clipRule="evenodd" />
-          </svg>
-          Preview
-        </button>
 
         {/* L1 button */}
         <LevelButton
@@ -664,10 +669,6 @@ function TranscriptRow({ item, isParentAdmin, isTranscriptAdmin, acting, onOpenM
           )}
         </div>
       </div>
-
-      {showPreview && (
-        <FirstDraftPreviewModal item={item} onClose={() => setShowPreview(false)} />
-      )}
 
       {/* Audit trail */}
       {hasHistory && (
@@ -1127,12 +1128,16 @@ function Spinner({ color }: { color: "blue" | "green" | "red" }) {
 
 // ── First draft preview modal ─────────────────────────────────────────────────
 
-function FirstDraftPreviewModal({ item, onClose }: { item: TranscriptReviewItem; onClose: () => void }) {
+function FirstDraftPreviewModal({ items, onClose }: { items: TranscriptReviewItem[]; onClose: () => void }) {
+  const [itemId, setItemId] = useState(items[0].id);
+  const item = items.find((i) => i.id === itemId) ?? items[0];
   const [data, setData] = useState<TranscriptFirstDraft | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    setData(null);
+    setError("");
     getTranscriptFirstDraft(item.id)
       .then((d) => { if (!cancelled) setData(d); })
       .catch(() => { if (!cancelled) setError("Could not load the first draft."); });
@@ -1160,6 +1165,24 @@ function FirstDraftPreviewModal({ item, onClose }: { item: TranscriptReviewItem;
             </svg>
           </button>
         </div>
+
+        {items.length > 1 && (
+          <div className="flex items-center gap-1.5 px-4 py-2 border-b border-gray-800 flex-wrap flex-shrink-0">
+            {items.map((i) => (
+              <button
+                key={i.id}
+                onClick={() => setItemId(i.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  i.id === item.id
+                    ? "border-orange-500/50 bg-orange-500/15 text-orange-300"
+                    : "border-gray-700 text-gray-400 hover:bg-gray-800"
+                }`}
+              >
+                {i.localeName}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {error ? (
