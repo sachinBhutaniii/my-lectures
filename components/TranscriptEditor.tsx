@@ -74,6 +74,8 @@ function msToSrtTime(ms: number): string {
 export default function TranscriptEditor({ data, mode, level = 1, onBack }: Props) {
   // Working cues
   const [cues, setCues] = useState<SrtCue[]>([]);
+  const cuesRef = useRef<SrtCue[]>([]);
+  cuesRef.current = cues;
   const [l1Diff, setL1Diff] = useState<Map<number, CueDiff>>(new Map());
   const [l2Diff, setL2Diff] = useState<Map<number, CueDiff>>(new Map());
   const [acceptedL1Ids, setAcceptedL1Ids] = useState<Set<number>>(new Set());
@@ -116,6 +118,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [tsEditCue, setTsEditCue] = useState<SrtCue | null>(null);
   // Set by CueTimestampEditor: saves its current (unsaved) values and closes
   const tsExitRef = useRef<(() => void) | null>(null);
+  // Timeline Editor Mode undo: snapshots of all cues before each committed change (max 5)
+  const [tsHistory, setTsHistory] = useState<{ cues: SrtCue[]; cueId: number }[]>([]);
   const [tsEditKey, setTsEditKey] = useState(0);
   const dragStartId = useRef<number | null>(null);
   const isDragging = useRef(false);
@@ -435,7 +439,28 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   }, []);
 
   // ── Timestamp editor ─────────────────────────────────────────────────────────
+  const pushTsHistory = useCallback((cueId: number) => {
+    const snapshot = cuesRef.current;
+    setTsHistory((h) => [...h.slice(-4), { cues: snapshot, cueId }]);
+  }, []);
+
+  const undoTsCommit = useCallback(() => {
+    const last = tsHistory[tsHistory.length - 1];
+    if (!last) return;
+    setTsHistory((h) => h.slice(0, -1));
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setCues(last.cues);
+    const restored = last.cues.find((c) => c.id === last.cueId);
+    if (restored) {
+      setTsEditCue(restored);
+      setTsEditKey((k) => k + 1);
+    }
+  }, [tsHistory]);
+
   const openTsEditor = useCallback((cue: SrtCue) => {
+    setTsHistory([]);
     audioRef.current?.pause();
     setIsPlaying(false);
     previewCueRef.current = null;
@@ -485,6 +510,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   }, []);
 
   const saveAndGoToNext = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    pushTsHistory(cueId);
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === cueId);
       if (idx === -1) return prev;
@@ -520,9 +546,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, []);
+  }, [pushTsHistory]);
 
   const saveAndGoToPrev = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    pushTsHistory(cueId);
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === cueId);
       if (idx === -1) return prev;
@@ -557,9 +584,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, []);
+  }, [pushTsHistory]);
 
   const mergeCueWithNext = useCallback((id: number) => {
+    pushTsHistory(id);
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === id);
       if (idx === -1 || idx === prev.length - 1) return prev;
@@ -584,7 +612,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, []);
+  }, [pushTsHistory]);
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
   const acceptL1Change = (cueId: number) => {
@@ -1413,6 +1441,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
               <span className={`text-[10px] font-mono flex-1 ${active ? "text-amber-300/70" : "text-gray-600"}`}>{c.startTime} → {c.endTime}</span>
               <button
                 onClick={() => {
+                  pushTsHistory(tsEditCue.id);
                   deleteCue(c.id);
                   if (active) closeTsEditor();
                 }}
@@ -1478,6 +1507,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             onClose={closeTsEditor}
             onMergeWithNext={() => mergeCueWithNext(tsEditCue.id)}
             exitRef={tsExitRef}
+            commitUndoCount={tsHistory.length}
+            onUndoCommit={undoTsCommit}
           />
         </>);
       })()}
@@ -1790,11 +1821,14 @@ interface TsEditorProps {
   onClose: () => void;
   onMergeWithNext: () => void;
   exitRef?: React.MutableRefObject<(() => void) | null>;
+  commitUndoCount?: number;
+  onUndoCommit?: () => void;
 }
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
   audioDuration, isFirstCue, isLastCue, neighbors, speed, onSpeedChange, onSave, onPrev, onNext, onClose, onMergeWithNext, exitRef,
+  commitUndoCount = 0, onUndoCommit,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
@@ -1804,6 +1838,28 @@ function CueTimestampEditor({
   const [stripPlaying, setStripPlaying] = useState(false);
   const stripRef = useRef<HTMLDivElement>(null);
   const dragTarget = useRef<"start" | "end" | null>(null);
+
+  // Undo for marker drags inside this cue (max 5). Older steps fall back to the parent's history.
+  const [markerHistory, setMarkerHistory] = useState<{ s: number; e: number }[]>([]);
+  const dragOriginRef = useRef<{ s: number; e: number } | null>(null);
+  const recordMarkerChange = (origin: { s: number; e: number } | null, s: number, e: number) => {
+    if (!origin || (origin.s === s && origin.e === e)) return;
+    setMarkerHistory((h) => [...h.slice(-4), origin]);
+  };
+  const undoCount = Math.min(5, markerHistory.length + commitUndoCount);
+  const handleUndo = () => {
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setStripPlaying(false);
+    const last = markerHistory[markerHistory.length - 1];
+    if (last) {
+      setMarkerHistory((h) => h.slice(0, -1));
+      setMarkerStart(last.s);
+      setMarkerEnd(last.e);
+      return;
+    }
+    onUndoCommit?.();
+  };
 
   // Reset strip-play button when audio pauses (preview loop ended by parent's timeupdate handler)
   useEffect(() => {
@@ -1852,6 +1908,7 @@ function CueTimestampEditor({
     e.stopPropagation(); // don't let the strip background start panning
     e.currentTarget.setPointerCapture(e.pointerId);
     dragTarget.current = target;
+    dragOriginRef.current = { s: markerStart, e: markerEnd };
   };
 
   const onMarkerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1872,6 +1929,7 @@ function CueTimestampEditor({
       finalStart = Math.min(ms, markerEnd - 200);
       finalEnd = markerEnd;
       setMarkerStart(finalStart);
+      recordMarkerChange(dragOriginRef.current, finalStart, finalEnd);
       // Play full strip on loop x2
       const audio = audioRef.current;
       if (audio) {
@@ -1887,6 +1945,7 @@ function CueTimestampEditor({
       finalEnd = Math.max(ms, markerStart + 200);
       finalStart = markerStart;
       setMarkerEnd(finalEnd);
+      recordMarkerChange(dragOriginRef.current, finalStart, finalEnd);
       // Play last 1s before end marker
       const audio = audioRef.current;
       if (audio) {
@@ -1940,6 +1999,8 @@ function CueTimestampEditor({
     const rect = stripRef.current?.getBoundingClientRect();
     const deltaMs = rect ? ((e.clientX - ambDragRef.current.x) / rect.width) * windowDuration : 0;
     const finalStart = Math.max(0, Math.round(ambDragRef.current.startMs + deltaMs));
+    const ambOrigin = { s: ambDragRef.current.startMs, e: ambDragRef.current.endMs };
+    recordMarkerChange(ambOrigin, finalStart, finalStart + (ambOrigin.e - ambOrigin.s));
     ambDragRef.current = null;
     // 1s preview at final start position
     const audio = audioRef.current;
@@ -2003,7 +2064,19 @@ function CueTimestampEditor({
           )}
         </div>
         <span className="text-xs font-semibold text-gray-300">Timeline Editor Mode</span>
-        {/* Right: Next */}
+        {/* Right: Undo + Next */}
+        <div className="flex items-center gap-2">
+        <button
+          onClick={handleUndo}
+          disabled={undoCount === 0}
+          title={undoCount ? `Undo (${undoCount} left)` : "Nothing to undo"}
+          className="flex items-center gap-1 px-2 py-1 rounded-md border border-gray-700 bg-gray-800/70 text-gray-200 text-xs hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-gray-800/70 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+          </svg>
+          {undoCount > 0 && <span className="font-mono text-[10px] text-gray-400">{undoCount}</span>}
+        </button>
         {!isLastCue ? (
           <button onClick={() => onNext(markerStart, markerEnd, textVal)} className="flex items-center gap-0.5 text-sm text-amber-400 hover:text-amber-300 transition-colors">
             Next
@@ -2014,6 +2087,7 @@ function CueTimestampEditor({
         ) : (
           <div className="w-14" />
         )}
+        </div>
       </div>
 
       {/* Cue text editor */}
