@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
 import { getMyAssignments, TranscriptReviewItem } from "@/services/video.service";
 import Link from "next/link";
+import { rememberReturnTo } from "@/lib/session";
 
 export default function ProofreadPage() {
   const { user, authLoading, isProofreader } = useAuth();
@@ -13,7 +14,12 @@ export default function ProofreadPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !isProofreader) router.replace("/");
+    if (!user) {
+      rememberReturnTo("/proofread");
+      router.replace("/login");
+    } else if (!isProofreader) {
+      router.replace("/");
+    }
   }, [user, authLoading, isProofreader, router]);
 
   const fetchFn = useCallback(() => getMyAssignments(), []);

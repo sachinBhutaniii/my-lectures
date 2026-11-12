@@ -6,12 +6,13 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   ReactNode,
 } from "react";
-import apiClient from "@/lib/axios";
+import apiClient, { API_BASE_URL } from "@/lib/axios";
+import { TOKEN_KEY, SESSION_EXPIRED_EVENT, getTokenExpiryMs, takeReturnTo } from "@/lib/session";
 
-const BACKEND_URL = "https://bddsm-production.up.railway.app";
-const TOKEN_KEY = "bdd_auth_token";
+const BACKEND_URL = API_BASE_URL;
 const PARENT_ADMIN_EMAIL = "dasgargamuni@gmail.com";
 
 export interface AuthUser {
@@ -129,7 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(TOKEN_KEY, urlToken);
       window.history.replaceState({}, "", window.location.pathname);
       setToken(urlToken);
-      handleFetchMe(urlToken);
+      handleFetchMe(urlToken).then(() => {
+        // Google login started from a page that asked to come back (e.g. the proofread editor)
+        const returnTo = takeReturnTo();
+        if (returnTo && localStorage.getItem(TOKEN_KEY)) window.location.replace(returnTo);
+      });
       return;
     }
 
@@ -142,6 +147,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthLoading(false);
     }
   }, [handleFetchMe]);
+
+  // ── Session ended (token expired / rejected / logged out in another tab) ──────
+  // Clears the session without wiping the saved profile (unlike a manual logout).
+  const clearSession = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  // Ask the server whether the stored token still works; clear the session if not.
+  // Network/5xx errors keep the session (we can't tell, and saves will retry).
+  const verifyingRef = useRef(false);
+  const verifySession = useCallback(async () => {
+    const stored = localStorage.getItem(TOKEN_KEY);
+    if (!stored || verifyingRef.current) return;
+    verifyingRef.current = true;
+    try {
+      await apiClient.get("/api/users/me", { headers: { Authorization: `Bearer ${stored}` } });
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if ((status === 401 || status === 403) && localStorage.getItem(TOKEN_KEY) === stored) clearSession();
+    } finally {
+      verifyingRef.current = false;
+    }
+  }, [clearSession]);
+
+  // Any API call rejected with 401 → check and end the session app-wide
+  useEffect(() => {
+    const onExpired = () => { verifySession(); };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [verifySession]);
+
+  // Token reaches its expiry time → check with the server (it is the source of truth;
+  // the device clock may be off). Also re-check when the app comes back to the foreground,
+  // because timers don't run while a phone is asleep.
+  useEffect(() => {
+    if (!token) return;
+    const expiresAt = getTokenExpiryMs(token);
+    if (expiresAt === null) return;
+    const check = () => { if (Date.now() >= expiresAt) verifySession(); };
+    const timer = setTimeout(check, Math.min(Math.max(0, expiresAt - Date.now()) + 1000, 2 ** 31 - 1));
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", check);
+    check();
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", check);
+    };
+  }, [token, verifySession]);
+
+  // Logged out / logged in from another tab → follow along in this tab
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== TOKEN_KEY) return;
+      if (!e.newValue) {
+        setToken(null);
+        setUser(null);
+      } else if (e.newValue !== token) {
+        setToken(e.newValue);
+        fetchMe(e.newValue).catch(() => { /* verified on next API call */ });
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [token, fetchMe]);
 
   const login = useCallback(
     async (email: string, password: string) => {

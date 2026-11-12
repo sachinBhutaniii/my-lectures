@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { takeReturnTo } from "@/lib/session";
 
 function GoogleIcon() {
   return (
@@ -57,7 +58,8 @@ export default function LoginPage() {
       } else {
         await register(name, email, password);
       }
-      router.push("/");
+      // Go back to the page that sent us here (e.g. the proofread editor), else home
+      router.push(takeReturnTo() ?? "/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })
         ?.response?.data?.error;

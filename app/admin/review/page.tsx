@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -8,6 +8,7 @@ import {
   TranscriptEditorData,
 } from "@/services/video.service";
 import TranscriptEditor from "@/components/TranscriptEditor";
+import { rememberReturnTo } from "@/lib/session";
 
 function ReviewContent() {
   const searchParams = useSearchParams();
@@ -18,12 +19,22 @@ function ReviewContent() {
   const [data, setData] = useState<TranscriptEditorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const loadedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !isAdmin) { router.replace("/"); return; }
+    // Once the editor is open, a lost session is handled inside the editor (it locks
+    // and keeps changes on the device) — never navigate away and drop unsaved work.
+    if (loadedIdRef.current !== null) return;
+    if (!user) {
+      rememberReturnTo(window.location.pathname + window.location.search);
+      router.replace("/login");
+      return;
+    }
+    if (!isAdmin) { router.replace("/"); return; }
     if (!id) { router.replace("/admin"); return; }
 
+    loadedIdRef.current = id;
     getTranscriptForEditor(Number(id))
       .then(setData)
       .catch(() => setError("Failed to load transcript. Please go back and try again."))

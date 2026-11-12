@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type React from "react";
+import { flushSync } from "react-dom";
 import {
   SrtCue, CueDiff,
   parseSrt, serializeSrt, diffCues, timeToMs, formatTime,
@@ -15,6 +16,9 @@ import {
   SrtCueDtoItem,
 } from "@/services/video.service";
 import { useStreak } from "@/hooks/useStreak";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { rememberReturnTo } from "@/lib/session";
 
 type EditorMode = "l1" | "l2" | "admin";
 
@@ -70,6 +74,32 @@ function msToSrtTime(ms: number): string {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
+
+// ── Device copy of unsaved changes ───────────────────────────────────────────
+// Every change is mirrored to localStorage until the server confirms the save, so
+// nothing is lost if the login session ends, the network drops, or the tab closes.
+interface DeviceCopy { srt: string; baseHash: string; savedAt: number }
+
+/** Short fingerprint of an SRT string, to tell whether the server copy changed. */
+function srtHash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return `${s.length}:${(h >>> 0).toString(36)}`;
+}
+function readDeviceCopy(key: string): DeviceCopy | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    return typeof v?.srt === "string" && typeof v?.baseHash === "string" ? v : null;
+  } catch { return null; }
+}
+function writeDeviceCopy(key: string, copy: DeviceCopy) {
+  try { localStorage.setItem(key, JSON.stringify(copy)); } catch { /* storage full/unavailable */ }
+}
+function removeDeviceCopy(key: string) {
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
 
 export default function TranscriptEditor({ data, mode, level = 1, onBack }: Props) {
   // Working cues
@@ -148,6 +178,25 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [rawTranscriptUsed, setRawTranscriptUsed] = useState(false);
   const [truncatedDraftRecovered, setTruncatedDraftRecovered] = useState(false);
 
+  // ── Login session + device copy of unsaved changes ──────────────────────────
+  const router = useRouter();
+  const { token, user, authLoading } = useAuth();
+  // Logged out (token expired, rejected, or logout in another tab): the editor locks
+  const sessionLost = !authLoading && !token;
+  const saveLevel: 1 | 2 = mode === "admin" ? 2 : (level as 1 | 2);
+  // One device copy per user + transcript + level (fixed for the life of the editor)
+  const deviceKey = useRef(`bdd_tx_unsaved_${user?.id ?? "anon"}_${data.id}_${saveLevel}`).current;
+  const initialCuesRef = useRef<SrtCue[]>([]);
+  const initialSrtRef = useRef<string | null>(null);  // what the editor opened with
+  const lastSavedSrtRef = useRef<string | null>(null); // last SRT the server confirmed
+  const serverBaseHashRef = useRef("");                // fingerprint of the server's copy
+  // While the user decides about a conflicting device copy, leave it untouched
+  const holdDeviceCopyRef = useRef(false);
+  const [deviceCopyNotice, setDeviceCopyNotice] = useState<
+    null | { kind: "restored" } | { kind: "conflict"; copy: DeviceCopy }
+  >(null);
+  const [saveRetryTick, setSaveRetryTick] = useState(0);
+
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
     let orig = parseSrt(data.originalSrt ?? "");
@@ -168,6 +217,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
 
     origCuesRef.current = orig;
 
+    let initial: SrtCue[];
+
     if (mode === "l1") {
       // Detect a truncated draft: if L1 ends significantly before the original audio,
       // the saved draft was incomplete — append the missing original cues so the proofreader
@@ -175,33 +226,64 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       if (l1.length > 0 && orig.length > 0) {
         const l1LastMs = l1[l1.length - 1].endMs;
         const origLastMs = orig[orig.length - 1].endMs;
-        if (origLastMs > 0 && l1LastMs < origLastMs * 0.95) {
+        // Only trust this time-based check when both versions have sane timings. An AI
+        // timestamp glitch (a cue ending before it starts, negative times) would otherwise
+        // make a complete draft look "truncated" and append the whole original again.
+        const sane = (cs: SrtCue[]) => cs.every((c) => c.startMs >= 0 && c.endMs >= c.startMs);
+        if (origLastMs > 0 && l1LastMs > 0 && sane(l1) && sane(orig) && l1LastMs < origLastMs * 0.95) {
           const remaining = orig
             .filter((c) => c.startMs > l1LastMs)
             .map((c, i) => ({ ...c, id: l1.length + i + 1 }));
-          setCues(remaining.length > 0 ? [...l1, ...remaining] : l1);
+          initial = remaining.length > 0 ? [...l1, ...remaining] : l1;
           setTruncatedDraftRecovered(remaining.length > 0);
         } else {
-          setCues(l1);
+          initial = l1;
           setTruncatedDraftRecovered(false);
         }
       } else {
-        setCues(l1.length > 0 ? l1 : orig);
+        initial = l1.length > 0 ? l1 : orig;
         setTruncatedDraftRecovered(false);
       }
     } else if (mode === "l2") {
       // L2 starts from L1's approved version (falls back to orig if L1 is empty)
-      setCues(l2.length > 0 ? l2 : l1.length > 0 ? l1 : orig);
+      initial = l2.length > 0 ? l2 : l1.length > 0 ? l1 : orig;
       if (l1.length > 0) setL1Diff(diffCues(orig, l1));
     } else {
       // Admin: start from best available version
       const best = l2.length > 0 ? l2 : l1.length > 0 ? l1 : orig;
-      setCues(best);
+      initial = best;
       if (l1.length > 0) setL1Diff(diffCues(orig, l1));
       if (l2.length > 0 && l1.length > 0) setL2Diff(diffCues(l1, l2));
       else if (l2.length > 0) setL2Diff(diffCues(orig, l2));
     }
-  }, [data, mode]);
+
+    // Unsaved changes kept on this device from an earlier session (e.g. the login expired)?
+    const initialSrt = serializeSrt(initial);
+    const serverSrt = (mode === "admin" || level === 2 ? data.level2Srt : data.level1Srt) ?? "";
+    initialCuesRef.current = initial;
+    initialSrtRef.current = initialSrt;
+    lastSavedSrtRef.current = null;
+    serverBaseHashRef.current = srtHash(serverSrt);
+    holdDeviceCopyRef.current = false;
+    setDeviceCopyNotice(null);
+    const copy = readDeviceCopy(deviceKey);
+    const copyCues = copy ? parseSrt(copy.srt) : [];
+    if (copy && copy.srt !== initialSrt && copyCues.length > 0) {
+      if (copy.baseHash === serverBaseHashRef.current) {
+        // Server copy hasn't changed since → carry on from the device copy (auto-save sends it)
+        setCues(copyCues);
+        setDeviceCopyNotice({ kind: "restored" });
+      } else {
+        // Saved from somewhere else since → let the user choose
+        holdDeviceCopyRef.current = true;
+        setCues(initial);
+        setDeviceCopyNotice({ kind: "conflict", copy });
+      }
+    } else {
+      if (copy) removeDeviceCopy(deviceKey);
+      setCues(initial);
+    }
+  }, [data, mode, level, deviceKey]);
 
   // ── Audio events ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -263,23 +345,70 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }
   }, [currentTime, cues, activeCueId, autoScroll, editingId, regressedIds]);
 
-  // ── Auto-save (L1 / L2 only) ─────────────────────────────────────────────────
+  // ── Device copy: mirror every change until the server confirms it ─────────────
   useEffect(() => {
-    if (cues.length === 0) return;
+    if (cues.length === 0 || holdDeviceCopyRef.current) return;
+    const srt = serializeSrt(cues);
+    if (srt === (lastSavedSrtRef.current ?? initialSrtRef.current)) removeDeviceCopy(deviceKey);
+    else writeDeviceCopy(deviceKey, { srt, baseHash: serverBaseHashRef.current, savedAt: Date.now() });
+  }, [cues, deviceKey]);
+
+  // ── Auto-save ────────────────────────────────────────────────────────────────
+  // Skipped while logged out (changes wait on the device); runs again as soon as the
+  // user logs back in. Failed saves retry every 15 s.
+  useEffect(() => {
+    if (cues.length === 0 || !token) return;
+    const srt = serializeSrt(cues);
+    if (srt === lastSavedSrtRef.current) return;
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        const saveLevel: 1 | 2 = mode === "admin" ? 2 : level as 1 | 2;
-        await saveTranscriptDraft(data.id, saveLevel, serializeSrt(cues));
+        await saveTranscriptDraft(data.id, saveLevel, srt);
+        lastSavedSrtRef.current = srt;
+        serverBaseHashRef.current = srtHash(srt);
+        if (!holdDeviceCopyRef.current && serializeSrt(cuesRef.current) === srt) removeDeviceCopy(deviceKey);
         setSaveStatus("saved");
-        setTimeout(() => setSaveStatus("idle"), 2500);
+        setTimeout(() => setSaveStatus((st) => (st === "saved" ? "idle" : st)), 2500);
       } catch {
+        // A 401 also ends the session app-wide (AuthContext) → the lock screen appears
         setSaveStatus("error");
+        setTimeout(() => setSaveRetryTick((n) => n + 1), 15000);
       }
     }, 3000);
     return () => { if (saveTimer.current !== null) clearTimeout(saveTimer.current); };
-  }, [cues, data.id, level, mode]);
+  }, [cues, token, saveRetryTick, data.id, saveLevel, deviceKey]);
+
+  // ── Logged out while editing: stop playback (the lock screen covers the editor) ──
+  useEffect(() => {
+    if (!sessionLost) return;
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
+  }, [sessionLost]);
+
+  const goToLoginKeepingWork = () => {
+    // Commit marker positions still open in Timeline Editor Mode, then store everything
+    if (tsEditCue && tsExitRef.current) flushSync(() => tsExitRef.current?.());
+    const srt = serializeSrt(cuesRef.current);
+    if (!holdDeviceCopyRef.current && srt !== (lastSavedSrtRef.current ?? initialSrtRef.current)) {
+      writeDeviceCopy(deviceKey, { srt, baseHash: serverBaseHashRef.current, savedAt: Date.now() });
+    }
+    rememberReturnTo(window.location.pathname + window.location.search);
+    router.push("/login");
+  };
+
+  const applyDeviceCopy = (copy: DeviceCopy) => {
+    holdDeviceCopyRef.current = false;
+    setDeviceCopyNotice(null);
+    setCues(parseSrt(copy.srt));
+  };
+  const discardDeviceCopy = () => {
+    holdDeviceCopyRef.current = false;
+    removeDeviceCopy(deviceKey);
+    setDeviceCopyNotice(null);
+    setCues(initialCuesRef.current);
+  };
 
   // ── L1 mode: live track-changes diff ─────────────────────────────────────────
   useEffect(() => {
@@ -487,6 +616,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       for (let i = idx + 1; i < next.length; i++) {
         if (next[i - 1].endMs <= next[i].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newStart = next[i - 1].endMs;
         const newEnd = newStart + dur;
         next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
@@ -496,6 +626,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       for (let i = idx - 1; i >= 0; i--) {
         if (next[i].endMs <= next[i + 1].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newEnd = next[i + 1].startMs;
         const newStart = Math.max(0, newEnd - dur);
         next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
@@ -519,12 +650,14 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       // Pack all subsequent cues with no gaps: each starts exactly where the previous ends
       for (let i = idx + 1; i < next.length; i++) {
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newStart = next[i - 1].endMs;
         next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
       }
       for (let i = idx - 1; i >= 0; i--) {
         if (next[i].endMs <= next[i + 1].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newEnd = next[i + 1].startMs;
         const newStart = Math.max(0, newEnd - dur);
         next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
@@ -558,12 +691,14 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       for (let i = idx + 1; i < next.length; i++) {
         if (next[i - 1].endMs <= next[i].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newStart = next[i - 1].endMs;
         next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
       }
       for (let i = idx - 1; i >= 0; i--) {
         if (next[i].endMs <= next[i + 1].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newEnd = next[i + 1].startMs;
         const newStart = Math.max(0, newEnd - dur);
         next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
@@ -718,6 +853,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setSubmitting(true);
     try {
       await submitTranscriptReview(data.id, level as 1 | 2, serializeSrt(cues));
+      removeDeviceCopy(deviceKey);
       setSubmitted(true);
     } catch {
       alert("Failed to submit review. Please try again.");
@@ -731,6 +867,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setSubmitting(true);
     try {
       await publishTranscript(data.id, serializeSrt(cues));
+      removeDeviceCopy(deviceKey);
       setPublishDone(true);
       setPublishConfirm(false);
     } catch {
@@ -842,6 +979,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       for (let i = lastSelectedIdx + 1; i < next.length; i++) {
         if (next[i - 1].endMs <= next[i].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newStart = next[i - 1].endMs;
         next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
       }
@@ -851,6 +989,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       for (let i = firstSelectedIdx - 1; i >= 0; i--) {
         if (next[i].endMs <= next[i + 1].startMs) break;
         const dur = next[i].endMs - next[i].startMs;
+        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newEnd = next[i + 1].startMs;
         const newStart = Math.max(0, newEnd - dur);
         next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
@@ -920,7 +1059,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             </span>
             {saveStatus === "saving" && <span className="text-[10px] text-gray-500 animate-pulse">Saving…</span>}
             {saveStatus === "saved" && <span className="text-[10px] text-green-500">Saved ✓</span>}
-            {saveStatus === "error" && <span className="text-[10px] text-red-400">Save failed</span>}
+            {saveStatus === "error" && <span className="text-[10px] text-red-400" title="Your changes are kept on this device and will be saved automatically">Not saved · kept on device</span>}
           </div>
         </div>
         {/* Actions */}
@@ -1144,6 +1283,30 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       )}
 
       {/* ── Truncated draft recovery notice ──────────────────────────────────── */}
+      {deviceCopyNotice?.kind === "restored" && (
+        <div className="flex-shrink-0 flex items-start gap-2.5 px-4 py-2.5 bg-green-500/10 border-b border-green-500/20">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5">
+            <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-green-300">Unsaved changes restored</p>
+            <p className="text-[11px] text-green-400/70 mt-0.5">Changes from your last session that hadn&apos;t reached the server were kept on this device. They&apos;ve been put back and are being saved now.</p>
+            <button onClick={discardDeviceCopy} className="mt-1 text-[11px] text-green-300/80 underline hover:text-green-200">Discard them and use the saved version</button>
+          </div>
+          <button onClick={() => setDeviceCopyNotice(null)} className="text-green-400/60 hover:text-green-300 text-xs" title="Dismiss">✕</button>
+        </div>
+      )}
+      {deviceCopyNotice?.kind === "conflict" && (
+        <div className="flex-shrink-0 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/30">
+          <p className="text-xs font-medium text-amber-300">This device has unsaved changes from {new Date(deviceCopyNotice.copy.savedAt).toLocaleString()}</p>
+          <p className="text-[11px] text-amber-400/80 mt-0.5">This transcript has been saved from somewhere else since then. Which version do you want to keep?</p>
+          <div className="flex gap-2 mt-2">
+            <button onClick={() => applyDeviceCopy(deviceCopyNotice.copy)} className="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-[11px] text-amber-200 hover:bg-amber-500/30">Use this device&apos;s changes</button>
+            <button onClick={discardDeviceCopy} className="px-3 py-1 rounded-lg border border-gray-700 text-[11px] text-gray-300 hover:border-gray-500">Keep the saved version</button>
+          </div>
+        </div>
+      )}
+
       {truncatedDraftRecovered && (
         <div className="flex-shrink-0 flex items-start gap-2.5 px-4 py-2.5 bg-blue-500/10 border-b border-blue-500/20">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5">
@@ -1512,6 +1675,32 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
           />
         </>);
       })()}
+
+      {/* ── Logged out: lock the editor so no more work is done without saving ──── */}
+      {sessionLost && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-5 bg-black/85 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-[#141414] p-5 text-center shadow-2xl">
+            <div className="mx-auto mb-3 w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-red-400">
+                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-white">You&apos;ve been logged out</p>
+            <p className="mt-2 text-xs leading-relaxed text-gray-400">
+              Your login session has ended, so changes can&apos;t be saved to the server.
+              Everything you&apos;ve done so far is kept safely on this device.
+              Log in again and your work will be restored and saved automatically.
+            </p>
+            <button
+              onClick={goToLoginKeepingWork}
+              className="mt-4 w-full py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-sm font-semibold text-white transition-colors"
+            >
+              Log in again
+            </button>
+            <p className="mt-3 text-[11px] text-gray-600">Logged in on another tab? This page will continue by itself.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Publish confirmation modal ─────────────────────────────────────────── */}
       {publishConfirm && (

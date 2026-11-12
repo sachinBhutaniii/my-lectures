@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -8,6 +8,7 @@ import {
   TranscriptEditorData,
 } from "@/services/video.service";
 import TranscriptEditor from "@/components/TranscriptEditor";
+import { rememberReturnTo } from "@/lib/session";
 
 function EditorContent() {
   const searchParams = useSearchParams();
@@ -18,14 +19,29 @@ function EditorContent() {
   const [data, setData] = useState<TranscriptEditorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Fixed when the transcript loads, so a later logout can't flip the editor's mode
+  const [level, setLevel] = useState<1 | 2>(1);
+  const loadedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !isProofreader) { router.replace("/"); return; }
+    // Once the editor is open, a lost session is handled inside the editor (it locks
+    // and keeps changes on the device) — never navigate away and drop unsaved work.
+    if (loadedIdRef.current !== null) return;
+    if (!user) {
+      rememberReturnTo(window.location.pathname + window.location.search);
+      router.replace("/login");
+      return;
+    }
+    if (!isProofreader) { router.replace("/"); return; }
     if (!id) { router.replace("/proofread"); return; }
 
+    loadedIdRef.current = id;
     getTranscriptForEditor(Number(id))
-      .then(setData)
+      .then((d) => {
+        setLevel(d.level2ProofreaderId === user.id ? 2 : 1);
+        setData(d);
+      })
       .catch(() => setError("Failed to load transcript. Please go back and try again."))
       .finally(() => setLoading(false));
   }, [id, user, authLoading, isProofreader, router]);
@@ -53,9 +69,6 @@ function EditorContent() {
   }
 
   if (!data) return null;
-
-  // Determine which level this proofreader is assigned to
-  const level: 1 | 2 = data.level2ProofreaderId === user?.id ? 2 : 1;
 
   return (
     <TranscriptEditor
