@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { rememberReturnTo } from "@/lib/session";
 import { useAuth } from "@/context/AuthContext";
 import { useT } from "@/hooks/useT";
 import { useBackClose } from "@/hooks/useBackClose";
@@ -50,7 +51,7 @@ export default function SadhanaPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) { router.replace("/login"); return; }
+    if (!user) { rememberReturnTo(window.location.pathname + window.location.search); router.replace("/login"); return; }
   }, [user, authLoading, router]);
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import apiClient from "@/lib/axios";
+import { authedWriteFetch } from "@/lib/apiRules";
 
 export interface SadhanaOption {
   value: string;
@@ -148,23 +149,16 @@ export interface SadhanaQA {
 
 export const uploadQAAudio = async (blob: Blob): Promise<string> => {
   // Use the existing /api/upload/audio endpoint (UploadController) which is proven to work.
-  // fetch() is used instead of apiClient so the browser sets multipart boundary automatically.
-  const token = typeof window !== "undefined" ? localStorage.getItem("bdd_auth_token") : null;
+  // fetch() is used instead of apiClient so the browser sets multipart boundary automatically;
+  // authedWriteFetch applies the same rules as apiClient (login required, failures shown loudly).
   const form = new FormData();
   // Force audio/webm so backend's content-type check (startsWith "audio/") always passes.
   // Chrome MediaRecorder reports "video/webm" which would be rejected otherwise.
   const audioBlob = new Blob([blob], { type: "audio/webm" });
   form.append("file", audioBlob, "voice.webm");
-  const res = await fetch("https://bddsm-production.up.railway.app/api/upload/audio", {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? `Upload failed: ${res.status}`);
-  }
+  const res = await authedWriteFetch("/api/upload/audio", { method: "POST", body: form });
   const data = await res.json();
+  if (typeof data?.url !== "string") throw new Error("Upload finished but the server returned no file URL");
   return data.url;
 };
 

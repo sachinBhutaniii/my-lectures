@@ -19,9 +19,11 @@ import { useStreak } from "@/hooks/useStreak";
 import { useActivityLog } from "@/hooks/useActivityLog";
 import { cuesHash } from "@/lib/activityDiff";
 import { toLogCues } from "@/lib/activityLog";
+import { missingOriginalTail } from "@/lib/draftRecovery";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { rememberReturnTo } from "@/lib/session";
+import { rememberReturnTo, SESSION_EXPIRED_EVENT } from "@/lib/session";
+import { overrideLoginRequired } from "@/lib/apiRules";
 
 type EditorMode = "l1" | "l2" | "admin";
 
@@ -240,24 +242,17 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     let truncatedRecovered = false;
 
     if (mode === "l1") {
-      // Detect a truncated draft: if L1 ends significantly before the original audio,
-      // the saved draft was incomplete — append the missing original cues so the proofreader
-      // can see and review the full transcript.
+      // Repair a cut-short draft: append the original lines missing from its end. Decided by
+      // content (lib/draftRecovery.ts), never by timing — Timeline Editor "Next" moves lines
+      // earlier, and a time-based check re-added the original ending to complete drafts.
       if (l1.length > 0 && orig.length > 0) {
-        const l1LastMs = l1[l1.length - 1].endMs;
-        const origLastMs = orig[orig.length - 1].endMs;
-        // Only trust this time-based check when both versions have sane timings. An AI
-        // timestamp glitch (a cue ending before it starts, negative times) would otherwise
-        // make a complete draft look "truncated" and append the whole original again.
-        const sane = (cs: SrtCue[]) => cs.every((c) => c.startMs >= 0 && c.endMs >= c.startMs);
-        if (origLastMs > 0 && l1LastMs > 0 && sane(l1) && sane(orig) && l1LastMs < origLastMs * 0.95) {
-          const remaining = orig
-            .filter((c) => c.startMs > l1LastMs)
-            .map((c, i) => ({ ...c, id: l1.length + i + 1 }));
-          initial = remaining.length > 0 ? [...l1, ...remaining] : l1;
+        const missing = missingOriginalTail(l1, orig);
+        if (missing.length > 0) {
+          console.warn(`Transcript ${data.id}: L1 draft is missing its last ${missing.length} lines; adding them from the original`);
+          initial = [...l1, ...missing.map((c, i) => ({ ...c, id: l1.length + i + 1 }))];
           source = "l1-draft";
-          truncatedRecovered = remaining.length > 0;
-          setTruncatedDraftRecovered(remaining.length > 0);
+          truncatedRecovered = true;
+          setTruncatedDraftRecovered(true);
         } else {
           initial = l1;
           source = "l1-draft";
@@ -403,7 +398,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        await saveTranscriptDraft(data.id, saveLevel, srt);
+        await saveTranscriptDraft(data.id, saveLevel, srt, { skipLoudError: true });
         logEvent("SAVE_OK", { action: "autosave", summary: `Saved to the server (${cues.length} lines)`, stateHash: savedHash, cueCount: cues.length });
         lastSavedSrtRef.current = srt;
         serverBaseHashRef.current = srtHash(srt);
@@ -427,6 +422,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }, 3000);
     return () => { if (saveTimer.current !== null) clearTimeout(saveTimer.current); };
   }, [cues, token, saveRetryTick, data.id, saveLevel, deviceKey, logEvent]);
+
+  // ── Lost login while this editor is open: show the lock screen (keeps all work on the device)
+  // instead of the app-wide "go to the login page" rule ────────────────────────────────────
+  useEffect(() => overrideLoginRequired(() => window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))), []);
 
   // ── Logged out while editing: stop playback (the lock screen covers the editor) ──
   useEffect(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { rememberReturnTo } from "@/lib/session";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import AdminVideoList from "@/components/AdminVideoList";
@@ -163,7 +164,13 @@ export default function AdminPage() {
   // ── Auth guard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
-    if (!user || (!isAdmin && !isTranscriptAdmin)) router.replace("/");
+    if (!user) {
+      // Not logged in → login page, then back here
+      rememberReturnTo(window.location.pathname + window.location.search);
+      router.replace("/login");
+      return;
+    }
+    if (!isAdmin && !isTranscriptAdmin) router.replace("/");
   }, [user, authLoading, isAdmin, isTranscriptAdmin, router]);
 
   if (authLoading || (!isAdmin && !isTranscriptAdmin)) {

@@ -11,6 +11,7 @@ import TripleTapFullscreen from "@/components/TripleTapFullscreen";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import InstallPrompt from "@/components/InstallPrompt";
 import OfflineIndicator from "@/components/OfflineIndicator";
+import GlobalNotices from "@/components/GlobalNotices";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -59,6 +60,7 @@ export default function RootLayout({
                 <PlayerProvider>
                   <TripleTapFullscreen>
                     <OfflineIndicator />
+                    <GlobalNotices />
                     {children}
                     <PlayerSheet />
                     <ServiceWorkerRegister />

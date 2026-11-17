@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { rememberReturnTo } from "@/lib/session";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -47,7 +48,7 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) { router.replace("/login"); return; }
+    if (!user) { rememberReturnTo(window.location.pathname + window.location.search); router.replace("/login"); return; }
     getCategories().then(setCategories).catch(() => {});
     loadMyFeedback();
   }, [user, authLoading, router]);

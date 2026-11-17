@@ -1,4 +1,6 @@
 import apiClient from "@/lib/axios";
+import type { AxiosRequestConfig } from "axios";
+import { authedWriteFetch } from "@/lib/apiRules";
 import { VideoApiResponse, VideoDetailResponse, LectureVideo, LanguageData } from '@/types/videos'; 
 //Start from the src folder, then go to: 
 // instead of this import , import { Video } from "../../../types/video";
@@ -215,8 +217,10 @@ export const getTranscriptForEditor = async (id: number): Promise<TranscriptEdit
   return res.data;
 };
 
-export const saveTranscriptDraft = async (id: number, level: 1 | 2, srtContent: string): Promise<void> => {
-  await apiClient.put(`/api/transcripts/${id}/save-draft`, { level, srtContent });
+export const saveTranscriptDraft = async (
+  id: number, level: 1 | 2, srtContent: string, config?: AxiosRequestConfig
+): Promise<void> => {
+  await apiClient.put(`/api/transcripts/${id}/save-draft`, { level, srtContent }, config);
 };
 
 export const submitTranscriptReview = async (id: number, level: 1 | 2, srtContent: string): Promise<void> => {
@@ -276,20 +280,10 @@ export const uploadAudioFile = async (file: File, startTime?: number): Promise<{
   form.append("file", file);
   if (startTime != null) form.append("startTime", String(startTime));
 
-  // Use fetch so FormData sets Content-Type + boundary without axios default header interference
-  const token = typeof window !== "undefined" ? localStorage.getItem("bdd_auth_token") : null;
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch("https://bddsm-production.up.railway.app/api/youtube/upload-audio", {
-    method: "POST",
-    headers,
-    body: form,
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Upload failed: ${res.status}`);
-  return data as { audioUrl: string; durationSeconds: number };
+  // fetch so FormData sets Content-Type + boundary itself; authedWriteFetch applies the
+  // same rules as apiClient (login required, failures shown loudly)
+  const res = await authedWriteFetch("/api/youtube/upload-audio", { method: "POST", body: form });
+  return (await res.json()) as { audioUrl: string; durationSeconds: number };
 };
 
 // ── Transcription pipeline ────────────────────────────────────────────────────

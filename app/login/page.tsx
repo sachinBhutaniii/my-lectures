@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { takeReturnTo } from "@/lib/session";
+import { takeReturnTo, takeLoginReason } from "@/lib/session";
 
 function GoogleIcon() {
   return (
@@ -39,6 +39,18 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Why we are here (e.g. "Please log in to save…"), and a failed Google sign-in (?error=…)
+  useEffect(() => {
+    const reason = takeLoginReason();
+    if (reason) setNotice(reason);
+    const googleError = new URLSearchParams(window.location.search).get("error");
+    if (googleError) {
+      console.error(`Google sign-in failed: ${googleError}`);
+      setError(`Google sign-in failed: ${googleError}`);
+    }
+  }, []);
 
   function switchMode(m: "signin" | "signup") {
     setMode(m);
@@ -224,6 +236,12 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {notice && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
+                <p className="text-amber-300 text-xs text-center">{notice}</p>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">

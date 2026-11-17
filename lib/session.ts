@@ -42,3 +42,26 @@ export function takeReturnTo(): string | null {
     return null;
   }
 }
+
+const LOGIN_REASON_KEY = "bdd_login_reason";
+
+/** Why the user was sent to the login page (shown there, once). */
+export function rememberLoginReason(reason: string) {
+  try {
+    sessionStorage.setItem(LOGIN_REASON_KEY, JSON.stringify({ reason, at: Date.now() }));
+  } catch { /* storage unavailable: the login page then shows no reason */ }
+}
+
+/** Read and clear the reason (ignored if older than 10 minutes). */
+export function takeLoginReason(): string | null {
+  try {
+    const raw = sessionStorage.getItem(LOGIN_REASON_KEY);
+    sessionStorage.removeItem(LOGIN_REASON_KEY);
+    if (!raw) return null;
+    const { reason, at } = JSON.parse(raw) as { reason?: unknown; at?: unknown };
+    if (typeof reason !== "string" || typeof at !== "number" || Date.now() - at > 10 * 60 * 1000) return null;
+    return reason;
+  } catch {
+    return null;
+  }
+}

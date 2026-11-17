@@ -18,10 +18,16 @@ function scheduleSave() {
       if (!token) return;
       const streakDates: string[] = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
       const listenTime: Record<string, number> = JSON.parse(localStorage.getItem(DAILY_TIME_KEY) ?? "{}");
+      // Background sync while listening: never bounce a listener to the login page and
+      // no red notice (the streak is kept on this device and synced next time) — but log it.
       await apiClient.put("/api/users/streak", { streakDates, listenTime }, {
         headers: { Authorization: `Bearer ${token}` },
+        skipLoginRedirect: true,
+        skipLoudError: true,
       });
-    } catch { /* non-critical */ }
+    } catch (err) {
+      console.error("Listening-streak sync failed (kept on this device, will retry on next listen)", err);
+    }
   }, 5000); // 5-second debounce
 }
 

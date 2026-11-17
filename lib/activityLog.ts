@@ -88,6 +88,10 @@ async function postBatch(rec: OutboxRecord, batch: ActivityEvent[]): Promise<voi
     mode: rec.mode,
     device: rec.device,
     events: batch,
+  }, {
+    // Background upload: kept on the device and retried, shown by the editor's own badge
+    skipLoginRedirect: true,
+    skipLoudError: true,
   });
   const expectedMax = batch[batch.length - 1].seq;
   if (res.data?.received !== batch.length || res.data?.maxSeq !== expectedMax) {

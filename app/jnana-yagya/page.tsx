@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { rememberReturnTo } from "@/lib/session";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -347,7 +348,7 @@ export default function JnanaYagyaPage() {
   // Access guard — redirect non-parent-admins back to home
   useEffect(() => {
     if (authLoading) return;
-    if (!user) { router.replace("/login"); return; }
+    if (!user) { rememberReturnTo(window.location.pathname + window.location.search); router.replace("/login"); return; }
     if (!isParentAdmin) router.replace("/");
   }, [user, authLoading, isParentAdmin, router]);
 

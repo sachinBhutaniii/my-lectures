@@ -55,6 +55,9 @@ export function useActivityLog(opts: {
   const timelineKeyRef = useRef<string | null>(null);
   const timelineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // What the edit box held when it was opened: only differences from this are real typing
+  // (the line itself may be re-timed meanwhile, e.g. by Timeline Editor "Next")
+  const editStartRef = useRef<{ id: number; s: string; e: string; t: string } | null>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>(() => logger.status());
 
   useEffect(() => logger.onStatus(setUploadStatus), [logger]);
@@ -150,20 +153,25 @@ export function useActivityLog(opts: {
 
   useEffect(() => {
     if (editingId === null) {
+      editStartRef.current = null;
       // Leave pending Timeline Editor work alone; it has its own timer
       if (pendingTypingRef.current?.source !== "timeline") pendingTypingRef.current = null;
       return;
     }
     const idx = cues.findIndex((c) => c.id === editingId);
     if (idx === -1) return;
-    const cue = cues[idx];
-    if (draft.text === cue.text && draft.startTime === cue.startTime && draft.endTime === cue.endTime) {
-      pendingTypingRef.current = null;
+    if (editStartRef.current?.id !== editingId) {
+      // The box was just opened: it holds the line's values at this moment
+      editStartRef.current = { id: editingId, s: draft.startTime, e: draft.endTime, t: draft.text };
+    }
+    const start = editStartRef.current;
+    if (draft.text === start.t && draft.startTime === start.s && draft.endTime === start.e) {
+      if (pendingTypingRef.current?.source !== "timeline") pendingTypingRef.current = null;
       return;
     }
     pendingTypingRef.current = {
       line: idx + 1,
-      before: { s: cue.startTime, e: cue.endTime, t: cue.text },
+      before: { s: start.s, e: start.e, t: start.t },
       typed: { s: draft.startTime, e: draft.endTime, t: draft.text },
     };
     const timer = setTimeout(flushTyping, TYPING_DEBOUNCE_MS);
@@ -209,13 +217,14 @@ export function useActivityLog(opts: {
     if (idx === -1) return;
     const cue = cues[idx];
     pendingTypingRef.current = null;
-    if (draft.text === cue.text && draft.startTime === cue.startTime && draft.endTime === cue.endTime) return;
+    const start = editStartRef.current?.id === cueId ? editStartRef.current : { s: cue.startTime, e: cue.endTime, t: cue.text };
+    if (draft.text === start.t && draft.startTime === start.s && draft.endTime === start.e) return;
     logger.log("CANCEL_EDIT", {
       action: "cancel-edit",
       summary: `Cancelled editing line ${idx + 1} — typed text not applied: ${short(draft.text)}`,
       payload: {
         line: idx + 1,
-        before: { s: cue.startTime, e: cue.endTime, t: cue.text },
+        before: { s: start.s, e: start.e, t: start.t },
         typed: { s: draft.startTime, e: draft.endTime, t: draft.text },
       },
     });
