@@ -6,10 +6,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useFetch } from "@/hooks/useFetch";
 import { getMyAssignments, TranscriptReviewItem } from "@/services/video.service";
 import Link from "next/link";
+import { uploadLeftoverActivity } from "@/lib/activityLog";
 import { rememberReturnTo } from "@/lib/session";
 
 export default function ProofreadPage() {
-  const { user, authLoading, isProofreader } = useAuth();
+  const { user, token, authLoading, isProofreader } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -21,6 +22,11 @@ export default function ProofreadPage() {
       router.replace("/");
     }
   }, [user, authLoading, isProofreader, router]);
+
+  // Edit history left on this device by an earlier editor session (closed tab, expired login …)
+  useEffect(() => {
+    if (token && user?.id) void uploadLeftoverActivity(user.id);
+  }, [token, user?.id]);
 
   const fetchFn = useCallback(() => getMyAssignments(), []);
   const { data: items, loading } = useFetch<TranscriptReviewItem[]>(fetchFn);

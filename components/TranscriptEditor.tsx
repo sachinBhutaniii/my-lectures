@@ -16,6 +16,9 @@ import {
   SrtCueDtoItem,
 } from "@/services/video.service";
 import { useStreak } from "@/hooks/useStreak";
+import { useActivityLog } from "@/hooks/useActivityLog";
+import { cuesHash } from "@/lib/activityDiff";
+import { toLogCues } from "@/lib/activityLog";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { rememberReturnTo } from "@/lib/session";
@@ -197,6 +200,19 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   >(null);
   const [saveRetryTick, setSaveRetryTick] = useState(0);
 
+  // ── Activity log: everything done here reaches the server, even if never saved ──
+  const { startSession, markAction, logEvent, noteCancelEdit, noteTimelineDraft, uploadStatus } = useActivityLog({
+    transcriptId: data.id,
+    level: saveLevel,
+    mode,
+    userId: user?.id,
+    token,
+    sessionLost,
+    cues,
+    editingId,
+    draft,
+  });
+
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
     let orig = parseSrt(data.originalSrt ?? "");
@@ -205,7 +221,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
 
     // Fallback: if SRT data is missing or has ≤1 cue, generate from plain transcript.
     // Apply to all levels that are also incomplete so L1/L2 mode uses the generated cues.
+    let usedRaw = false;
     if (orig.length <= 1 && data.rawTranscript?.trim()) {
+      usedRaw = true;
       const generated = plainTextToSrtCues(data.rawTranscript);
       orig = generated;
       if (l1.length <= 1) l1 = generated;
@@ -218,6 +236,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     origCuesRef.current = orig;
 
     let initial: SrtCue[];
+    let source: string;
+    let truncatedRecovered = false;
 
     if (mode === "l1") {
       // Detect a truncated draft: if L1 ends significantly before the original audio,
@@ -235,23 +255,29 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             .filter((c) => c.startMs > l1LastMs)
             .map((c, i) => ({ ...c, id: l1.length + i + 1 }));
           initial = remaining.length > 0 ? [...l1, ...remaining] : l1;
+          source = "l1-draft";
+          truncatedRecovered = remaining.length > 0;
           setTruncatedDraftRecovered(remaining.length > 0);
         } else {
           initial = l1;
+          source = "l1-draft";
           setTruncatedDraftRecovered(false);
         }
       } else {
         initial = l1.length > 0 ? l1 : orig;
+        source = l1.length > 0 ? "l1-draft" : "original";
         setTruncatedDraftRecovered(false);
       }
     } else if (mode === "l2") {
       // L2 starts from L1's approved version (falls back to orig if L1 is empty)
       initial = l2.length > 0 ? l2 : l1.length > 0 ? l1 : orig;
+      source = l2.length > 0 ? "l2-draft" : l1.length > 0 ? "l1-draft" : "original";
       if (l1.length > 0) setL1Diff(diffCues(orig, l1));
     } else {
       // Admin: start from best available version
       const best = l2.length > 0 ? l2 : l1.length > 0 ? l1 : orig;
       initial = best;
+      source = l2.length > 0 ? "l2-draft" : l1.length > 0 ? "l1-draft" : "original";
       if (l1.length > 0) setL1Diff(diffCues(orig, l1));
       if (l2.length > 0 && l1.length > 0) setL2Diff(diffCues(l1, l2));
       else if (l2.length > 0) setL2Diff(diffCues(orig, l2));
@@ -268,9 +294,21 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setDeviceCopyNotice(null);
     const copy = readDeviceCopy(deviceKey);
     const copyCues = copy ? parseSrt(copy.srt) : [];
+    const hasCopy = !!copy && copy.srt !== initialSrt && copyCues.length > 0;
+    startSession(initial, {
+      mode,
+      level,
+      source,
+      truncatedDraftRecovered: truncatedRecovered,
+      rawTranscriptUsed: usedRaw,
+      serverDraftHash: srtHash(serverSrt),
+      deviceCopy: !hasCopy ? "none" : copy!.baseHash === serverBaseHashRef.current ? "restored" : "conflict",
+      deviceCopySavedAt: hasCopy ? copy!.savedAt : null,
+    });
     if (copy && copy.srt !== initialSrt && copyCues.length > 0) {
       if (copy.baseHash === serverBaseHashRef.current) {
         // Server copy hasn't changed since → carry on from the device copy (auto-save sends it)
+        markAction("device-copy-restored");
         setCues(copyCues);
         setDeviceCopyNotice({ kind: "restored" });
       } else {
@@ -283,7 +321,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       if (copy) removeDeviceCopy(deviceKey);
       setCues(initial);
     }
-  }, [data, mode, level, deviceKey]);
+  }, [data, mode, level, deviceKey, startSession, markAction]);
 
   // ── Audio events ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -360,24 +398,35 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     if (cues.length === 0 || !token) return;
     const srt = serializeSrt(cues);
     if (srt === lastSavedSrtRef.current) return;
+    const savedHash = cuesHash(toLogCues(cues));
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
         await saveTranscriptDraft(data.id, saveLevel, srt);
+        logEvent("SAVE_OK", { action: "autosave", summary: `Saved to the server (${cues.length} lines)`, stateHash: savedHash, cueCount: cues.length });
         lastSavedSrtRef.current = srt;
         serverBaseHashRef.current = srtHash(srt);
         if (!holdDeviceCopyRef.current && serializeSrt(cuesRef.current) === srt) removeDeviceCopy(deviceKey);
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus((st) => (st === "saved" ? "idle" : st)), 2500);
-      } catch {
+      } catch (err) {
         // A 401 also ends the session app-wide (AuthContext) → the lock screen appears
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        console.error(`Auto-save of transcript ${data.id} (L${saveLevel}) failed`, err);
+        logEvent("SAVE_FAILED", {
+          action: "autosave",
+          summary: `Save to the server failed (${status ? `HTTP ${status}` : "no connection"}) — kept on this device, retrying`,
+          payload: { status: status ?? null },
+          stateHash: savedHash,
+          cueCount: cues.length,
+        });
         setSaveStatus("error");
         setTimeout(() => setSaveRetryTick((n) => n + 1), 15000);
       }
     }, 3000);
     return () => { if (saveTimer.current !== null) clearTimeout(saveTimer.current); };
-  }, [cues, token, saveRetryTick, data.id, saveLevel, deviceKey]);
+  }, [cues, token, saveRetryTick, data.id, saveLevel, deviceKey, logEvent]);
 
   // ── Logged out while editing: stop playback (the lock screen covers the editor) ──
   useEffect(() => {
@@ -401,12 +450,15 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const applyDeviceCopy = (copy: DeviceCopy) => {
     holdDeviceCopyRef.current = false;
     setDeviceCopyNotice(null);
+    markAction("device-copy-applied");
     setCues(parseSrt(copy.srt));
   };
   const discardDeviceCopy = () => {
     holdDeviceCopyRef.current = false;
     removeDeviceCopy(deviceKey);
     setDeviceCopyNotice(null);
+    logEvent("UI", { action: "device-copy-discarded", summary: "Discarded unsaved changes kept on this device, kept the saved version" });
+    markAction("device-copy-discarded");
     setCues(initialCuesRef.current);
   };
 
@@ -501,6 +553,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     }
   };
   const cancelEdit = () => {
+    if (editingId !== null) noteCancelEdit(editingId);
     previewCueRef.current = null;
     setEditingId(null);
     const audio = audioRef.current;
@@ -516,6 +569,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const saveEdit = useCallback(() => {
     if (editingId === null) return;
     previewCueRef.current = null;
+    markAction("edit-line");
     setCues((prev) =>
       prev.map((c) =>
         c.id === editingId
@@ -536,14 +590,16 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       audio.play().catch(() => {});
       setIsPlaying(true);
     }
-  }, [editingId, draft]);
+  }, [editingId, draft, markAction]);
 
   // ── Delete / Insert cue ──────────────────────────────────────────────────────
   const deleteCue = useCallback((id: number) => {
+    markAction("delete");
     setCues((prev) => prev.filter((c) => c.id !== id).map((c, i) => ({ ...c, id: i + 1 })));
-  }, []);
+  }, [markAction]);
 
   const insertCueAfter = useCallback((afterId: number) => {
+    markAction("insert");
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === afterId);
       if (idx === -1) return prev;
@@ -565,7 +621,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         ...prev.slice(idx + 1),
       ].map((c, i) => ({ ...c, id: i + 1 }));
     });
-  }, []);
+  }, [markAction]);
 
   // ── Timestamp editor ─────────────────────────────────────────────────────────
   const pushTsHistory = useCallback((cueId: number) => {
@@ -580,30 +636,35 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
+    markAction("timeline-undo");
     setCues(last.cues);
     const restored = last.cues.find((c) => c.id === last.cueId);
     if (restored) {
       setTsEditCue(restored);
       setTsEditKey((k) => k + 1);
     }
-  }, [tsHistory]);
+  }, [tsHistory, markAction]);
 
   const openTsEditor = useCallback((cue: SrtCue) => {
+    const line = cuesRef.current.findIndex((c) => c.id === cue.id) + 1;
+    logEvent("UI", { action: "timeline-open", summary: `Opened Timeline Editor Mode on line ${line}` });
     setTsHistory([]);
     audioRef.current?.pause();
     setIsPlaying(false);
     previewCueRef.current = null;
     setTsEditCue(cue);
-  }, []);
+  }, [logEvent]);
 
   const closeTsEditor = useCallback(() => {
+    logEvent("UI", { action: "timeline-close", summary: "Closed Timeline Editor Mode" });
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
     setTsEditCue(null);
-  }, []);
+  }, [logEvent]);
 
   const saveTsEdit = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    markAction("timeline-done");
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === cueId);
       if (idx === -1) return prev;
@@ -638,10 +699,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     audioRef.current?.pause();
     setIsPlaying(false);
     setTsEditCue(null);
-  }, []);
+  }, [markAction]);
 
   const saveAndGoToNext = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
     pushTsHistory(cueId);
+    markAction("timeline-next");
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === cueId);
       if (idx === -1) return prev;
@@ -679,10 +741,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, [pushTsHistory]);
+  }, [pushTsHistory, markAction]);
 
   const saveAndGoToPrev = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
     pushTsHistory(cueId);
+    markAction("timeline-prev");
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === cueId);
       if (idx === -1) return prev;
@@ -719,10 +782,11 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, [pushTsHistory]);
+  }, [pushTsHistory, markAction]);
 
   const mergeCueWithNext = useCallback((id: number) => {
     pushTsHistory(id);
+    markAction("merge");
     setCues((prev) => {
       const idx = prev.findIndex((c) => c.id === id);
       if (idx === -1 || idx === prev.length - 1) return prev;
@@ -747,12 +811,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     previewCueRef.current = null;
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, [pushTsHistory]);
+  }, [pushTsHistory, markAction]);
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
   const acceptL1Change = (cueId: number) => {
     const diff = l1Diff.get(cueId);
     if (!diff) return;
+    markAction("accept-l1");
     setCues((prev) =>
       prev.map((c) =>
         c.id === cueId
@@ -764,6 +829,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setPreAcceptAllSnapshot(null); // individual accept invalidates the bulk undo
   };
   const acceptAllL1 = () => {
+    markAction("accept-all-l1");
     setPreAcceptAllSnapshot({ cues: [...cues], acceptedIds: new Set(acceptedL1Ids) });
     setCues((prev) =>
       prev.map((c) => {
@@ -776,6 +842,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   };
   const undoAcceptAll = () => {
     if (!preAcceptAllSnapshot) return;
+    markAction("undo-accept-all");
     setCues(preAcceptAllSnapshot.cues);
     setAcceptedL1Ids(preAcceptAllSnapshot.acceptedIds);
     setPreAcceptAllSnapshot(null);
@@ -785,6 +852,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const adminAcceptL1 = (cueId: number) => {
     const diff = l1Diff.get(cueId);
     if (!diff) return;
+    markAction("admin-accept-l1");
     setCues((prev) => prev.map((c) => c.id === cueId
       ? { ...c, text: diff.newText, startTime: diff.newStart, endTime: diff.newEnd, startMs: timeToMs(diff.newStart), endMs: timeToMs(diff.newEnd) }
       : c
@@ -795,6 +863,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const adminRejectL1 = (cueId: number) => {
     const diff = l1Diff.get(cueId);
     if (!diff) return;
+    markAction("admin-reject-l1");
     setCues((prev) => prev.map((c) => c.id === cueId
       ? { ...c, text: diff.origText, startTime: diff.origStart, endTime: diff.origEnd, startMs: timeToMs(diff.origStart), endMs: timeToMs(diff.origEnd) }
       : c
@@ -809,6 +878,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const adminRejectL2 = (cueId: number) => {
     const diff = l2Diff.get(cueId);
     if (!diff) return;
+    markAction("admin-reject-l2");
     setCues((prev) => prev.map((c) => c.id === cueId
       ? { ...c, text: diff.origText, startTime: diff.origStart, endTime: diff.origEnd, startMs: timeToMs(diff.origStart), endMs: timeToMs(diff.origEnd) }
       : c
@@ -817,6 +887,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setAdminAcceptedL2Ids((prev) => { const s = new Set(prev); s.delete(cueId); return s; });
   };
   const adminAcceptAllL1 = () => {
+    markAction("admin-accept-all-l1");
     setCues((prev) => prev.map((c) => {
       const diff = l1Diff.get(c.id);
       if (!diff) return c;
@@ -826,6 +897,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setAdminRejectedL1Ids(new Set());
   };
   const adminRejectAllL1 = () => {
+    markAction("admin-reject-all-l1");
     setCues((prev) => prev.map((c) => {
       const diff = l1Diff.get(c.id);
       if (!diff) return c;
@@ -839,6 +911,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setAdminRejectedL2Ids(new Set());
   };
   const adminRejectAllL2 = () => {
+    markAction("admin-reject-all-l2");
     setCues((prev) => prev.map((c) => {
       const diff = l2Diff.get(c.id);
       if (!diff) return c;
@@ -853,9 +926,12 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setSubmitting(true);
     try {
       await submitTranscriptReview(data.id, level as 1 | 2, serializeSrt(cues));
+      logEvent("SUBMIT", { action: "submit", summary: `Submitted the L${level} review (${cues.length} lines)`, stateHash: cuesHash(toLogCues(cues)), cueCount: cues.length }, true);
       removeDeviceCopy(deviceKey);
       setSubmitted(true);
-    } catch {
+    } catch (err) {
+      console.error(`Submitting L${level} review of transcript ${data.id} failed`, err);
+      logEvent("SUBMIT_FAILED", { action: "submit", summary: `Submitting the L${level} review failed`, stateHash: cuesHash(toLogCues(cues)), cueCount: cues.length }, true);
       alert("Failed to submit review. Please try again.");
     } finally {
       setSubmitting(false);
@@ -867,10 +943,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setSubmitting(true);
     try {
       await publishTranscript(data.id, serializeSrt(cues));
+      logEvent("PUBLISH", { action: "publish", summary: `Published this version as the live transcript (${cues.length} lines)`, stateHash: cuesHash(toLogCues(cues)), cueCount: cues.length }, true);
       removeDeviceCopy(deviceKey);
       setPublishDone(true);
       setPublishConfirm(false);
-    } catch {
+    } catch (err) {
+      console.error(`Publishing transcript ${data.id} failed`, err);
+      logEvent("PUBLISH_FAILED", { action: "publish", summary: "Publishing failed", stateHash: cuesHash(toLogCues(cues)), cueCount: cues.length }, true);
       alert("Failed to publish. Please try again.");
     } finally {
       setSubmitting(false);
@@ -909,10 +988,13 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         ...newSrtCues,
         ...nonSelected.slice(insertInNonSelected),
       ].map((c, i) => ({ ...c, id: i + 1 }));
+      markAction("ai-regenerate");
       setCues(merged);
       setSelectedIds(new Set());
       setSelectMode(false);
-    } catch {
+    } catch (err) {
+      console.error(`AI re-transcription of transcript ${data.id} failed`, err);
+      logEvent("UI", { action: "ai-regenerate-failed", summary: `AI re-transcription of ${selectedCues.length} selected lines failed — nothing changed` });
       alert("Regeneration failed. Please try again.");
     } finally {
       setRegenerating(false);
@@ -948,6 +1030,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
         selected.map((c) => ({ id: c.id, text: c.text }))
       );
       const updatedMap = new Map(updated.map((u) => [u.id, u]));
+      markAction("ai-timestamps");
       setCues((prev) => prev.map((c) => {
         const u = updatedMap.get(c.id);
         return u ? { ...c, startTime: u.startTime, endTime: u.endTime, startMs: u.startMs, endMs: u.endMs } : c;
@@ -955,7 +1038,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       setSelectedIds(new Set());
       setSelectMode(false);
       setSelectAction("text");
-    } catch {
+    } catch (err) {
+      console.error(`AI re-timing of transcript ${data.id} failed`, err);
+      logEvent("UI", { action: "ai-timestamps-failed", summary: `AI re-timing of ${selected.length} selected lines failed — nothing changed` });
       alert("Failed to redistribute timestamps. Please try again.");
     } finally {
       setIsRedistributing(false);
@@ -966,6 +1051,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     const secs = parseFloat(shiftSeconds);
     if (isNaN(secs) || secs <= 0) return;
     const deltaMs = Math.round(secs * 1000) * (shiftDirection === "forward" ? 1 : -1);
+    markAction("shift");
     setCues((prev) => {
       const next = prev.map((c) => {
         if (!selectedIds.has(c.id)) return c;
@@ -1000,7 +1086,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     setSelectedIds(new Set());
     setSelectMode(false);
     setSelectAction("text");
-  }, [shiftSeconds, shiftDirection, selectedIds]);
+  }, [shiftSeconds, shiftDirection, selectedIds, markAction]);
 
   const pendingL1Changes = l1Diff.size - acceptedL1Ids.size;
   const allAccepted = l1Diff.size > 0 && pendingL1Changes === 0;
@@ -1060,6 +1146,12 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             {saveStatus === "saving" && <span className="text-[10px] text-gray-500 animate-pulse">Saving…</span>}
             {saveStatus === "saved" && <span className="text-[10px] text-green-500">Saved ✓</span>}
             {saveStatus === "error" && <span className="text-[10px] text-red-400" title="Your changes are kept on this device and will be saved automatically">Not saved · kept on device</span>}
+            {(uploadStatus.state === "refused" || uploadStatus.state === "deviceFull") && (
+              <span className="text-[10px] text-red-400" title="The edit history could not be uploaded or kept. Please tell the admin.">History not uploading</span>
+            )}
+            {(uploadStatus.state === "offline" || uploadStatus.state === "loggedOut") && uploadStatus.waiting > 0 && (
+              <span className="text-[10px] text-amber-400" title="Your edit history is kept on this device and will be uploaded automatically">History waiting · {uploadStatus.waiting}</span>
+            )}
           </div>
         </div>
         {/* Actions */}
@@ -1672,6 +1764,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             exitRef={tsExitRef}
             commitUndoCount={tsHistory.length}
             onUndoCommit={undoTsCommit}
+            onWorkInProgress={(startMs, endMs, text) =>
+              noteTimelineDraft(tsEditCue.id, msToSrtTime(startMs), msToSrtTime(endMs), text)}
           />
         </>);
       })()}
@@ -2012,16 +2106,22 @@ interface TsEditorProps {
   exitRef?: React.MutableRefObject<(() => void) | null>;
   commitUndoCount?: number;
   onUndoCommit?: () => void;
+  /** Marker positions / text as they are being changed (not applied yet), for the activity log */
+  onWorkInProgress?: (startMs: number, endMs: number, text: string) => void;
 }
 
 function CueTimestampEditor({
   cue, audioRef, previewCueRef, previewLoopCountRef,
   audioDuration, isFirstCue, isLastCue, neighbors, speed, onSpeedChange, onSave, onPrev, onNext, onClose, onMergeWithNext, exitRef,
-  commitUndoCount = 0, onUndoCommit,
+  commitUndoCount = 0, onUndoCommit, onWorkInProgress,
 }: TsEditorProps) {
   const [markerStart, setMarkerStart] = useState(cue.startMs);
   const [markerEnd, setMarkerEnd] = useState(cue.endMs);
   const [textVal, setTextVal] = useState(cue.text);
+  // Report work not applied yet to the activity log (it debounces and ignores repeats)
+  useEffect(() => {
+    onWorkInProgress?.(markerStart, markerEnd, textVal);
+  }, [markerStart, markerEnd, textVal, onWorkInProgress]);
   // Let the parent's Exit button save the latest values
   if (exitRef) exitRef.current = () => onSave(markerStart, markerEnd, textVal);
   const [stripPlaying, setStripPlaying] = useState(false);
