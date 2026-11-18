@@ -20,6 +20,8 @@ import { useActivityLog } from "@/hooks/useActivityLog";
 import { cuesHash } from "@/lib/activityDiff";
 import { toLogCues } from "@/lib/activityLog";
 import { missingOriginalTail } from "@/lib/draftRecovery";
+import { applyReviewedLines, formatReviewedLines } from "@/lib/reviewedLines";
+import { confirmTimelineLine } from "@/lib/timelineConfirm";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { rememberReturnTo, SESSION_EXPIRED_EVENT } from "@/lib/session";
@@ -83,7 +85,13 @@ function msToSrtTime(ms: number): string {
 // ── Device copy of unsaved changes ───────────────────────────────────────────
 // Every change is mirrored to localStorage until the server confirms the save, so
 // nothing is lost if the login session ends, the network drops, or the tab closes.
-interface DeviceCopy { srt: string; baseHash: string; savedAt: number }
+interface DeviceCopy {
+  srt: string;
+  /** Lines confirmed in Timeline Editor Mode (lib/reviewedLines.ts); missing in older copies */
+  reviewed?: string;
+  baseHash: string;
+  savedAt: number;
+}
 
 /** Short fingerprint of an SRT string, to tell whether the server copy changed. */
 function srtHash(s: string): string {
@@ -153,6 +161,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const [tsEditCue, setTsEditCue] = useState<SrtCue | null>(null);
   // Set by CueTimestampEditor: saves its current (unsaved) values and closes
   const tsExitRef = useRef<(() => void) | null>(null);
+  // Browser history entry added while Timeline Editor Mode is open (phone Back = Exit)
+  const tsBackEntryRef = useRef(false);
+  const unmountingRef = useRef(false);
   // Timeline Editor Mode undo: snapshots of all cues before each committed change (max 5)
   const [tsHistory, setTsHistory] = useState<{ cues: SrtCue[]; cueId: number }[]>([]);
   const [tsEditKey, setTsEditKey] = useState(0);
@@ -194,6 +205,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const initialCuesRef = useRef<SrtCue[]>([]);
   const initialSrtRef = useRef<string | null>(null);  // what the editor opened with
   const lastSavedSrtRef = useRef<string | null>(null); // last SRT the server confirmed
+  // Same two, for the lines confirmed in Timeline Editor Mode (saved together with the SRT)
+  const initialReviewedRef = useRef("");
+  const lastSavedReviewedRef = useRef<string | null>(null);
   const serverBaseHashRef = useRef("");                // fingerprint of the server's copy
   // While the user decides about a conflicting device copy, leave it untouched
   const holdDeviceCopyRef = useRef(false);
@@ -218,8 +232,9 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   // ── Initialise cues ──────────────────────────────────────────────────────────
   useEffect(() => {
     let orig = parseSrt(data.originalSrt ?? "");
-    let l1 = parseSrt(data.level1Srt ?? "");
-    let l2 = parseSrt(data.level2Srt ?? "");
+    // Each saved draft comes with the lines already confirmed in Timeline Editor Mode
+    let l1 = applyReviewedLines(parseSrt(data.level1Srt ?? ""), data.level1ReviewedLines);
+    let l2 = applyReviewedLines(parseSrt(data.level2Srt ?? ""), data.level2ReviewedLines);
 
     // Fallback: if SRT data is missing or has ≤1 cue, generate from plain transcript.
     // Apply to all levels that are also incomplete so L1/L2 mode uses the generated cues.
@@ -280,16 +295,20 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
 
     // Unsaved changes kept on this device from an earlier session (e.g. the login expired)?
     const initialSrt = serializeSrt(initial);
+    const initialReviewed = formatReviewedLines(initial);
     const serverSrt = (mode === "admin" || level === 2 ? data.level2Srt : data.level1Srt) ?? "";
     initialCuesRef.current = initial;
     initialSrtRef.current = initialSrt;
+    initialReviewedRef.current = initialReviewed;
     lastSavedSrtRef.current = null;
+    lastSavedReviewedRef.current = null;
     serverBaseHashRef.current = srtHash(serverSrt);
     holdDeviceCopyRef.current = false;
     setDeviceCopyNotice(null);
     const copy = readDeviceCopy(deviceKey);
-    const copyCues = copy ? parseSrt(copy.srt) : [];
-    const hasCopy = !!copy && copy.srt !== initialSrt && copyCues.length > 0;
+    const copyCues = copy ? applyReviewedLines(parseSrt(copy.srt), copy.reviewed) : [];
+    const copyDiffers = !!copy && (copy.srt !== initialSrt || (copy.reviewed !== undefined && copy.reviewed !== initialReviewed));
+    const hasCopy = copyDiffers && copyCues.length > 0;
     startSession(initial, {
       mode,
       level,
@@ -300,7 +319,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       deviceCopy: !hasCopy ? "none" : copy!.baseHash === serverBaseHashRef.current ? "restored" : "conflict",
       deviceCopySavedAt: hasCopy ? copy!.savedAt : null,
     });
-    if (copy && copy.srt !== initialSrt && copyCues.length > 0) {
+    if (copy && hasCopy) {
       if (copy.baseHash === serverBaseHashRef.current) {
         // Server copy hasn't changed since → carry on from the device copy (auto-save sends it)
         markAction("device-copy-restored");
@@ -382,8 +401,10 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   useEffect(() => {
     if (cues.length === 0 || holdDeviceCopyRef.current) return;
     const srt = serializeSrt(cues);
-    if (srt === (lastSavedSrtRef.current ?? initialSrtRef.current)) removeDeviceCopy(deviceKey);
-    else writeDeviceCopy(deviceKey, { srt, baseHash: serverBaseHashRef.current, savedAt: Date.now() });
+    const reviewed = formatReviewedLines(cues);
+    if (srt === (lastSavedSrtRef.current ?? initialSrtRef.current)
+      && reviewed === (lastSavedReviewedRef.current ?? initialReviewedRef.current)) removeDeviceCopy(deviceKey);
+    else writeDeviceCopy(deviceKey, { srt, reviewed, baseHash: serverBaseHashRef.current, savedAt: Date.now() });
   }, [cues, deviceKey]);
 
   // ── Auto-save ────────────────────────────────────────────────────────────────
@@ -392,17 +413,20 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   useEffect(() => {
     if (cues.length === 0 || !token) return;
     const srt = serializeSrt(cues);
-    if (srt === lastSavedSrtRef.current) return;
+    const reviewed = formatReviewedLines(cues);
+    if (srt === lastSavedSrtRef.current && reviewed === lastSavedReviewedRef.current) return;
     const savedHash = cuesHash(toLogCues(cues));
     if (saveTimer.current !== null) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        await saveTranscriptDraft(data.id, saveLevel, srt, { skipLoudError: true });
+        await saveTranscriptDraft(data.id, saveLevel, srt, { skipLoudError: true }, reviewed);
         logEvent("SAVE_OK", { action: "autosave", summary: `Saved to the server (${cues.length} lines)`, stateHash: savedHash, cueCount: cues.length });
         lastSavedSrtRef.current = srt;
+        lastSavedReviewedRef.current = reviewed;
         serverBaseHashRef.current = srtHash(srt);
-        if (!holdDeviceCopyRef.current && serializeSrt(cuesRef.current) === srt) removeDeviceCopy(deviceKey);
+        if (!holdDeviceCopyRef.current && serializeSrt(cuesRef.current) === srt
+          && formatReviewedLines(cuesRef.current) === reviewed) removeDeviceCopy(deviceKey);
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus((st) => (st === "saved" ? "idle" : st)), 2500);
       } catch (err) {
@@ -436,11 +460,15 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   }, [sessionLost]);
 
   const goToLoginKeepingWork = () => {
-    // Commit marker positions still open in Timeline Editor Mode, then store everything
+    // Commit marker positions still open in Timeline Editor Mode, then store everything.
+    // (Leave the sheet's Back entry alone: removing it now would undo the move to /login.)
+    tsBackEntryRef.current = false;
     if (tsEditCue && tsExitRef.current) flushSync(() => tsExitRef.current?.());
     const srt = serializeSrt(cuesRef.current);
-    if (!holdDeviceCopyRef.current && srt !== (lastSavedSrtRef.current ?? initialSrtRef.current)) {
-      writeDeviceCopy(deviceKey, { srt, baseHash: serverBaseHashRef.current, savedAt: Date.now() });
+    const reviewed = formatReviewedLines(cuesRef.current);
+    if (!holdDeviceCopyRef.current && (srt !== (lastSavedSrtRef.current ?? initialSrtRef.current)
+      || reviewed !== (lastSavedReviewedRef.current ?? initialReviewedRef.current))) {
+      writeDeviceCopy(deviceKey, { srt, reviewed, baseHash: serverBaseHashRef.current, savedAt: Date.now() });
     }
     rememberReturnTo(window.location.pathname + window.location.search);
     router.push("/login");
@@ -450,7 +478,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
     holdDeviceCopyRef.current = false;
     setDeviceCopyNotice(null);
     markAction("device-copy-applied");
-    setCues(parseSrt(copy.srt));
+    setCues(applyReviewedLines(parseSrt(copy.srt), copy.reviewed));
   };
   const discardDeviceCopy = () => {
     holdDeviceCopyRef.current = false;
@@ -579,6 +607,8 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
               endTime: draft.endTime,
               startMs: timeToMs(draft.startTime),
               endMs: timeToMs(draft.endTime),
+              // Times typed in by hand count as confirmed, like Timeline Editor Mode
+              reviewed: c.reviewed || draft.startTime !== c.startTime || draft.endTime !== c.endTime,
             }
           : c
       )
@@ -623,194 +653,171 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   }, [markAction]);
 
   // ── Timestamp editor ─────────────────────────────────────────────────────────
+  // Confirming a line here (Next, Prev, Exit / ✕ / phone Back) marks it "reviewed": it is saved
+  // with the draft and never moved again by another line's change (lib/timelineConfirm.ts).
   const pushTsHistory = useCallback((cueId: number) => {
     const snapshot = cuesRef.current;
     setTsHistory((h) => [...h.slice(-4), { cues: snapshot, cueId }]);
+  }, []);
+
+  /** Show a line in Timeline Editor Mode with fresh markers (a new key remounts the sheet). */
+  const showTsCue = useCallback((cue: SrtCue) => {
+    setTsEditCue(cue);
+    setTsEditKey((k) => k + 1);
+  }, []);
+
+  /** Play a line twice — used when Next / Prev moves to it. */
+  const previewLine = useCallback((cue: SrtCue) => {
+    previewCueRef.current = { startMs: cue.startMs, endMs: cue.endMs };
+    previewLoopCountRef.current = 0;
+    if (audioRef.current) {
+      audioRef.current.currentTime = cue.startMs / 1000;
+      audioRef.current.play().catch(() => {});
+    }
+    setIsPlaying(true);
+  }, []);
+
+  const stopPreview = useCallback(() => {
+    previewCueRef.current = null;
+    audioRef.current?.pause();
+    setIsPlaying(false);
   }, []);
 
   const undoTsCommit = useCallback(() => {
     const last = tsHistory[tsHistory.length - 1];
     if (!last) return;
     setTsHistory((h) => h.slice(0, -1));
-    previewCueRef.current = null;
-    audioRef.current?.pause();
-    setIsPlaying(false);
+    stopPreview();
     markAction("timeline-undo");
     setCues(last.cues);
     const restored = last.cues.find((c) => c.id === last.cueId);
-    if (restored) {
-      setTsEditCue(restored);
-      setTsEditKey((k) => k + 1);
-    }
-  }, [tsHistory, markAction]);
+    if (restored) showTsCue(restored);
+  }, [tsHistory, markAction, stopPreview, showTsCue]);
 
   const openTsEditor = useCallback((cue: SrtCue) => {
     const line = cuesRef.current.findIndex((c) => c.id === cue.id) + 1;
     logEvent("UI", { action: "timeline-open", summary: `Opened Timeline Editor Mode on line ${line}` });
     setTsHistory([]);
-    audioRef.current?.pause();
-    setIsPlaying(false);
-    previewCueRef.current = null;
-    setTsEditCue(cue);
-  }, [logEvent]);
+    stopPreview();
+    showTsCue(cue);
+  }, [logEvent, stopPreview, showTsCue]);
 
   const closeTsEditor = useCallback(() => {
     logEvent("UI", { action: "timeline-close", summary: "Closed Timeline Editor Mode" });
-    previewCueRef.current = null;
-    audioRef.current?.pause();
-    setIsPlaying(false);
+    stopPreview();
     setTsEditCue(null);
-  }, [logEvent]);
+  }, [logEvent, stopPreview]);
 
+  // The new cues are worked out here from the latest state (not inside a setCues updater), so
+  // the next / previous line is shown in the same step — no timer that could reopen the sheet
+  // after the proofreader already pressed Exit.
   const saveTsEdit = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    const prev = cuesRef.current;
+    const idx = prev.findIndex((c) => c.id === cueId);
     markAction("timeline-done");
-    setCues((prev) => {
-      const idx = prev.findIndex((c) => c.id === cueId);
-      if (idx === -1) return prev;
-      const next = [...prev];
-
-      // Apply the edited cue
-      next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs), text };
-
-      // Cascade forward: push subsequent cues that now start inside the edited endMs
-      for (let i = idx + 1; i < next.length; i++) {
-        if (next[i - 1].endMs <= next[i].startMs) break;
-        const dur = next[i].endMs - next[i].startMs;
-        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
-        const newStart = next[i - 1].endMs;
-        const newEnd = newStart + dur;
-        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
-      }
-
-      // Cascade backward: pull previous cues whose endMs now overlaps the edited startMs
-      for (let i = idx - 1; i >= 0; i--) {
-        if (next[i].endMs <= next[i + 1].startMs) break;
-        const dur = next[i].endMs - next[i].startMs;
-        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
-        const newEnd = next[i + 1].startMs;
-        const newStart = Math.max(0, newEnd - dur);
-        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
-      }
-
-      return next;
-    });
-    previewCueRef.current = null;
-    audioRef.current?.pause();
-    setIsPlaying(false);
+    if (idx !== -1) setCues(confirmTimelineLine(prev, idx, startMs, endMs, text, "stay"));
+    stopPreview();
     setTsEditCue(null);
-  }, [markAction]);
+  }, [markAction, stopPreview]);
 
   const saveAndGoToNext = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    const prev = cuesRef.current;
+    const idx = prev.findIndex((c) => c.id === cueId);
+    if (idx === -1) return;
     pushTsHistory(cueId);
     markAction("timeline-next");
-    setCues((prev) => {
-      const idx = prev.findIndex((c) => c.id === cueId);
-      if (idx === -1) return prev;
-      const next = [...prev];
-      next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs), text };
-      // Pack all subsequent cues with no gaps: each starts exactly where the previous ends
-      for (let i = idx + 1; i < next.length; i++) {
-        const dur = next[i].endMs - next[i].startMs;
-        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
-        const newStart = next[i - 1].endMs;
-        next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
-      }
-      for (let i = idx - 1; i >= 0; i--) {
-        if (next[i].endMs <= next[i + 1].startMs) break;
-        const dur = next[i].endMs - next[i].startMs;
-        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
-        const newEnd = next[i + 1].startMs;
-        const newStart = Math.max(0, newEnd - dur);
-        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
-      }
-      // Open the next cue after state settles + auto-play it
-      const nextCue = next[idx + 1];
-      if (nextCue) setTimeout(() => {
-        setTsEditCue(nextCue);
-        previewCueRef.current = { startMs: nextCue.startMs, endMs: nextCue.endMs };
-        previewLoopCountRef.current = 0;
-        if (audioRef.current) {
-          audioRef.current.currentTime = nextCue.startMs / 1000;
-          audioRef.current.play().catch(() => {});
-        }
-        setIsPlaying(true);
-      }, 0);
-      return next;
-    });
-    previewCueRef.current = null;
-    audioRef.current?.pause();
-    setIsPlaying(false);
-  }, [pushTsHistory, markAction]);
+    // Lines after this one follow on end-to-end — up to the first line already reviewed
+    const next = confirmTimelineLine(prev, idx, startMs, endMs, text, "next");
+    setCues(next);
+    stopPreview();
+    const nextCue = next[idx + 1];
+    if (nextCue) {
+      showTsCue(nextCue);
+      previewLine(nextCue);
+    }
+  }, [pushTsHistory, markAction, stopPreview, showTsCue, previewLine]);
 
   const saveAndGoToPrev = useCallback((cueId: number, startMs: number, endMs: number, text: string) => {
+    const prev = cuesRef.current;
+    const idx = prev.findIndex((c) => c.id === cueId);
+    if (idx === -1) return;
     pushTsHistory(cueId);
     markAction("timeline-prev");
-    setCues((prev) => {
-      const idx = prev.findIndex((c) => c.id === cueId);
-      if (idx === -1) return prev;
-      const next = [...prev];
-      next[idx] = { ...next[idx], startMs, endMs, startTime: msToSrtTime(startMs), endTime: msToSrtTime(endMs), text };
-      for (let i = idx + 1; i < next.length; i++) {
-        if (next[i - 1].endMs <= next[i].startMs) break;
-        const dur = next[i].endMs - next[i].startMs;
-        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
-        const newStart = next[i - 1].endMs;
-        next[i] = { ...next[i], startMs: newStart, endMs: newStart + dur, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newStart + dur) };
-      }
-      for (let i = idx - 1; i >= 0; i--) {
-        if (next[i].endMs <= next[i + 1].startMs) break;
-        const dur = next[i].endMs - next[i].startMs;
-        if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
-        const newEnd = next[i + 1].startMs;
-        const newStart = Math.max(0, newEnd - dur);
-        next[i] = { ...next[i], startMs: newStart, endMs: newEnd, startTime: msToSrtTime(newStart), endTime: msToSrtTime(newEnd) };
-      }
-      const prevCue = next[idx - 1];
-      if (prevCue) setTimeout(() => {
-        setTsEditCue(prevCue);
-        previewCueRef.current = { startMs: prevCue.startMs, endMs: prevCue.endMs };
-        previewLoopCountRef.current = 0;
-        if (audioRef.current) {
-          audioRef.current.currentTime = prevCue.startMs / 1000;
-          audioRef.current.play().catch(() => {});
-        }
-        setIsPlaying(true);
-      }, 0);
-      return next;
-    });
-    previewCueRef.current = null;
-    audioRef.current?.pause();
-    setIsPlaying(false);
-  }, [pushTsHistory, markAction]);
+    const next = confirmTimelineLine(prev, idx, startMs, endMs, text, "stay");
+    setCues(next);
+    stopPreview();
+    const prevCue = next[idx - 1];
+    if (prevCue) {
+      showTsCue(prevCue);
+      previewLine(prevCue);
+    }
+  }, [pushTsHistory, markAction, stopPreview, showTsCue, previewLine]);
 
   const mergeCueWithNext = useCallback((id: number) => {
+    const prev = cuesRef.current;
+    const idx = prev.findIndex((c) => c.id === id);
+    if (idx === -1 || idx === prev.length - 1) return;
     pushTsHistory(id);
     markAction("merge");
-    setCues((prev) => {
-      const idx = prev.findIndex((c) => c.id === id);
-      if (idx === -1 || idx === prev.length - 1) return prev;
-      const cur = prev[idx];
-      const nxt = prev[idx + 1];
-      const merged: SrtCue = {
-        id: cur.id,
-        startMs: cur.startMs,
-        endMs: nxt.endMs,
-        startTime: cur.startTime,
-        endTime: nxt.endTime,
-        text: cur.text.trim() + " " + nxt.text.trim(),
-      };
-      const updated = [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)].map((c, i) => ({ ...c, id: i + 1 }));
-      // Stay in editor on the merged cue (force remount with new key)
-      setTimeout(() => {
-        setTsEditCue(updated[idx]);
-        setTsEditKey((k) => k + 1);
-      }, 0);
-      return updated;
-    });
-    previewCueRef.current = null;
-    audioRef.current?.pause();
-    setIsPlaying(false);
-  }, [pushTsHistory, markAction]);
+    const cur = prev[idx];
+    const nxt = prev[idx + 1];
+    const merged: SrtCue = {
+      id: cur.id,
+      startMs: cur.startMs,
+      endMs: nxt.endMs,
+      startTime: cur.startTime,
+      endTime: nxt.endTime,
+      text: cur.text.trim() + " " + nxt.text.trim(),
+      // The merged line spans new audio: reviewed only if both halves were
+      reviewed: !!(cur.reviewed && nxt.reviewed),
+    };
+    const updated = [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)].map((c, i) => ({ ...c, id: i + 1 }));
+    setCues(updated);
+    stopPreview();
+    // Stay in the editor on the merged line
+    showTsCue(updated[idx]);
+  }, [pushTsHistory, markAction, stopPreview, showTsCue]);
+
+  // ── Phone Back button / gesture in Timeline Editor Mode = Exit ─────────────────────
+  // Opening the sheet adds a browser history entry. Back then applies the open line (like Exit)
+  // and returns to the line list, instead of leaving the editor page and losing the changes.
+  // Closing the sheet any other way removes that entry again.
+  const tsOpen = tsEditCue !== null;
+  useEffect(() => { // declared first, so on unmount it runs before the cleanup below
+    unmountingRef.current = false;
+    return () => { unmountingRef.current = true; };
+  }, []);
+  useEffect(() => {
+    if (!tsOpen) return;
+    window.history.pushState({ ...(window.history.state ?? {}), timelineEditor: true }, "");
+    tsBackEntryRef.current = true;
+    const onPopState = () => {
+      if (!tsBackEntryRef.current) return;
+      tsBackEntryRef.current = false; // Back just removed our entry
+      if (tsExitRef.current) tsExitRef.current();
+      else closeTsEditor();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      if (tsBackEntryRef.current && !unmountingRef.current) {
+        tsBackEntryRef.current = false;
+        window.history.back();
+      }
+    };
+  }, [tsOpen, closeTsEditor]);
+
+  // ── Progress: lines confirmed in Timeline Editor Mode ─────────────────────────────
+  const reviewedCount = useMemo(() => cues.filter((c) => c.reviewed).length, [cues]);
+  /** Open Timeline Editor Mode on the first line not reviewed yet after the furthest reviewed one. */
+  const continueReview = () => {
+    const lastReviewed = cues.reduce((acc, c, i) => (c.reviewed ? i : acc), -1);
+    let target = cues.findIndex((c, i) => i > lastReviewed && !c.reviewed);
+    if (target === -1) target = cues.findIndex((c) => !c.reviewed);
+    if (target === -1) return;
+    document.querySelector(`[data-cue="${cues[target].id}"]`)?.scrollIntoView({ block: "center" });
+    openTsEditor(cues[target]);
+  };
 
   // ── L2: accept L1 changes ────────────────────────────────────────────────────
   const acceptL1Change = (cueId: number) => {
@@ -924,7 +931,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      await submitTranscriptReview(data.id, level as 1 | 2, serializeSrt(cues));
+      await submitTranscriptReview(data.id, level as 1 | 2, serializeSrt(cues), formatReviewedLines(cues));
       logEvent("SUBMIT", { action: "submit", summary: `Submitted the L${level} review (${cues.length} lines)`, stateHash: cuesHash(toLogCues(cues)), cueCount: cues.length }, true);
       removeDeviceCopy(deviceKey);
       setSubmitted(true);
@@ -1063,6 +1070,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       const lastSelectedIdx = next.reduce((acc, c, i) => selectedIds.has(c.id) ? i : acc, -1);
       for (let i = lastSelectedIdx + 1; i < next.length; i++) {
         if (next[i - 1].endMs <= next[i].startMs) break;
+        if (next[i].reviewed) break; // confirmed in Timeline Editor Mode: never moved by others
         const dur = next[i].endMs - next[i].startMs;
         if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newStart = next[i - 1].endMs;
@@ -1073,6 +1081,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
       const firstSelectedIdx = next.findIndex((c) => selectedIds.has(c.id));
       for (let i = firstSelectedIdx - 1; i >= 0; i--) {
         if (next[i].endMs <= next[i + 1].startMs) break;
+        if (next[i].reviewed) break; // confirmed in Timeline Editor Mode: never moved by others
         const dur = next[i].endMs - next[i].startMs;
         if (dur <= 0) break; // broken timing (ends before it starts) — never spread it to later cues
         const newEnd = next[i + 1].startMs;
@@ -1145,6 +1154,16 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             {saveStatus === "saving" && <span className="text-[10px] text-gray-500 animate-pulse">Saving…</span>}
             {saveStatus === "saved" && <span className="text-[10px] text-green-500">Saved ✓</span>}
             {saveStatus === "error" && <span className="text-[10px] text-red-400" title="Your changes are kept on this device and will be saved automatically">Not saved · kept on device</span>}
+            {reviewedCount > 0 && (
+              <button
+                onClick={continueReview}
+                disabled={selectMode}
+                className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                title="Lines reviewed in Timeline Editor Mode (Next won't move them) — tap to continue from the next line"
+              >
+                ✓ {reviewedCount}/{cues.length}
+              </button>
+            )}
             {(uploadStatus.state === "refused" || uploadStatus.state === "deviceFull") && (
               <span className="text-[10px] text-red-400" title="The edit history could not be uploaded or kept. Please tell the admin.">History not uploading</span>
             )}
@@ -1693,11 +1712,17 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className={`text-[10px] font-mono ${active ? "text-amber-400" : "text-gray-600"}`}>#{c.id}</span>
               <span className={`text-[10px] font-mono flex-1 ${active ? "text-amber-300/70" : "text-gray-600"}`}>{c.startTime} → {c.endTime}</span>
+              {c.reviewed && !active && (
+                <span className="text-[9px] text-emerald-400/80 flex-shrink-0" title="Already reviewed — Next won't move it">✓ reviewed</span>
+              )}
               <button
                 onClick={() => {
                   pushTsHistory(tsEditCue.id);
                   deleteCue(c.id);
                   if (active) closeTsEditor();
+                  // Lines are renumbered after a delete: deleting the line above moves the open
+                  // line up one, so keep pointing at it (or its changes would go to the line below)
+                  else if (c.id < tsEditCue.id) setTsEditCue((t) => (t ? { ...t, id: t.id - 1 } : t));
                 }}
                 className="flex-shrink-0 text-gray-700 hover:text-red-400 transition-colors"
                 title="Delete cue"
@@ -1744,7 +1769,7 @@ export default function TranscriptEditor({ data, mode, level = 1, onBack }: Prop
             </div>
           </div>
           <CueTimestampEditor
-            key={`${tsEditCue.id}-${tsEditKey}`}
+            key={tsEditKey}
             cue={tsEditCue}
             audioRef={audioRef}
             previewCueRef={previewCueRef}
@@ -1967,6 +1992,7 @@ function CueRow({
             >
               <span className={`block text-[10px] font-mono transition-colors ${isRegressed ? "text-red-400" : "text-gray-600 group-hover:text-blue-400"}`}>
                 #{cue.id}{isRegressed && " ⚠"}
+                {cue.reviewed && <span className="text-emerald-500" title="Reviewed in Timeline Editor Mode — Next won't move it"> ✓</span>}
               </span>
               <span className={`block text-[10px] font-mono transition-colors leading-tight ${isRegressed ? "text-red-400/80" : "text-gray-700 group-hover:text-blue-400"}`}>
                 {cue.startTime}<br />{cue.endTime}

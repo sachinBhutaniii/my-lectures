@@ -5,6 +5,8 @@ export interface SrtCue {
   startMs: number;
   endMs: number;
   text: string;
+  /** Confirmed in Timeline Editor Mode — never moved by other lines' changes (lib/reviewedLines.ts) */
+  reviewed?: boolean;
 }
 
 export interface CueDiff {

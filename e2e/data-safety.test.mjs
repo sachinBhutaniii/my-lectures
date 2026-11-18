@@ -5,7 +5,7 @@
 import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { launchBrowser } from "./lib/cdp.mjs";
-import { login, testTranscriptId, resetDraft, waitForDraft, draftText, activity, openAs, APP } from "./lib/app.mjs";
+import { api, login, testTranscriptId, resetDraft, waitForDraft, draftText, activity, openAs, APP } from "./lib/app.mjs";
 import { ADMIN, PROOFREADER } from "./config.mjs";
 
 let browser, adminToken, proofToken, id;
@@ -58,6 +58,83 @@ test("a change made in Timeline Editor Mode is saved when pressing Next", async 
     const rows = await activity(adminToken, id);
     assert.ok(rows.some((r) => r.type === "TYPING" && /Timeline Editor, line 5/.test(r.summary ?? "")), "unapplied Timeline Editor text was logged");
     assert.ok(rows.some((r) => r.type === "CHANGE" && r.action === "timeline-next"), "the Next press was logged");
+  } finally { await page.close(); }
+});
+
+/** Lines confirmed in Timeline Editor Mode, as saved on the server (1-based line numbers). */
+async function reviewedOnServer(token, transcriptId) {
+  const v = (await api("GET", `/api/transcripts/${transcriptId}/editor`, token)).level1ReviewedLines ?? "";
+  const ranges = v.split(":")[1] ?? "";
+  return ranges.split(",").filter(Boolean).flatMap((r) => {
+    const [a, b] = r.split("-").map(Number);
+    return Array.from({ length: (b ?? a) - a + 1 }, (_, i) => a + i);
+  });
+}
+async function waitForReviewed(token, transcriptId, lines, what) {
+  const end = Date.now() + 20000;
+  while (Date.now() < end) {
+    const got = await reviewedOnServer(token, transcriptId);
+    if (lines.every((n) => got.includes(n))) return got;
+    await sleep(500);
+  }
+  throw new Error(`Reviewed lines never saved: ${what}`);
+}
+
+test("a line confirmed with Timeline Editor Next is not moved by Next on an earlier line, on any device", async () => {
+  const page = await browser.newPage();
+  try {
+    await openEditor(page);
+    // Confirm line 3 (10–14 s, with a 1 s gap after line 2) with Next, then leave line 4 as it is
+    await page.click('[data-cue="3"] button[title="Timeline Editor Mode"]');
+    await page.waitForSelector("textarea");
+    await page.clickButton("Next");
+    await page.clickButton("Exit");
+    await waitForReviewed(adminToken, id, [3], "line 3 confirmed");
+    // Back on line 2: Next used to pull every later line up against it, undoing line 3
+    await page.click('[data-cue="2"] button[title="Timeline Editor Mode"]');
+    await page.waitForSelector("textarea");
+    await page.clickButton("Next");
+    await page.clickButton("Exit");
+    await waitForReviewed(adminToken, id, [2, 3], "line 2 confirmed");
+    await sleep(4000); // let the last autosave land
+    const text = await draftText(adminToken, id);
+    assert.ok(text.includes("3\n00:00:10,000 --> 00:00:14,000\nTest line 3"), "line 3 kept its confirmed times");
+    // Another device (nothing kept on this one) still shows line 3 as reviewed
+    await page.eval(`Object.keys(localStorage).filter((k) => k.startsWith("bdd_tx_unsaved_")).forEach((k) => localStorage.removeItem(k))`);
+    await page.goto(`${APP}${editorPath()}`);
+    await page.waitFor(`document.querySelector('[data-cue="3"] button')?.innerText.includes("✓")`, 60000, "line 3 marked reviewed");
+  } finally { await page.close(); }
+});
+
+test("the phone Back gesture in Timeline Editor Mode applies the line instead of leaving the editor", async () => {
+  const page = await browser.newPage();
+  try {
+    await openEditor(page);
+    await page.click('[data-cue="6"] button[title="Timeline Editor Mode"]');
+    await page.waitForSelector("textarea");
+    await page.fill("textarea", "Line six fixed, then the Back gesture (E2E)");
+    await page.eval("history.back()");
+    await sleep(1500);
+    assert.match(await page.url(), /\/proofread\/editor/, "still in the editor");
+    await waitForDraft(adminToken, id, (t) => t.includes("Line six fixed, then the Back gesture (E2E)"), "line 6 applied by Back");
+  } finally { await page.close(); }
+});
+
+test("deleting the line above in Timeline Editor Mode keeps the changes on the line being edited", async () => {
+  const page = await browser.newPage();
+  try {
+    await openEditor(page);
+    await page.click('[data-cue="9"] button[title="Timeline Editor Mode"]');
+    await page.waitForSelector("textarea");
+    await page.fill("textarea", "Line nine edited after deleting line eight (E2E)");
+    // The trash icon on the card ABOVE the open line (line 8)
+    await page.eval(`[...document.querySelectorAll('.fixed button[title="Delete cue"]')][0].click()`);
+    await sleep(500);
+    await page.clickButton("Exit");
+    const text = await waitForDraft(adminToken, id, (t) => t.includes("Line nine edited after deleting line eight (E2E)"), "line 9 edit");
+    assert.ok(text.includes("8\n00:00:40,000 --> 00:00:44,000\nLine nine edited after deleting line eight (E2E)"), "the edit is on the old line 9, now line 8");
+    assert.ok(text.includes("9\n00:00:45,000 --> 00:00:49,000\nTest line 10 of the E2E lecture"), "the next line keeps its own text and times");
+    assert.ok(!text.includes("Test line 8 of the E2E lecture"), "line 8 is deleted");
   } finally { await page.close(); }
 });
 

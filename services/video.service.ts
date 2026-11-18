@@ -170,6 +170,9 @@ export interface TranscriptEditorData {
   originalSrt: string | null;
   level1Srt: string | null;
   level2Srt: string | null;
+  /** Lines confirmed in Timeline Editor Mode for each draft ("<line count>:<ranges>") */
+  level1ReviewedLines?: string | null;
+  level2ReviewedLines?: string | null;
   l1ReviewSubmitted: boolean;
   l2ReviewSubmitted: boolean;
   level1ProofreaderId: number | null;
@@ -218,13 +221,15 @@ export const getTranscriptForEditor = async (id: number): Promise<TranscriptEdit
 };
 
 export const saveTranscriptDraft = async (
-  id: number, level: 1 | 2, srtContent: string, config?: AxiosRequestConfig
+  id: number, level: 1 | 2, srtContent: string, config?: AxiosRequestConfig, reviewedLines?: string
 ): Promise<void> => {
-  await apiClient.put(`/api/transcripts/${id}/save-draft`, { level, srtContent }, config);
+  await apiClient.put(`/api/transcripts/${id}/save-draft`, { level, srtContent, reviewedLines }, config);
 };
 
-export const submitTranscriptReview = async (id: number, level: 1 | 2, srtContent: string): Promise<void> => {
-  await apiClient.put(`/api/transcripts/${id}/submit-review`, { level, srtContent });
+export const submitTranscriptReview = async (
+  id: number, level: 1 | 2, srtContent: string, reviewedLines?: string
+): Promise<void> => {
+  await apiClient.put(`/api/transcripts/${id}/submit-review`, { level, srtContent, reviewedLines });
 };
 
 export const publishTranscript = async (id: number, srtContent: string): Promise<void> => {
